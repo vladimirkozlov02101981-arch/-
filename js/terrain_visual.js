@@ -316,7 +316,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const cr = 3.2, cx2 = Math.max(0, cr - ex), cy2 = Math.max(0, cr - ey);
         const edge = (cx2 > 0 && cy2 > 0 ? cr - Math.hypot(cx2, cy2) : Math.min(ex, ey)) + wob;
         const chip = (hc > 0.78 && fx + fy * 1.3 < 6 + hc * 3) || (hc < 0.14 && (bw - fx) + (bh - fy) * 1.2 < 7);   // сколы углов
-        if (edge < 1.3 || chip) {
+        if (edge < 0.9 || chip) {
           const f = (0.55 + n1 * 0.25) * (chip ? 0.85 : 0.75); r = P.mortar[0] * f; g = P.mortar[1] * f; bl = P.mortar[2] * f;
           if (!P.nomoss && S.grassy && tileAt(tl.t3, x * 1.3 + 40, y * 1.3, 3, 57) > 0.66) { const k = 0.75 + n1 * 0.3; r = 62 * k; g = 104 * k; bl = 34 * k; }   // мох в швах
         } else {
@@ -325,7 +325,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           // фаска: нормаль от ближайшего края, свет сверху слева — светлая верхняя/левая кромка, тёмная нижняя/правая
           const bev = 4.2; let f = tone;
           if (edge < bev) {
-            const q = 1 - (edge - 1.3) / (bev - 1.3), qq = q * q;
+            const q = 1 - (edge - 0.9) / (bev - 0.9), qq = q * q;
             let nx = 0, ny = 0;
             if (ex < ey) nx = fx < bw * 0.5 ? -1 : 1; else ny = fy < bh * 0.5 ? -1 : 1;
             if (cx2 > 0 && cy2 > 0) { nx = (fx < bw * 0.5 ? -cx2 : cx2); ny = (fy < bh * 0.5 ? -cy2 : cy2); const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l; }
@@ -413,7 +413,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
               const cs = hv > 0.5 ? fx < 3 + hv * 3 : fx > 11 - hv * 3;
               if (cs) { const k = 0.62 + Math.sin(fy * 1.3 + fx) * 0.05; r *= k; g *= k * 0.9; bl *= k * 0.8; }
               if (fy > 14 && Math.abs(fx - 4 - hv * 6) < 2.2) { r *= 0.35; g *= 0.3; bl *= 0.3; }
-              o.emit = true; o.ga = isBack ? 110 : 190; o.gr = hueW[0]; o.gg = hueW[1]; o.gb = hueW[2];
+              o.emit = true; o.ga = isBack ? 170 : 255; o.gr = hueW[0]; o.gg = hueW[1]; o.gb = hueW[2];
             } else {
               // тёмное стекло отражает небо: светлее вверху, диагональный блик
               const k = 1 - fy / 19 * 0.5; r = P.dark[0] * k + 26 * (1 - fy / 19); g = P.dark[1] * k + 30 * (1 - fy / 19); bl = P.dark[2] * k + 46 * (1 - fy / 19);
@@ -584,7 +584,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -613,7 +613,23 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x;
       const isSolid = m[i];
-      if (!isSolid && !(bpx && back[i])) continue;
+      if (!isSolid && !(bpx && back[i])) {
+        // маленькие сквозные окна в деревянных стенах: тёплое стекло с переплётом и свечением
+        if (S.glass && bpx && x > 14 && y > 14 && x < W - 14 && y < H - 14) {
+          const wl = (k) => m[k] || back[k];
+          let l = 0, rr = 0, u = 0, dn = 0; for (let q = 1; q <= 14; q++) { if (!l && wl(i - q)) l = q; if (!rr && wl(i + q)) rr = q; if (!u && wl(i - q * W)) u = q; if (!dn && wl(i + q * W)) dn = q; }
+          const wm = (k) => m[k] ? mat[k] : back[k];
+          if (l && rr && u && dn && l + rr < 24 && u + dn < 26 && wm(i - l) === 4 && wm(i + rr) === 4) {
+            const fx = l / (l + rr), fy = u / (u + dn), j = i * 4, tone = 0.8 + fy * 0.3;
+            let gr = 255 * tone, gg = 196 * tone, gb = 110 * tone;
+            if (Math.abs(fx - 0.5) < 0.07 || Math.abs(fy - 0.45) < 0.06) { gr = 70; gg = 44; gb = 22; }
+            if (fx < 0.3 && fy < 0.35) { gr += 30; gg += 30; gb += 30; }
+            bpx[j] = gr; bpx[j + 1] = gg; bpx[j + 2] = gb; bpx[j + 3] = 255;
+            if (gimg) { gimg[j] = 255; gimg[j + 1] = 170; gimg[j + 2] = 80; gimg[j + 3] = 200; }
+          }
+        }
+        continue;
+      }
       const oxf = x / 4 - 0.5, ox0 = Math.max(0, Math.floor(oxf)), fx = Math.max(0, oxf - ox0), ox1 = Math.min(OW - 1, ox0 + 1);
       const occ = (OCC[oyR + ox0] * (1 - fx) + OCC[oyR + ox1] * fx) * (1 - fy) + (OCC[oyR1 + ox0] * (1 - fx) + OCC[oyR1 + ox1] * fx) * fy;
       if (isSolid) {
@@ -804,20 +820,20 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       if (x < nextX || y > waterY - 20 || matAt(x, y + 2) !== 5 || !flatTop(x, y) || T.isSolid(x, y - 30) || T.isSolid(x + 14, y - 16)) continue;
       nextX = x + 70 + rng() * 120; const kind = rng();
       if (kind < 0.45) {                                                                     // кондиционер: корпус, решётка, вентилятор
-        const w = 16 + rng() * 6, h = 11;
+        const w = 22 + rng() * 8, h = 15;
         c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(x - 1, y - 1, w + 3, 2);
         const bg = c.createLinearGradient(0, y - h, 0, y); bg.addColorStop(0, '#8a90a0'); bg.addColorStop(1, '#4a4e5c'); c.fillStyle = bg; c.fillRect(x, y - h, w, h);
-        c.fillStyle = '#2a2d36'; c.beginPath(); c.arc(x + w * 0.62, y - h / 2, 3.6, 0, TAU); c.fill();
+        c.fillStyle = '#2a2d36'; c.beginPath(); c.arc(x + w * 0.64, y - h / 2, 5, 0, TAU); c.fill(); c.strokeStyle = '#555a68'; c.lineWidth = 1; c.beginPath(); c.moveTo(x + w * 0.64 - 4, y - h / 2); c.lineTo(x + w * 0.64 + 4, y - h / 2); c.moveTo(x + w * 0.64, y - h / 2 - 4); c.lineTo(x + w * 0.64, y - h / 2 + 4); c.stroke();
         c.strokeStyle = '#6a7080'; c.lineWidth = 0.8; for (let q = 0; q < 4; q++) { c.beginPath(); c.moveTo(x + 2, y - h + 2.5 + q * 2); c.lineTo(x + w * 0.4, y - h + 2.5 + q * 2); c.stroke(); }
-        c.fillStyle = 'rgba(160,190,255,0.5)'; c.fillRect(x, y - h, w, 1);
+        c.fillStyle = '#6a6a90'; c.fillRect(x, y - h, w, 1.5);
       } else if (kind < 0.75) {                                                              // антенна с мигающим огоньком
-        const h = 18 + rng() * 16; c.strokeStyle = '#3a3e4a'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
+        const h = 26 + rng() * 20; c.strokeStyle = '#4a4e5c'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
         c.lineWidth = 1; for (let q = 1; q < 3; q++) { c.beginPath(); c.moveTo(x - 5 + q, y - h * (0.4 + q * 0.2)); c.lineTo(x + 5 - q, y - h * (0.4 + q * 0.2)); c.stroke(); }
-        c.fillStyle = '#ff4060'; c.beginPath(); c.arc(x, y - h, 1.5, 0, TAU); c.fill();
-        if (gc) { gc.fillStyle = 'rgba(255,60,90,0.9)'; gc.beginPath(); gc.arc(x, y - h, 5, 0, TAU); gc.fill(); }
+        c.fillStyle = '#ff4060'; c.beginPath(); c.arc(x, y - h, 2.4, 0, TAU); c.fill();
+        if (gc) { gc.fillStyle = 'rgba(255,60,90,1)'; gc.beginPath(); gc.arc(x, y - h, 7, 0, TAU); gc.fill(); }
       } else {                                                                               // вытяжная труба с колпаком
-        const h = 12 + rng() * 8; const pg = c.createLinearGradient(x - 3, 0, x + 3, 0); pg.addColorStop(0, '#7a808e'); pg.addColorStop(1, '#3a3e48');
-        c.fillStyle = pg; c.fillRect(x - 3, y - h, 6, h); c.fillStyle = '#2e323c'; c.fillRect(x - 5, y - h - 2, 10, 2.5);
+        const h = 18 + rng() * 10; const pg = c.createLinearGradient(x - 5, 0, x + 5, 0); pg.addColorStop(0, '#8a90a0'); pg.addColorStop(1, '#3a3e48');
+        c.fillStyle = pg; c.fillRect(x - 5, y - h, 10, h); c.fillStyle = '#6a6a90'; c.fillRect(x - 8, y - h - 3, 16, 3); c.fillStyle = '#2e323c'; c.fillRect(x - 8, y - h, 16, 1.5);
       }
     }
   }

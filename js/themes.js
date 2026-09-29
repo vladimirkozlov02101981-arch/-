@@ -20,7 +20,7 @@ const THEMES = {
       soil: '#5e3a20', soilDepth: 26,
       strata: ['#aa7248', '#98663e', '#b27e52', '#8e5e3a', '#a47046'], band: 46, bandSharp: 0.6,
       rock: ['#a39c92', '#8f887e', '#b3aba0', '#7e776e'],
-      pebbles: ['#8a8680', '#7a7672', '#96908a', '#827c76', '#8e8680', '#74706c'],
+      pebbles: ['#9a9088', '#8a8078', '#a69a8e', '#928474', '#9e9286', '#86807a'],
       outline: '#2c1a0d', rim: '#b89a78', sun: '#ffe0a0', veins: null, ceiling: 'roots', capMats: [1],
     },
     scatter: ['bush', 'rock', 'flowers', 'mushroom', 'bush', 'tuft'],
