@@ -109,11 +109,13 @@ function district(B, o) {
   });
   // подвал на всю ширину, лестница из центра первого этажа
   B.room(X + 20, gy + 22, Wd - 40, 80);
+  B.add(Sh.rect(X + 20, gy + 90, Wd - 40, 14, { mat, pal }));   // мощёный пол подвала, без травы
   B.ladder(X + Math.round(Wd / 2), gy, gy + 102);
   // подземный ход к бункеру и выход на поверхность
   B.tunnel([[X + Wd - 40, gy + 102], [X + Wd + 120, gy + 108], [X + Wd + 240, gy + 110], [X + Wd + 330, gy + 104]], 74, { arch: 6 });
   const bk = X + Wd + 300;
   B.room(bk, gy + 26, 200, 78);
+  B.add(Sh.rect(bk, gy + 92, 200, 14, { mat, pal }));
   B.ladder(bk + 150, gy, gy + 104);
   // вышка между крепостью и бункером
   B.tower(X + Wd + 130, gy, 140, { mat: o.tmat || mat, pal: o.tpal || pal, stories: [100, 100, 100], ladders: [30, 110, 30], crown: true, windows: true, found: 20 });
