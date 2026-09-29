@@ -80,8 +80,11 @@ const DECOR = {
       c.lineWidth = r.range(1.8, 3.2) * s; c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo(bx + dir * len * 0.6, by - len * 0.15, bx + dir * len, by - len * r.range(0.35, 0.7)); c.stroke();
     }
     const R = r.range(30, 40) * s; const cx = tx, cy = ty - R * 0.2;
-    const blobs = [{ x: cx, y: cy, r: R * 0.72 }, { x: cx - R * 0.55, y: cy + R * 0.12, r: R * 0.55 }, { x: cx + R * 0.55, y: cy + R * 0.1, r: R * 0.55 }, { x: cx, y: cy - R * 0.4, r: R * 0.55 }];
-    for (let i = 0; i < 14; i++) { const a = r() * TAU, d = Math.sqrt(r()) * R * 0.75; blobs.push({ x: cx + Math.cos(a) * d * 1.3, y: cy + Math.sin(a) * d * 0.72, r: R * r.range(0.3, 0.46) }); }
+    // крона из 6–8 отдельных лопастей вокруг ядра: между ними — глубокие выемки силуэта
+    const blobs = [{ x: cx, y: cy + R * 0.08, r: R * 0.52 }]; const nl = 6 + (r() * 3 | 0);
+    for (let i = 0; i < nl; i++) { const a = Math.PI * (0.92 + 1.16 * i / (nl - 1)) + r.range(-0.12, 0.12), d = R * r.range(0.62, 0.78);
+      const lr = R * r.range(0.4, 0.54), lx = cx + Math.cos(a) * d * 1.28, ly = cy + Math.sin(a) * d * 0.8; blobs.push({ x: lx, y: ly, r: lr }, { x: (lx + cx) / 2, y: (ly + cy) / 2, r: lr * 0.8 }); }
+    blobs.push({ x: cx - R * 0.55, y: cy + R * 0.42, r: R * 0.38 }, { x: cx + R * 0.6, y: cy + R * 0.4, r: R * 0.36 });
     foliage(c, blobs, DECOR_THEME === 'castle' ? r.pick(CASTLE_PALS) : r.pick(OAK_PALS));
   },
   birch(c, g, x, y, s, r) {

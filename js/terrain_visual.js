@@ -123,6 +123,14 @@ function stoneAt(S, o, ox, oy, rad, ph, pc, n1, n2, r, g, bl) {
   o.r = r; o.g = g; o.b = bl;
 }
 
+/** расстояние до рваной прожилки (0 — на прожилке). Плато шума (почти постоянное значение) прожилкой не считается —
+    иначе на ровных участках вместо тонкой трещины получается сплошное пятно */
+function veinDist(tl, x, y, n2) {
+  const px = x * 1.5 + (tileAt(tl.t1, x, y, 1, 3) - 0.5) * 9 + (n2 - 0.5) * 6, py = y * 1.5 + (tileAt(tl.t1, x, y, 1, 11) - 0.5) * 9;
+  const v0 = veinAt(tl.tv, px, py), gx = veinAt(tl.tv, px + 4, py) - v0, gy = veinAt(tl.tv, px, py + 4) - v0;
+  const gl = Math.abs(gx) + Math.abs(gy); if (gl < 0.01) return 1;
+  return Math.abs(v0 - 0.5) * 1.5 * Math.min(3, 0.03 / gl + 0.6);
+}
 /** цвет материала в точке. Результат в o: r,g,b; свечение ga/gr/gg/gb; блеск spec */
 function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
@@ -165,7 +173,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     const lv = (0.9 + n3 * 0.1 + (n2 - 0.5) * 0.05 + (big - 0.5) * 0.16) * (1 - Math.min(0.2, sd / 1100));
     r = (c0[0] + (c1[0] - c0[0]) * bm) * lv; g = (c0[1] + (c1[1] - c0[1]) * bm) * lv; bl = (c0[2] + (c1[2] - c0[2]) * bm) * lv;
     if (sd < S.soilDepth) { const k = sd / S.soilDepth, q = k * k; const so = S.soil; r = so[0] + (r - so[0]) * q; g = so[1] + (g - so[1]) * q; bl = so[2] + (bl - so[2]) * q; }
-    if (capT > 0 && sd < 10) { const k = sd < 2.5 ? 0.4 : 0.62 + (sd - 2.5) * 0.05; r *= k; g *= k * 0.95; bl *= k * 0.92; }        // тень под травяной губой
+    if (capT > 0 && sd < 10) { const k = sd < 4 ? 0.34 : 0.62 + (sd - 4) * 0.063; r *= k; g *= k * 0.95; bl *= k * 0.92; }        // тень под травяной губой
     // почва: тёплая у поверхности, фактура в двух масштабах (2–3 px и 12–20 px), комья с тенью, крошка
     { const nm = tileAt(tl.t1, x, y, 1, 7), nb = tileAt(tl.t2, x, y, 4, 41);
       let gk = 1 + (nm - 0.5) * 0.2 + (nb - 0.5) * 0.26 + (n1 - 0.5) * 0.08;
@@ -211,7 +219,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     }
     { const dk = Math.min(1, sd / 480); r *= 1 - 0.34 * dk; g *= 1 - 0.38 * dk; bl *= 1 - 0.36 * dk; }
     if (S.veinC && sd > 8) {
-      const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : 0.56) ? 1 : Math.abs(veinAt(tl.tv, x * 1.5 + (tileAt(tl.t1, x, y, 1, 3) - 0.5) * 9 + (n2 - 0.5) * 6, y * 1.5 + (tileAt(tl.t1, x, y, 1, 11) - 0.5) * 9) - 0.5) * 1.5;   // рваные трещины, не везде
+      const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : 0.56) ? 1 : veinDist(tl, x, y, n2);   // рваные трещины, не везде
       if (dv < S.veinW) {
         const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW, kk = k * 0.85 + 0.15;
         r += (vc[0] - r) * kk; g += (vc[1] - g) * kk; bl += (vc[2] - bl) * kk;
@@ -227,7 +235,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     // на глыбы; у глыб — объёмная фаска (светлый верх/левый край, тёмный низ), выветренные карнизы и потёки
     const wy = y + (tileAt(tl.t3, x, y, 5, 3) - 0.5) * 90 + (tileAt(tl.t3, x, y, 6, 51) - 0.5) * 70 + (tileAt(tl.t2, x, y, 3, 9) - 0.5) * 12 + (tileAt(tl.t1, x, y, 1, 5) - 0.5) * 3;
     const sd2 = t - capT, BH = S.rockBand, bi = Math.floor(wy / BH), hb = hash3(bi, 11, 3);
-    const th = BH * (0.7 + hb * 0.24) + (tileAt(tl.t2, x, y, 4, 33) - 0.5) * BH * 0.3;                                                   // толщина пласта (часть полосы)
+    const th = BH * (0.7 + hb * 0.24) + (tileAt(tl.t2, x, y, 4, 33) - 0.5) * BH * 0.55;                                                   // толщина пласта (часть полосы)
     const fyb = wy - bi * BH;
     let r0, g0, b0;
     const rc0 = S.rockC[((bi % S.RL) + S.RL) % S.RL], bt = 1 + (hash3(bi, 19, 3) - 0.5) * 0.4, bh2 = (hash3(bi, 20, 3) - 0.5) * 0.16;
@@ -238,7 +246,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     } else {
       const bw = 70 + hash3(bi, 12, 3) * 130, xo = hash3(bi, 13, 3) * 400 + (tileAt(tl.t2, x, y, 2, 21) - 0.5) * 10 + (fyb - th * 0.5) * (hash3(bi, 16, 3) - 0.5) * 0.9;
       const bj = Math.floor((x + xo) / bw), fxb = x + xo - bj * bw, hh = hash3(bi, bj, 14);
-      const pv = 0.88 + hh * 0.18 + (n3 - 0.5) * 0.08;
+      const pv = 0.8 + hh * 0.34 + (n3 - 0.5) * 0.08;
       r = rc[0] * pv; g = rc[1] * pv; bl = rc[2] * pv;
       // не каждый шов — трещина: соседние глыбы часто срастаются
       const sL = hash3(bi, bj, 15) > 0.8, sR = hash3(bi, bj + 1, 15) > 0.8;
@@ -271,13 +279,13 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (e > 4 && sd2 > 6) { const V = S.vs, vi = ((y & 255) << 8) | ((x + 97) & 255), id = V.id[vi];
         if (V.rnd[id] > 0.86) { const q2 = V.rnd2[id]; stoneAt(S, o, -V.vx[vi] * 0.5, -V.vy[vi] * 0.6, V.cell * (0.08 + 0.16 * q2), id * 3.1, [rc[0] * 0.8, rc[1] * 0.78, rc[2] * 0.76], n1, n2, r, g, bl); r = o.r; g = o.g; bl = o.b; } }
       // иней и снег на уступах пластов
-      if (S.snowy) { const mg = 1.2 - (y / S.H) * 0.5; r *= mg; g *= mg; bl *= mg * 1.04; }                  // лунный свет: светлее вверху
+      if (S.snowy) { const mg = 1.35 - (y / S.H) * 0.8; r *= mg; g *= mg; bl *= mg * 1.04; }                  // лунный свет: светлее вверху
       if (S.snowy && fyb < 2 + n2 * 3 + tileAt(tl.t1, x, y, 2, 77) * 2) { const k = 0.7; r += (236 - r) * k; g += (244 - g) * k; bl += (255 - bl) * k; }
       // тонкие диагональные трещинки внутри глыбы
       if (hh > 0.6 && Math.abs(veinAt(tl.tv, x * 1.6 + bj * 37, y * 1.6) - 0.5) < 0.006 && e > 3) { r *= 0.62; g *= 0.62; bl *= 0.62; }
     }
     if (S.veinC && t - capT > 8) {
-      const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : 0.56) ? 1 : Math.abs(veinAt(tl.tv, x * 1.5 + (tileAt(tl.t1, x, y, 1, 3) - 0.5) * 9 + (n2 - 0.5) * 6, y * 1.5 + (tileAt(tl.t1, x, y, 1, 11) - 0.5) * 9) - 0.5) * 1.5;   // рваные трещины, не везде
+      const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : 0.56) ? 1 : veinDist(tl, x, y, n2);   // рваные трещины, не везде
       if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } } else if (S.veinGlow && dv < S.veinW * 5) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, q = 1 - dv / (S.veinW * 5), k = q * q * 0.32; r += (vc[0] - r) * k; g += (vc[1] - g) * k * 0.7; bl += (vc[2] - bl) * k * 0.5; }
     }
   } else if (mt === 12) {
@@ -286,7 +294,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     const rc = S.rockC[id % S.RL], pv = 0.84 + V.rnd[id] * 0.3 + (n3 - 0.5) * 0.1;
     r = rc[0] * pv; g = rc[1] * pv; bl = rc[2] * pv;
     const ed = V.ed[vi] + (tileAt(tl.t1, x, y, 1, 13) - 0.5) * 8;
-    if (ed < 6) { const k = 0.3 + Math.max(0, ed) * 0.04; r *= k; g *= k; bl *= k; }
+    if (ed < 8) { const k = 0.26 + Math.max(0, ed) * 0.035; r *= k; g *= k; bl *= k; }
     else if (ed < 40) {
       const q = 1 - (ed - 6) / 34, ox = -V.vx[vi], oy = -V.vy[vi], ol = Math.sqrt(ox * ox + oy * oy) || 1;
       const f = 1 + q * q * 0.5 * (ox * LX + oy * LY) / ol; r *= f; g *= f; bl *= f;
@@ -350,7 +358,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const row = Math.floor(ly / ph), fy = ly - row * ph;
         const off = hash3(row, 3, info.idx) * 190; const segL = 60 + hash3(row, 4, info.idx) * 120;
         const seg = Math.floor((x + off) / segL), fx = x + off - seg * segL;
-        if (fy < 2.3 || fx < 1.6) { const k = fy < 1.2 || fx < 0.8 ? 0.7 : 1; r = P.gap[0] * k; g = P.gap[1] * k; bl = P.gap[2] * k; }
+        if (fy < 3 || fx < 1.8) { const k = fy < 1.6 || fx < 0.9 ? 0.6 : 1; r = P.gap[0] * k; g = P.gap[1] * k; bl = P.gap[2] * k; }
         else {
           const h = hash3(seg, row, info.idx + 5);
           const gr = tl.tg[((y & 255) << 8) | ((x >> 1) & 255)];
@@ -417,7 +425,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           else if (lx % 60 < 1.5) { r *= 0.86; g *= 0.86; bl *= 0.86; }
           else { const st = tileAt(S.tiles.t3, x * 3, y * 0.3, 3, 23); if (st > 0.66) { const k = 1 - (st - 0.66) * 0.6; r *= k; g *= k; bl *= k; } else if (st < 0.2) { const k = 1 + (0.2 - st) * 0.9; r *= k; g *= k; bl *= k * 1.05; } }   // потёки и мокрые блики на фасаде
           // тёплый отсвет на стене под светящимся окном
-          if (lx >= mx && col >= 0 && col < cols && fx < 16 && fy >= 21 && fy < 31 && hash3(col >> 1, fl, info.idx * 13 + 1) * 0.7 + hash3(col, fl, info.idx * 13 + 5) * 0.3 < Math.min(0.8, P.lit * 1.6)) { const k = (1 - (fy - 21) / 10); r += (255 - r) * k * 0.4; g += (190 - g) * k * 0.3; bl += (120 - bl) * k * 0.14; }
+          if (lx >= mx && col >= 0 && col < cols && fx < 16 && fy >= 21 && fy < 35 && hash3(col >> 1, fl, info.idx * 13 + 1) * 0.7 + hash3(col, fl, info.idx * 13 + 5) * 0.3 < Math.min(0.8, P.lit * 1.6)) { const k = (1 - (fy - 21) / 14); r += (255 - r) * k * 0.5; g += (190 - g) * k * 0.3; bl += (120 - bl) * k * 0.14; }
           if (prm.h > 80) { const vg = 1.12 - Math.min(1, ly / prm.h) * 0.24; r *= vg; g *= vg; bl *= vg; }
         }
         break;
@@ -768,6 +776,43 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         c.fillStyle = lc; c.beginPath(); c.ellipse(lx + side * 2.4, y + tt, lr, lr * 0.62, side * 0.6, 0, TAU); c.fill();
         c.fillStyle = 'rgba(220,240,140,0.35)'; c.beginPath(); c.ellipse(lx + side * 2.4 - 0.6, y + tt - 0.5, lr * 0.5, lr * 0.25, side * 0.6, 0, TAU); c.fill();
       }
+    }
+  }
+  // иллюминаторы на корпусе корабля у ватерлинии
+  if (theme.id === 'tropical') {
+    const py = waterY - 46; let lastP = -999;
+    for (let x = 0; x < W; x += 6) {
+      if (x - lastP < 150 || py < 0 || matAt(x, py) !== 4) continue;
+      let ok = true; for (const [dx, dy] of [[-12, 0], [12, 0], [0, -12], [0, 12]]) if (!T.isSolid(x + dx, py + dy) || matAt(x + dx, py + dy) !== 4) ok = false;
+      if (!ok) continue; lastP = x;
+      c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.arc(x + 1.5, py + 2, 9, 0, TAU); c.fill();
+      const br = c.createLinearGradient(x - 9, py - 9, x + 9, py + 9); br.addColorStop(0, '#ffe29a'); br.addColorStop(0.5, '#c08a3a'); br.addColorStop(1, '#6a4418');
+      c.fillStyle = br; c.beginPath(); c.arc(x, py, 8.5, 0, TAU); c.fill();
+      const gl = c.createRadialGradient(x - 2, py - 2, 1, x, py, 6); gl.addColorStop(0, '#ffd27a'); gl.addColorStop(0.7, '#c86a20'); gl.addColorStop(1, '#5a2a10');
+      c.fillStyle = gl; c.beginPath(); c.arc(x, py, 5.8, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(x - 2.2, py - 2.4, 2, 1, -0.6, 0, TAU); c.fill();
+      c.fillStyle = '#3a2410'; for (let q = 0; q < 6; q++) { const a = q / 6 * TAU; c.beginPath(); c.arc(x + Math.cos(a) * 7.2, py + Math.sin(a) * 7.2, 0.8, 0, TAU); c.fill(); }
+      if (gc) { gc.fillStyle = 'rgba(255,170,70,0.6)'; gc.beginPath(); gc.arc(x, py, 8, 0, TAU); gc.fill(); }
+    }
+  }
+  // фонари под деревянными потолками: висят на верёвке, заливают заднюю стену тёплым светом
+  {
+    let lastL = -999; const dc = T.dctx;
+    for (let k = 0; k < ceils.length; k += 2) {
+      const x = ceils[k], y = ceils[k + 1];
+      if (x - lastL < 230 || matAt(x, y) !== 4 || y > waterY - 60) continue;
+      let air = 0; for (let q = 1; q < 50; q++) { if (T.isSolid(x, y + q)) break; air = q; }
+      if (air < 44 || T.isSolid(x - 14, y + 20) || T.isSolid(x + 14, y + 20)) continue;
+      lastL = x; const ly = y + 16;
+      c.strokeStyle = '#3a2614'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, y); c.lineTo(x, ly - 5); c.stroke();
+      c.fillStyle = '#2a1a0e'; c.fillRect(x - 4, ly - 6, 8, 2); c.fillRect(x - 4, ly + 5, 8, 2);
+      const lg = c.createRadialGradient(x, ly, 0.5, x, ly, 5); lg.addColorStop(0, '#fff6c8'); lg.addColorStop(0.6, '#ffc24a'); lg.addColorStop(1, '#d0701e');
+      c.fillStyle = lg; c.fillRect(x - 3.5, ly - 4, 7, 9);
+      c.strokeStyle = '#2a1a0e'; c.lineWidth = 1; c.strokeRect(x - 3.5, ly - 4, 7, 9); c.beginPath(); c.moveTo(x, ly - 4); c.lineTo(x, ly + 5); c.stroke();
+      if (gc) { gc.fillStyle = 'rgba(255,190,90,0.85)'; gc.beginPath(); gc.arc(x, ly, 9, 0, TAU); gc.fill(); }
+      if (dc) { dc.save(); dc.globalCompositeOperation = 'source-atop'; const pg = dc.createRadialGradient(x, ly, 4, x, ly + 10, 110);
+        pg.addColorStop(0, 'rgba(255,200,110,0.55)'); pg.addColorStop(0.45, 'rgba(255,160,70,0.2)'); pg.addColorStop(1, 'rgba(255,140,60,0)');
+        dc.fillStyle = pg; dc.fillRect(x - 120, ly - 110, 240, 230); dc.restore(); }
     }
   }
   // камешки на поверхности
