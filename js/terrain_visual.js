@@ -137,6 +137,28 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         } else if (e2 < 1.7 && oy > rad * 0.2) { const k = 0.72 + (e2 - 1) * 0.4; r *= k; g *= k; bl *= k; }   // тень под камнем
       }
     }
+    // разрез как иллюстрация: корни у поверхности, крупные валуны в глубине, порода темнее и холоднее с глубиной
+    if (sd < 70) {
+      const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70);
+      if (dvr < wr) { const k = (1 - dvr / wr) * 0.75; r += (58 - r) * k; g += (38 - g) * k; bl += (24 - bl) * k; }
+    }
+    if (sd > 36) {
+      const BC = 118, cx = Math.floor(x / BC), cy = Math.floor(y / BC), hb = hash3(cx, cy, 77);
+      if (hb > 0.58) {
+        // валун целиком помещается в свою ячейку (центр в средней трети, полуось ≤ 34 px) — без обрезанных краёв
+        const rad = 15 + hash3(cx, cy, 78) * 11, bx = cx * BC + BC * (0.36 + hash3(cx, cy, 79) * 0.28), by = cy * BC + BC * (0.36 + hash3(cx, cy, 80) * 0.28);
+        const ox = (x - bx) / (rad * 1.3), oy = (y - by) / rad, e2 = ox * ox + oy * oy;
+        if (e2 < 1) {
+          const rc0 = S.rockC[(cx + cy * 7) % S.RL], so = S.soil, rc = [rc0[0] * 0.7 + so[0] * 0.3, rc0[1] * 0.7 + so[1] * 0.3, rc0[2] * 0.7 + so[2] * 0.3];
+          const nz = Math.sqrt(1 - e2), lam = ox * LX + oy * LY + nz * LZ;
+          let f = (0.55 + 0.6 * lam) * (0.92 + n1 * 0.14); if (e2 > 0.82) f *= 0.62;
+          const ca = hash3(cx, cy, 81) * 3.14, cxs = Math.cos(ca), csn = Math.sin(ca);
+          if (hb > 0.7 && Math.abs(ox * csn - oy * cxs + Math.sin((ox * cxs + oy * csn) * 7) * 0.05) < 0.03 && e2 < 0.6) f *= 0.55;   // трещина под случайным углом
+          r = rc[0] * f; g = rc[1] * f; bl = rc[2] * f;
+        } else if (e2 < 1.45 && oy > 0.3) { const k = 0.6 + (e2 - 1) * 0.85; r *= k; g *= k; bl *= k; }   // тень под валуном
+      }
+    }
+    { const dk = Math.min(1, sd / 520); r *= 1 - 0.38 * dk; g *= 1 - 0.32 * dk; bl *= 1 - 0.16 * dk; }
     if (S.veinC && sd > 8) {
       const dv = Math.abs(veinAt(tl.tv, x, y) - 0.5);
       if (dv < S.veinW) {
