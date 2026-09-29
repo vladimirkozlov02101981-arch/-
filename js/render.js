@@ -268,7 +268,7 @@ class Renderer {
   /* ---------- HUD ---------- */
   drawHUD(sc, cam, ctl, t, extra) {
     const c = this.c, sw = this.sw, sh = this.sh; const T = sc.turn;
-    this.drawBinoculars(c, cam, sw, sh, t);
+    this.drawBinoculars(c, cam, sw, sh, t, sc);
     c.save(); c.textBaseline = 'middle';
     const team = sc.teams[T.team]; const act = sc.soldiers.find(s => s.id === T.sid);
     // панель хода
@@ -338,7 +338,7 @@ class Renderer {
     c.restore();
   }
   /** оверлей бинокля: две линзы, шкала и затемнение по краям */
-  drawBinoculars(c, cam, sw, sh, t) {
+  drawBinoculars(c, cam, sw, sh, t, sc) {
     const k = cam.binocK; if (k < 0.02) return;
     const R = Math.min(sh * 0.47, sw * 0.29);
     if (!this.binMask || this.binMask.w !== sw || this.binMask.h !== sh) {
@@ -362,6 +362,34 @@ class Renderer {
     c.beginPath(); c.moveTo(cx - R * 0.9, cy); c.lineTo(cx + R * 0.9, cy); c.moveTo(cx, cy - R * 0.55); c.lineTo(cx, cy + R * 0.55); c.stroke();
     for (let i = -8; i <= 8; i++) { if (!i) continue; const x = cx + i * R * 0.1; const h = i % 4 ? 4 : 9; c.beginPath(); c.moveTo(x, cy - h); c.lineTo(x, cy + h); c.stroke(); }
     c.font = `12px ${FONT_TITLE}`; c.fillStyle = 'rgba(210,235,255,0.6)'; c.textAlign = 'left'; c.fillText('×8', cx + R * 0.62, cy - R * 0.62);
+    // оправа линз: тёмный металл с бликом сверху, только по внешнему контуру «восьмёрки»
+    const lx = [cx - R * 0.6, cx + R * 0.6];
+    lx.forEach((ex, i) => {
+      const ox = lx[1 - i];
+      c.save(); c.beginPath(); c.rect(0, 0, sw, sh); c.arc(ox, cy, R * 0.93, 0, TAU, true); c.clip('evenodd');
+      c.lineWidth = R * 0.07; c.strokeStyle = 'rgba(8,10,14,0.9)'; c.beginPath(); c.arc(ex, cy, R * 0.955, 0, TAU); c.stroke();
+      const rim = c.createLinearGradient(ex, cy - R, ex, cy + R);
+      rim.addColorStop(0, 'rgba(160,178,196,0.55)'); rim.addColorStop(0.35, 'rgba(60,68,80,0.35)'); rim.addColorStop(1, 'rgba(20,24,30,0.2)');
+      c.lineWidth = 2; c.strokeStyle = rim; c.beginPath(); c.arc(ex, cy, R * 0.92, 0, TAU); c.stroke();
+      c.restore();
+      // отсвет стекла
+      c.save(); c.beginPath(); c.arc(ex, cy, R * 0.9, 0, TAU); c.clip();
+      const gl = c.createLinearGradient(ex - R, cy - R, ex + R * 0.2, cy + R * 0.2);
+      gl.addColorStop(0, 'rgba(255,255,255,0.10)'); gl.addColorStop(0.45, 'rgba(255,255,255,0.025)'); gl.addColorStop(0.5, 'rgba(255,255,255,0)');
+      c.fillStyle = gl; c.fillRect(ex - R, cy - R, R * 2, R * 2); c.restore();
+    });
+    // дальномер: расстояние и направление до активного бойца, чтобы не потеряться в бинокле
+    const a = sc && sc.soldiers.find(s => s.id === sc.turn.sid);
+    if (a && !a.gone) {
+      const dx = a.x - cam.x, dy = a.y - cam.y, d = Math.hypot(dx, dy);
+      c.font = `13px ${FONT_TITLE}`; c.textAlign = 'center'; c.fillStyle = 'rgba(210,235,255,0.75)';
+      c.fillText(`${Math.round(d / 10)} м`, cx, cy + R * 0.62);
+      if (d > 120) {
+        const ang = Math.atan2(dy, dx), px = cx + Math.cos(ang) * R * 0.78, py = cy + Math.sin(ang) * R * 0.5;
+        c.save(); c.translate(px, py); c.rotate(ang); c.fillStyle = sc.teams[a.team]?.color || '#fff'; c.globalAlpha *= 0.85;
+        c.beginPath(); c.moveTo(10, 0); c.lineTo(-6, -7); c.lineTo(-2, 0); c.lineTo(-6, 7); c.closePath(); c.fill(); c.restore();
+      }
+    }
     c.restore();
   }
 }
