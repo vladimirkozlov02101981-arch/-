@@ -253,6 +253,8 @@ class FX {
         g.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},0)`); g.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0.75)`);
         L.fillStyle = g; L.fillRect(v.x0, sc.waterY - 260, v.x1 - v.x0, 400);
       }
+      // мягкий ореол вокруг бойцов: на тёмных картах их всегда видно
+      for (const s of sc.soldiers) { if (!s.alive || s.gone) continue; L.globalAlpha = 0.55; L.drawImage(glowSprite('#fff4e0'), s.x - 70, s.y - 95, 140, 140); }
       for (const l of this.frameLights) { L.globalAlpha = Math.min(1, l.a); L.drawImage(glowSprite(l.col), l.x - l.r, l.y - l.r, l.r * 2, l.r * 2); }
       L.globalAlpha = 1;
       c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'multiply'; c.drawImage(this.lightCv, 0, 0, c.canvas.width, c.canvas.height); c.restore();

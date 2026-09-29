@@ -1,4 +1,10 @@
 'use strict';
+/** прожилки: билинейная выборка сетки 4×4 px — гладкие края вместо «лесенки» */
+function veinAt(tv, x, y) {
+  const fx = x / 4 - 0.5, fy = y / 4 - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0;
+  const r0 = (y0 & 255) << 8, r1 = ((y0 + 1) & 255) << 8, c0 = x0 & 255, c1 = (x0 + 1) & 255;
+  return (tv[r0 | c0] * (1 - ax) + tv[r0 | c1] * ax) * (1 - ay) + (tv[r1 | c0] * (1 - ax) + tv[r1 | c1] * ax) * ay;
+}
 /* =========================================================
    Текстурирование карты в духе мультфильмов с компьютерной
    графикой: мягкие объёмные фаски (тёплый ключевой свет сверху
@@ -122,7 +128,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       }
     }
     if (S.veinC && sd > 8) {
-      const dv = Math.abs(tl.tv[ty3 | ((x >> 2) & 255)] - 0.5);
+      const dv = Math.abs(veinAt(tl.tv, x, y) - 0.5);
       if (dv < S.veinW) {
         const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW, kk = k * 0.85 + 0.15;
         r += (vc[0] - r) * kk; g += (vc[1] - g) * kk; bl += (vc[2] - bl) * kk;
@@ -142,7 +148,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     }
     const f = 0.97 + (n1 - 0.5) * 0.06; r *= f; g *= f; bl *= f;
     if (S.veinC && t - capT > 8) {
-      const dv = Math.abs(tl.tv[ty3 | ((x >> 2) & 255)] - 0.5);
+      const dv = Math.abs(veinAt(tl.tv, x, y) - 0.5);
       if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } }
     }
   } else {

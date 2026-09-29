@@ -130,19 +130,26 @@ const App = {
     else if (UI.mode === 'host' && i === 0) this.sendLobby();
     UI.drawPreviewAll && UI.drawPreviewAll();
   },
+  /** команда гостя не должна совпадать с командой хоста ни цветом, ни названием */
+  distinctGuest(t) {
+    const h = UI.teamsCfg[0];
+    if (t.color === h.color) t.color = TEAM_COLORS.find(c => c !== h.color && c !== '#ff4d4d') || '#3d8bff';
+    if (t.name.trim().toLowerCase() === String(h.name).trim().toLowerCase()) t.name = h.name === DEFAULT_PREFS.teams[1].name ? DEFAULT_PREFS.teams[0].name : DEFAULT_PREFS.teams[1].name;
+    return t;
+  },
   onNetHost(d) {
     switch (d.t) {
       case 'hello': {
         if (d.v !== NET_VERSION) { Net.send({ t: 'err', txt: 'У вас разные версии игры. Обновите файлы игры у обоих игроков.' }); setTimeout(() => Net.close(), 400); return; }
         let t = sanitizeTeam(d.team, DEFAULT_PREFS.teams[1]);
-        if (t.color === UI.teamsCfg[0].color) t.color = TEAM_COLORS.find(c => c !== UI.teamsCfg[0].color && c !== '#ff4d4d') || '#3d8bff';
+        t = this.distinctGuest(t);
         this.guestTeam = t; UI.teamsCfg[1] = Object.assign({}, t);
         if (UI.cur === 's-setup') UI.buildTeams();
         UI.setPeerStatus(true); Sfx.play('pickup'); UI.setNote('Друг в комнате! Выберите карту и жмите «В бой!»'); this.sendLobby();
         break;
       }
       case 'team': {
-        const t = sanitizeTeam(d.team, DEFAULT_PREFS.teams[1]); if (t.color === UI.teamsCfg[0].color) break;
+        const t = this.distinctGuest(sanitizeTeam(d.team, DEFAULT_PREFS.teams[1]));
         this.guestTeam = t; if (this.demo || !this.game) { UI.teamsCfg[1] = Object.assign({}, t); if (UI.cur === 's-setup') UI.buildTeams(); this.sendLobby(); }
         break;
       }

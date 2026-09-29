@@ -84,15 +84,15 @@ const THEMES = {
     clouds: { n: 8, color: '#3a2a2a', shade: '#140c0c', alpha: 0.85, lit: '#ff6a2a' },
     liquid: { kind: 'lava', top: '#ffe066', mid: '#ff6a00', deep: '#7a1000', foam: '#fff2b0', alpha: 1 },
     ground: {
-      cap: { cols: ['#6f6865', '#57504d', '#433d3b'], thick: 6, blades: null, ash: true },
-      soil: '#3b3230', soilDepth: 12,
-      strata: ['#3a2e2c', '#463834', '#302625', '#4e3e38', '#3c302d'], band: 26, bandSharp: 0.3,
-      rock: ['#3a302e', '#463a36', '#2e2624', '#524440'],
-      pebbles: ['#4a403d', '#5c504b', '#231d1c'],
-      outline: '#0a0505', veins: { color: '#ff8a2a', w: 0.013, glow: true }, ceiling: 'stalactites', capMats: [1, 9],
+      cap: { cols: ['#908783', '#716864', '#574f4d'], thick: 6, blades: null, ash: true },
+      soil: '#4d413e', soilDepth: 12,
+      strata: ['#4b3c39', '#5b4944', '#3e3130', '#655149', '#4e3e3a'], band: 26, bandSharp: 0.3,
+      rock: ['#4b3e3c', '#5b4b46', '#3c312f', '#6b5853'],
+      pebbles: ['#60534f', '#786862', '#2e2624'],
+      outline: '#0d0606', veins: { color: '#ff8a2a', w: 0.013, glow: true }, ceiling: 'stalactites', capMats: [1, 9],
     },
     scatter: ['obsidian', 'lavarock', 'bones', 'obsidian', 'lavarock'],
-    weather: 'embers', birds: false, ambient: '#6e4a44', ambientSound: 'lava', glow: true,
+    weather: 'embers', birds: false, ambient: '#a47a6c', ambientSound: 'lava', glow: true,
   },
   alien: {
     id: 'alien',
@@ -182,7 +182,7 @@ const THEMES = {
       outline: '#07080d', veins: null, ceiling: 'drips', capMats: [1],
     },
     scatter: ['trash', 'tuft'],
-    weather: 'rain', birds: false, ambient: '#55557e', ambientSound: 'rain', glow: true,
+    weather: 'rain', birds: false, ambient: '#8c8ab8', ambientSound: 'rain', glow: true,
   },
 };
 

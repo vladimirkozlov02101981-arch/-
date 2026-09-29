@@ -185,3 +185,10 @@ kbd { font-family: var(--ui); font-size: 12px; background: rgba(255, 255, 255, 0
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition:none!important}}
 .volume-control{display:flex;align-items:center;justify-content:space-between;gap:20px;font-size:13px;color:var(--muted);padding:8px 2px}.volume-control input{accent-color:var(--accent);width:65%}
 .map-card img{position:absolute;inset:0;width:100%;height:100%}
+
+/* доработки: панель оружия без прокрутки и не поверх верхнего HUD, кнопки в панелях по центру, заголовок без наложения */
+.tray{width:min(640px,calc(100vw - 28px));max-height:calc(100vh - 190px)}.tray-grid{grid-template-columns:repeat(8,1fr);gap:5px}.tray-item{height:46px}.tray-item canvas{width:40px;height:40px}
+.tray-item .lock{left:2px;top:2px;padding:0 4px;border-radius:3px;background:rgba(10,14,16,.82);font-size:9px;line-height:14px;color:#ffb3a6}
+.panel .menu-btns{margin:0 auto}
+.logo{line-height:1.08}
+.tray-cat{margin:3px 0 1px}.tray-item{height:42px}.tray-item canvas{width:36px;height:36px}.tray-info{margin-top:6px}

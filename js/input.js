@@ -147,7 +147,8 @@ class LocalController {
     if (P.KeyR && T.weapon === 'girder' && canAct) this.send({ c: 'rot', d: 1 });
     if (P.KeyP && (phase === 'aim' || phase === 'retreat')) this.send({ c: 'skip' });
     if (P.Space && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
-    const mFire = Input.mouse.clicked[0], kFire = !!P.Enter;
+    // в бинокль клик не стреляет: мышь ведёт обзор (кроме оружия с выбором точки)
+    const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = !!P.Enter;
     if (phase === 'use') { if (mFire || kFire) this.send({ c: 'fire' }); }
     else if (canAct) {
       switch (W.mode) {

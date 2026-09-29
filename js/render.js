@@ -14,15 +14,17 @@ class Camera {
   toScreen(wx, wy, sw, sh) { return [(wx - this.x) * this.z + sw / 2 + this.sx, (wy - this.y) * this.z + sh / 2 + this.sy]; }
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
-  baseZoom(sh) { return clamp(sh / 800, 0.62, 1.6); }
-  zoomLimits(sh) { const b = this.baseZoom(sh); return [b * 0.84, b * 1.7]; }
+  /** на широких мониторах ширина обзора тоже ограничена (не больше ~2000 px карты) */
+  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 800, 0.62, 1.6), sw / 2000); }
+  zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.84, sw / 2300), b * 1.7]; }
   reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; }
   update(dt, sc, fx, sw, sh, mouse) {
-    if (!this.inited) { this.inited = true; this.x = sc.W / 2; this.y = sc.waterY - 420; this.z = this.tz = this.baseZoom(sh); }
-    const [zmin, zmax] = this.zoomLimits(sh);
+    if (!this.inited) { this.inited = true; this.x = sc.W / 2; this.y = sc.waterY - 420; this.z = this.tz = this.baseZoom(sh, sw); }
+    const [zmin, zmax] = this.zoomLimits(sh, sw);
     if (this.userZ !== null) this.userZ = clamp(this.userZ, zmin, zmax);
     this.binocK = approach(this.binocK, this.binoc ? 1 : 0, 9, dt);
-    this.tz = (this.userZ ?? this.baseZoom(sh)) * (1 + 0.2 * this.binocK);
+    // бинокль не приближает: он плавно ведёт обзор за мышью
+    this.tz = this.userZ ?? this.baseZoom(sh, sw);
     let target = null;
     {
       if (this.binoc && mouse) {
@@ -55,13 +57,13 @@ class Camera {
     const hw = sw / 2 / this.z, hh = sh / 2 / this.z;
     const minX = hw - 250, maxX = sc.W - hw + 250;
     this.x = minX > maxX ? sc.W / 2 : clamp(this.x, minX, maxX);
-    const minY = -900 + hh, maxY = sc.waterY + 150 - hh;
+    const minY = -900 + hh, maxY = sc.waterY + 270 - hh; // запас снизу, чтобы бойцы у воды не прятались под нижним HUD
     this.y = minY > maxY ? maxY : clamp(this.y, minY, maxY);
   }
   /** колесо мыши: только небольшое приближение/отдаление вокруг курсора */
   zoomAt(f, px, py, sw, sh) {
-    const [wx, wy] = this.toWorld(px, py, sw, sh); const [zmin, zmax] = this.zoomLimits(sh);
-    this.userZ = clamp((this.userZ ?? this.baseZoom(sh)) * f, zmin, zmax); this.z = this.tz = this.userZ * (1 + 0.2 * this.binocK);
+    const [wx, wy] = this.toWorld(px, py, sw, sh); const [zmin, zmax] = this.zoomLimits(sh, sw);
+    this.userZ = clamp((this.userZ ?? this.baseZoom(sh, sw)) * f, zmin, zmax); this.z = this.tz = this.userZ;
     const [wx2, wy2] = this.toWorld(px, py, sw, sh); this.x += wx - wx2; this.y += wy - wy2; this.free = Math.max(this.free, 2.5);
   }
 }
@@ -332,9 +334,12 @@ class Renderer {
       c.fillStyle = wk > 0.25 ? '#6fd0ff' : '#ff7a4a'; rrect(c, x + 66, y + 51, (w - 80) * wk, 5, 2.5); c.fill();
     }
     // подсказки внизу справа
-    c.textAlign = 'right'; c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.55)';
-    c.fillText(cam.binoc ? 'Бинокль: ведите мышь к краю' : 'Бинокль — удерживайте ПКМ или B', sw - 14, sh - 70);
-    if (extra && extra.ping !== undefined) { c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillText(`пинг ${extra.ping} мс`, sw - 14, sh - 12); }
+    // подсказка про бинокль — на подложке и только пока игрок им ни разу не пользовался
+    if (cam.binocK > 0.5) this.binocUsed = true;
+    const hint = cam.binoc ? 'Бинокль: ведите мышь к краю' : this.binocUsed ? '' : 'Бинокль — удерживайте ПКМ или B';
+    c.textAlign = 'right'; c.font = `12px ${FONT_UI}`;
+    if (hint) { const hw = c.measureText(hint).width + 20; hudPanel(c, sw - 14 - hw, sh - 88, hw, 24, 8); c.fillStyle = 'rgba(255,255,255,0.85)'; c.fillText(hint, sw - 24, sh - 76); }
+    if (extra && extra.ping !== undefined) { c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillText(`пинг ${extra.ping} мс`, sw - 106, sh - 34); }
     c.restore();
   }
   /** оверлей бинокля: две линзы, шкала и затемнение по краям */

@@ -22,8 +22,9 @@ class AISearch {
       if (!avail(w)) continue;
       for (let a = -178; a <= 34; a += 4) for (let p = 0.2; p <= 1.0001; p += 0.08) this.tasks.push([w, sim, speed, fuse, a * DEG, p]);
     }
-    this.direct(avail);
+    this.direct(avail); this.heal(avail);
   }
+  heal(avail) { if (this.s.hp < 40 && avail('medkit')) this.consider({ w: 'medkit', aim: this.s.aim, pw: 1, score: 26 }); }
   consider(c) { if (!this.best || c.score > this.best.score) this.best = c; }
   blastScore(x, y, R, D) {
     let sc = 0;
@@ -63,6 +64,19 @@ class AISearch {
       const clear = h.type === 'soldier' && h.s === e;
       const kb = (dmg) => dmg >= e.hp ? 40 : 0;
       if (clear && avail('sniper')) this.consider({ w: 'sniper', aim: a, pw: 1, score: 50 + kb(50) - 8 });
+      // прямой огонь: небольшой случайный бонус, чтобы компьютер не повторял одно и то же оружие
+      const vary = () => Math.random() * 10;
+      if (clear && dist < 750 && avail('assault')) { const dmg = dist < 350 ? 26 : 18; this.consider({ w: 'assault', aim: a, pw: 1, score: dmg + kb(dmg) + vary() }); }
+      if (clear && dist < 600 && avail('revolver')) this.consider({ w: 'revolver', aim: a, pw: 1, score: 40 + kb(45) - 6 + vary() });
+      if (clear && dist < 550 && avail('minigun')) this.consider({ w: 'minigun', aim: a, pw: 1, score: 34 + kb(34) - 6 + vary() });
+      if (clear && dist < 520 && avail('tesla')) { const chain = this.enemies.filter(o => o !== e && Math.hypot(o.x - e.x, o.y - e.y) < 160).length; this.consider({ w: 'tesla', aim: a, pw: 1, score: 32 + 14 * chain + kb(32) - 6 + vary() }); }
+      if (clear && dist < 190 && avail('flamer')) this.consider({ w: 'flamer', aim: a, pw: 1, score: 30 + kb(30) - 6 + vary() });
+      if (avail('railgun')) {
+        // луч пробивает землю: считаем всех бойцов на линии
+        let sc = 0; const cx = Math.cos(a), cy = Math.sin(a);
+        for (const o of g.soldiers) { if (!o.alive || o === s) continue; const rx = o.x - s.x, ry = o.y - 14 - (s.y - 17), along = rx * cx + ry * cy; if (along < 0 || Math.abs(rx * cy - ry * cx) > 16) continue; sc += o.team === this.team ? -70 : 40 + (o.hp <= 45 ? 40 : 0); }
+        if (sc > 0) this.consider({ w: 'railgun', aim: a, pw: 1, score: sc - 10 + vary() });
+      }
       if (clear && dist < 420 && avail('shotgun')) { const dmg = dist < 150 ? 40 : dist < 280 ? 30 : 18; this.consider({ w: 'shotgun', aim: a, pw: 1, score: dmg + kb(dmg) }); }
       if (Math.abs(ex - s.x) < 22 && Math.abs(e.y - s.y) < 18 && avail('bat')) { const dir = ex >= s.x ? 1 : -1; this.consider({ w: 'bat', aim: dir > 0 ? -0.6 : Math.PI + 0.6, pw: 1, score: 55 + kb(30) }); }
       if (avail('airstrike') && !own(ex, 110)) { const n = this.enemies.filter(o => Math.abs(o.x - ex) < 90).length; this.consider({ w: 'airstrike', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 24 * n + kb(26) - 14 }); }
