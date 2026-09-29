@@ -104,8 +104,8 @@ function stoneAt(S, o, ox, oy, rad, ph, pc, n1, n2, r, g, bl) {
     const k = e < 0.3 ? e * 0.9 : Math.min(0.92, 0.27 + (e - 0.3) * 1.1);
     const nx = Math.cos(ca) * k * 0.6 + (ox / R) * 0.4, ny = Math.sin(ca) * k * 0.6 + (oy / R) * 0.4, nz = Math.sqrt(Math.max(0.02, 1 - nx * nx - ny * ny));
     const lam = nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z;
-    let f = 0.26 + 1.08 * Math.max(0, lam) + (n1 - 0.5) * 0.2 + (n2 - 0.5) * 0.1;
-    { const hx = ox / R + 0.32, hy = oy / R + 0.42, hs = hx * hx + hy * hy; if (hs < 0.05) f += (1 - hs / 0.05) * 0.35; }   // мягкий блик
+    let f = 0.22 + 1.2 * Math.max(0, lam) + (n1 - 0.5) * 0.18 + (n2 - 0.5) * 0.1;
+    { const hx = ox / R + 0.32, hy = oy / R + 0.42, hs = hx * hx + hy * hy; if (hs < 0.06) f += (1 - hs / 0.06) * 0.55; }   // мягкий блик
     if (e > 0.88) f *= 0.72 + (1 - e) * 2.2;
     const so = S.soil, lo = ny > 0.15 ? (ny - 0.15) * 0.35 : 0;                     // отсвет тёплой земли на нижних гранях
     let rr = (pc[0] * (1 - lo) + so[0] * 1.5 * lo) * f, gg = (pc[1] * (1 - lo) + so[1] * 1.25 * lo) * f, bb = (pc[2] * (1 - lo) + so[2] * lo) * f;
@@ -152,9 +152,9 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       f = 0.8 + hb * 0.36 + (n2 - 0.5) * 0.08;
       if ((bx & 1) === 0) f *= 0.86;
       if (hash3(bid, 1, 3) < 0.3) f *= 0.62;                                                   // тёмные стебли разделяют пучки
-      if (t < 1.8) f *= 1.12;
+      if (t < 1.8) f *= 1.04;
       if (k > 0.72) f *= 1 - (k - 0.72) * 1.3;
-      if (hb > 0.7 && t < 2.5) { r += (232 - r) * 0.45; g += (240 - g) * 0.45; bl += (144 - bl) * 0.45; }   // солнце на кончиках
+      if (hb > 0.72 && t < 2.5) { r += (238 - r) * 0.35; g += (240 - g) * 0.35; bl += (142 - bl) * 0.35; }   // солнце на кончиках
     } else {
       const blade = tl.t1[((y >> 2 & 255) << 8) | (x & 255)];
       f = 0.9 + n2 * 0.1 + (blade - 0.5) * 0.22;
@@ -173,7 +173,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     const lv = (0.9 + n3 * 0.1 + (n2 - 0.5) * 0.05 + (big - 0.5) * 0.16) * (1 - Math.min(0.2, sd / 1100));
     r = (c0[0] + (c1[0] - c0[0]) * bm) * lv; g = (c0[1] + (c1[1] - c0[1]) * bm) * lv; bl = (c0[2] + (c1[2] - c0[2]) * bm) * lv;
     if (sd < S.soilDepth) { const k = sd / S.soilDepth, q = k * k; const so = S.soil; r = so[0] + (r - so[0]) * q; g = so[1] + (g - so[1]) * q; bl = so[2] + (bl - so[2]) * q; }
-    if (capT > 0 && sd < 10) { const k = sd < 4 ? 0.34 : 0.62 + (sd - 4) * 0.063; r *= k; g *= k * 0.95; bl *= k * 0.92; }        // тень под травяной губой
+    if (capT > 0 && sd < 12) { const k = sd < 6 ? 0.36 : 0.6 + (sd - 6) * 0.066; r *= k; g *= k * 0.95; bl *= k * 0.92; }        // тень под травяной губой
     // почва: тёплая у поверхности, фактура в двух масштабах (2–3 px и 12–20 px), комья с тенью, крошка
     { const nm = tileAt(tl.t1, x, y, 1, 7), nb = tileAt(tl.t2, x, y, 4, 41);
       let gk = 1 + (nm - 0.5) * 0.2 + (nb - 0.5) * 0.26 + (n1 - 0.5) * 0.08;
@@ -280,7 +280,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         if (V.rnd[id] > 0.86) { const q2 = V.rnd2[id]; stoneAt(S, o, -V.vx[vi] * 0.5, -V.vy[vi] * 0.6, V.cell * (0.08 + 0.16 * q2), id * 3.1, [rc[0] * 0.8, rc[1] * 0.78, rc[2] * 0.76], n1, n2, r, g, bl); r = o.r; g = o.g; bl = o.b; } }
       // иней и снег на уступах пластов
       if (S.snowy) { const mg = 1.35 - (y / S.H) * 0.8; r *= mg; g *= mg; bl *= mg * 1.04; }                  // лунный свет: светлее вверху
-      if (S.snowy && fyb < 2 + n2 * 3 + tileAt(tl.t1, x, y, 2, 77) * 2) { const k = 0.7; r += (236 - r) * k; g += (244 - g) * k; bl += (255 - bl) * k; }
+      if (S.snowy && hash3(bi, 21, 3) > 0.45 && tileAt(tl.t3, x, y, 4, 13) > 0.45 && fyb < 1.5 + n2 * 3 + tileAt(tl.t1, x, y, 2, 77) * 2) { const k = 0.45; r += (236 - r) * k; g += (244 - g) * k; bl += (255 - bl) * k; }
       // тонкие диагональные трещинки внутри глыбы
       if (hh > 0.6 && Math.abs(veinAt(tl.tv, x * 1.6 + bj * 37, y * 1.6) - 0.5) < 0.006 && e > 3) { r *= 0.62; g *= 0.62; bl *= 0.62; }
     }
@@ -891,7 +891,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       }
     } else if (kind === 'icicles' && x - lastX > 3 + rng() * 9 && rng() < (fbm1(x / 45, seed + 41, 2) > 0 ? 0.55 : 0.08)) {
       lastX = x; const q = rng(), len = 4 + q * q * 22; const w = 1.2 + rng() * 1.4 + len * 0.04;
-      const g = c.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(255,255,255,0.98)'); g.addColorStop(0.5, 'rgba(200,236,255,0.9)'); g.addColorStop(1, 'rgba(120,180,230,0.7)');
+      const g = c.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(255,255,255,0.85)'); g.addColorStop(0.35, 'rgba(207,230,255,0.7)'); g.addColorStop(1, 'rgba(120,170,225,0.45)');
       c.fillStyle = g; c.beginPath(); c.moveTo(x - w, y - 0.5); c.lineTo(x + w, y - 0.5); c.quadraticCurveTo(x + w * 0.3, y + len * 0.6, x + 0.2, y + len); c.quadraticCurveTo(x - w * 0.4, y + len * 0.6, x - w, y - 0.5); c.fill();
     } else if (kind === 'drips' && rng() < 0.05) {
       const len = 3 + rng() * 5; c.fillStyle = theme.id === 'city' ? '#3a3632' : '#b8683a'; c.beginPath(); c.moveTo(x - 2, y); c.lineTo(x + 2, y); c.lineTo(x, y + len); c.closePath(); c.fill();

@@ -34,7 +34,7 @@ function foliage(c, blobs, pal) {
   c.fillStyle = ramp(0.02); for (const b of blobs) scallop(b.x, b.y, b.r * 0.96, 9, b.x);
   // слои по всей кроне сразу: сначала тени всех кочанов, потом середины, потом освещённые шапки —
   // кочаны сливаются в одну массу с общим светом (сверху слева), а не выглядят отдельными шариками
-  for (const q of clumps) { const gx = (q.x - cxm) / hw, gy = (q.y - cym) / hh; q.glob = -(gx * 0.45 + gy * 0.8) * 0.5; q.base = 0.36 + q.glob * 0.8 + (rnd() - 0.5) * 0.06; q.k = 7 + (rnd() * 4 | 0); q.ph = rnd() * 6; }
+  for (const q of clumps) { const gx = (q.x - cxm) / hw, gy = (q.y - cym) / hh; q.glob = -(gx * 0.45 + gy * 0.8) * 0.5; q.base = 0.36 + q.glob * 0.8 + (rnd() - 0.5) * 0.06 - (gy > 0.3 ? (gy - 0.3) * 0.3 : 0); q.k = 7 + (rnd() * 4 | 0); q.ph = rnd() * 6; }
   for (const q of clumps) { c.fillStyle = ramp(q.base - 0.3); scallop(q.x, q.y, q.r, q.k, q.ph); }
   for (const q of clumps) { if (q.glob > -0.3) { c.fillStyle = ramp(q.base + 0.06); scallop(q.x - q.r * 0.18, q.y - q.r * 0.22, q.r * 0.74, q.k, q.ph + 1); } }
   for (const q of clumps) { if (q.glob > -0.05) { c.fillStyle = ramp(q.base + 0.34); scallop(q.x - q.r * 0.32, q.y - q.r * 0.36, q.r * 0.42, q.k + 2, q.ph + 2); } }
