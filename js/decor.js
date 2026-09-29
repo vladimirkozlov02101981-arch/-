@@ -4,7 +4,7 @@
    Рисуется на отдельный слой позади земли, разрушается взрывами
    ========================================================= */
 let DECOR_THEME = 'valley';
-const OAK_PALS = [['#1a3419', '#336828', '#6ea23a', '#c4dc62'], ['#193822', '#30642e', '#63993e', '#b6d46e'], ['#1e3817', '#3c6c28', '#7aa83c', '#ccdf6a']];
+const OAK_PALS = [['#1e3212', '#3e6420', '#7e9e30', '#d0dc60'], ['#1c3414', '#386024', '#72983a', '#c4d868'], ['#223412', '#44681e', '#88a42e', '#dadf64']];
 const CASTLE_PALS = [['#233e14', '#4a7a22', '#8fb83a', '#d8e670'], ['#2e4216', '#5e7e26', '#a0b844', '#e0e27a']];
 
 function circ(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.1, r), 0, TAU); c.fill(); }
@@ -56,6 +56,15 @@ function foliage(c, blobs, pal) {
   c.save(); c.lineCap = 'round'; c.strokeStyle = 'rgba(236,244,150,0.55)';
   for (const q of rims) { c.lineWidth = Math.max(1, q.r * 0.14); c.beginPath(); c.arc(q.x, q.y, q.r * 0.86, -2.6, -1.5); c.stroke(); }
   c.restore();
+  // просветы неба сквозь большую крону: рваные дырочки с тёмной кромкой листвы
+  if (blobs.length >= 10) {
+    for (let i = 0, k = 3 + (rnd() * 3 | 0); i < k; i++) {
+      const hx = cxm + (rnd() - 0.5) * hw * 1.1, hy = cym + (rnd() - 0.7) * hh * 0.9, hr = 2 + rnd() * 2.6;
+      c.save(); c.globalCompositeOperation = 'destination-out'; c.beginPath();
+      for (let j = 0; j <= 10; j++) { const a = j / 10 * TAU, rr = hr * (0.7 + rnd() * 0.5); if (j) c.lineTo(hx + Math.cos(a) * rr * 1.3, hy + Math.sin(a) * rr); else c.moveTo(hx + Math.cos(a) * rr * 1.3, hy + Math.sin(a) * rr); }
+      c.closePath(); c.fill(); c.restore();
+    }
+  }
 }
 function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
@@ -467,7 +476,7 @@ const DECOR = {
   /* ---------- мелочь ---------- */
   bush(c, g, x, y, s, r) {
     const blobs = []; const n = r.int(5, 8); for (let i = 0; i < n; i++) blobs.push({ x: x + r.range(-13, 13) * s, y: y - r.range(4, 12) * s, r: r.range(6, 10) * s });
-    foliage(c, blobs, DECOR_THEME === 'castle' ? ['#26401a', '#4a7a26', '#8fb840', '#d8e670'] : ['#15401a', '#2f7d27', '#6cc03a', '#c8f060']);
+    foliage(c, blobs, DECOR_THEME === 'castle' ? ['#26401a', '#4a7a26', '#8fb840', '#d8e670'] : ['#1c3410', '#3c6a1c', '#7aa42c', '#cce060']);
   },
   bushFlower(c, g, x, y, s, r) {
     DECOR.bush(c, g, x, y, s, r); const col = r.pick(['#ff4f7b', '#ffcf3d', '#ff8a3d', '#ffffff']);
