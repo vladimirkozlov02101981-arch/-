@@ -374,8 +374,9 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (fy < 2.6) f *= 1.18; else if (fy > ph - 2) f *= 0.72;
           if (fx < 2.4) f *= 1.06; else if (fx > segL - 2) f *= 0.8;
           if (prm && prm.h > 60) f *= 1.06 - 0.3 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h));   // объём корпуса: низ темнее
+          else if (!prm && S.glass && !isBack) f *= 1.1 - Math.min(1, Math.max(0, (y - S.hullTop) / 420)) * 0.42;   // выпуклый корпус: светлее у борта, темнее к килю
           r = P.base[0] * f * (1 + hue); g = P.base[1] * f; bl = P.base[2] * f * (1 - hue);
-          if (((fx > 2.5 && fx < 4.2) || (fx > segL - 4.2 && fx < segL - 2.5)) && fy > ph * 0.5 - 1 && fy < ph * 0.5 + 0.8) { r = 60; g = 52; bl = 46; o.spec = 0.6; }
+          { const nx2 = Math.min(Math.abs(fx - 3.5), Math.abs(fx - (segL - 3.5))), ny2 = Math.abs(fy - ph * 0.5); if (nx2 * nx2 + ny2 * ny2 < 1.8) { r = 44; g = 36; bl = 30; o.spec = 0.8; } else if (nx2 < 2.2 && ny2 < 2.2 && fy > ph * 0.5) { r *= 0.8; g *= 0.8; bl *= 0.8; } }   // гвозди с тенью
         }
         break;
       }
@@ -584,7 +585,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -677,7 +678,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
+        const k = back[i] === 3 ? 0.84 * (0.82 + 0.18 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
@@ -817,8 +818,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     let nextX = -1;
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
-      if (x < nextX || y > waterY - 20 || matAt(x, y + 2) !== 5 || !flatTop(x, y) || T.isSolid(x, y - 30) || T.isSolid(x + 14, y - 16)) continue;
-      nextX = x + 70 + rng() * 120; const kind = rng();
+      if (x < nextX || y > waterY - 20 || !(matAt(x, y + 2) === 5 || matAt(x, y + 2) === 6 || matAt(x, y + 2) === 1) || !flatTop(x, y) || T.isSolid(x, y - 40) || T.isSolid(x + 24, y - 20) || T.isSolid(x - 8, y - 20)) continue;
+      nextX = x + 50 + rng() * 90; const kind = rng();
       if (kind < 0.45) {                                                                     // кондиционер: корпус, решётка, вентилятор
         const w = 22 + rng() * 8, h = 15;
         c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(x - 1, y - 1, w + 3, 2);
