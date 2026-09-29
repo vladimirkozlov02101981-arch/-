@@ -95,8 +95,8 @@ class Game {
     const knock = o.knock ?? R * 8;
     for (const s of this.soldiers) {
       if (s.gone) continue;
-      // ударная волна шире самого взрыва: урон и отбрасывание — до RW (в 1,6 раза дальше радиуса)
-      const cx = s.x, cy = s.y - 17; const d = Math.hypot(cx - x, cy - y); const RR = R + 12, RW = RR * 1.6;
+      // ударная волна: радиус RW; расстояние считается до ближайшей точки тела бойца (попадание в упор — полный урон)
+      const cx = s.x, cy = s.y - 17, by = clamp(y, s.y - 33, s.y - 4); const d = Math.max(0, Math.hypot(s.x - x, by - y) - 6); const RR = R + 12, RW = RR * 1.6;
       if (d >= RW) continue;
       const fw = 1 - d / RW;
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
@@ -104,8 +104,8 @@ class Game {
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
       const imp = Math.min(820, knock * 1.45) * Math.pow(fw, 1.1) * shielding;
       if (imp >= 25) { s.vx += dx * imp; s.vy += dy * imp; s.fly(); }
-      // урон ударной волны — по всему её радиусу RW с мягким спадом (в центре — полный D)
-      if (D > 0 && s.alive && fw > 0) this.damage(s, Math.round(D * Math.pow(fw, 0.8) * shielding), o.owner);
+      // урон: максимум D в эпицентре, линейно убывает с расстоянием до нуля на краю волны
+      if (D > 0 && s.alive && fw > 0) this.damage(s, Math.round(D * fw * shielding), o.owner);
     }
     for (const e of this.entities) {
       if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > (R + 20) * 1.6) continue;

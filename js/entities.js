@@ -9,7 +9,7 @@ const KINDS = ['rocket', 'homing', 'mortar', 'frag', 'drill', 'mini', 'grenade',
 function gaussRand() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
 const KIND_IDX = Object.fromEntries(KINDS.map((k, i) => [k, i]));
 const BLAST = {
-  rocket: { R: 42, D: 48, K: 330 }, homing: { R: 40, D: 45, K: 320 }, mortar: { R: 46, D: 55, K: 350 }, frag: { R: 17, D: 12, K: 150 },
+  rocket: { R: 42, D: 70, K: 330 }, homing: { R: 40, D: 45, K: 320 }, mortar: { R: 46, D: 55, K: 350 }, frag: { R: 17, D: 12, K: 150 },
   drill: { R: 38, D: 42, K: 320 }, mini: { R: 22, D: 18, K: 190 }, grenade: { R: 46, D: 60, K: 350 }, cluster: { R: 30, D: 24, K: 260 },
   bomblet: { R: 20, D: 16, K: 180 }, sticky: { R: 42, D: 46, K: 330 }, dynamite: { R: 76, D: 72, K: 520 }, mine: { R: 42, D: 45, K: 340 },
   robot: { R: 62, D: 56, K: 460 }, bomb: { R: 32, D: 26, K: 280 }, nukem: { R: 135, D: 82, K: 760 }, crate: { R: 36, D: 25, K: 300 },
