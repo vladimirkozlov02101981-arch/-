@@ -131,7 +131,7 @@ function rasterizeMap(def) {
 
 /* ---------- строители сооружений ---------- */
 const PAL = {
-  castleStone: { base: '#9a9ca6', alt: '#858893', mortar: '#4b4d56', w: 20, h: 10, var: 0.09 },
+  castleStone: { base: '#9c9ea6', alt: '#868892', mortar: '#2c2d33', w: 28, h: 14, var: 0.11 },
   sandBrick: { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 22, h: 11, var: 0.08 },
   darkStone: { base: '#4a4040', alt: '#3c3434', mortar: '#1a1414', w: 20, h: 10, var: 0.1 },
   shipWood: { base: '#7a4a2a', gap: '#2a160a', plank: 8, var: 0.18 },

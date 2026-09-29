@@ -4,25 +4,57 @@
    Рисуется на отдельный слой позади земли, разрушается взрывами
    ========================================================= */
 let DECOR_THEME = 'valley';
-const OAK_PALS = [['#263d30', '#516c3b', '#9aa462'], ['#243d36', '#45644b', '#86996b'], ['#354332', '#5c7040', '#a8ae6b']];
-const CASTLE_PALS = [['#4a6a22', '#6f9432', '#b3c95a'], ['#5a6a24', '#88963a', '#c9c268']];
+const OAK_PALS = [['#1a3419', '#336828', '#6ea23a', '#c4dc62'], ['#193822', '#30642e', '#63993e', '#b6d46e'], ['#1e3817', '#3c6c28', '#7aa83c', '#ccdf6a']];
+const CASTLE_PALS = [['#233e14', '#4a7a22', '#8fb83a', '#d8e670'], ['#2e4216', '#5e7e26', '#a0b844', '#e0e27a']];
 
 function circ(c, x, y, r) { c.beginPath(); c.arc(x, y, Math.max(0.1, r), 0, TAU); c.fill(); }
+/** крона из листвы: каждое облачко — сотни мелких листьев, освещённых по своей нормали
+    (солнце сверху слева): светлые жёлто-зелёные верхушки, сочная середина, глубокая тень снизу */
+/** крона: облачка из «кочанов» листвы. Каждый кочан — фестончатый шар с собственным светом
+    (солнце сверху слева): глубокая тень снизу, сочная середина, жёлто-зелёная освещённая шапка
+    и отдельные листья по кромке. Верх кроны светлее, низ уходит в тень */
 function foliage(c, blobs, pal) {
   const rnd = makeRng(7129 + Math.round(blobs[0].x * 11));
+  const P = pal.map(hex2rgb); if (P.length < 4) P.push(P[2].map(v => Math.min(255, v * 1.22 + 22)));
+  const ramp = (t) => { t = t < 0 ? 0 : t > 1 ? 1 : t; const k = t * 3, i = Math.min(2, k | 0), f = k - i, A = P[i], B = P[i + 1];
+    return `rgb(${(A[0] + (B[0] - A[0]) * f) | 0},${(A[1] + (B[1] - A[1]) * f) | 0},${(A[2] + (B[2] - A[2]) * f) | 0})`; };
+  const scallop = (x, y, r, k, ph) => { c.beginPath(); for (let i = 0; i <= 36; i++) { const a = i / 36 * TAU, rr = r * (0.9 + 0.1 * Math.abs(Math.sin(a * k * 0.5 + ph))); const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr; if (i) c.lineTo(px, py); else c.moveTo(px, py); } c.closePath(); c.fill(); };
+  let minY = 1e9, maxY = -1e9, minX = 1e9, maxX = -1e9; const rims = [];
+  for (const b of blobs) { minY = Math.min(minY, b.y - b.r); maxY = Math.max(maxY, b.y + b.r); minX = Math.min(minX, b.x - b.r); maxX = Math.max(maxX, b.x + b.r); }
+  const span = Math.max(1, maxY - minY), cxm = (minX + maxX) / 2, cym = (minY + maxY) / 2, hw = Math.max(1, (maxX - minX) / 2), hh = span / 2;
+  // кочаны по всем облачкам
+  const clumps = [];
   for (const b of blobs) {
-    const grad = c.createRadialGradient(b.x-b.r*.35,b.y-b.r*.4,b.r*.05,b.x,b.y,b.r);
-    grad.addColorStop(0,pal[2]); grad.addColorStop(.38,pal[1]); grad.addColorStop(1,pal[0]);
-    c.fillStyle=grad; c.beginPath();
-    for(let i=0;i<=24;i++){const a=i/24*TAU,rr=b.r*(.82+rnd()*.21),x=b.x+Math.cos(a)*rr,y=b.y+Math.sin(a)*rr; if(i===0)c.moveTo(x,y);else c.lineTo(x,y);}c.closePath();c.fill();
-    for(let i=0;i<42;i++){const a=rnd()*TAU,d=Math.sqrt(rnd())*b.r*.95; c.globalAlpha=.15+rnd()*.3;c.fillStyle=pal[i%3];c.beginPath();c.ellipse(b.x+Math.cos(a)*d,b.y+Math.sin(a)*d,1+rnd()*2,.6+rnd()*1.3,-.6,0,TAU);c.fill();}c.globalAlpha=1;
+    const m = Math.max(1, Math.round((b.r * b.r) / 130));
+    for (let i = 0; i < m; i++) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * b.r * 0.5; clumps.push({ x: b.x + Math.cos(a) * d, y: b.y + Math.sin(a) * d, r: Math.max(2.4, b.r * (0.5 + rnd() * 0.22)) }); }
   }
-  // объём кроны: солнечный ободок сверху-слева и тень снизу-справа поверх всех шаров
-  c.save(); c.lineCap = 'round';
-  for (const b of blobs) {
-    c.globalAlpha = 0.45; c.strokeStyle = pal[2]; c.lineWidth = Math.max(1, b.r * 0.14); c.beginPath(); c.arc(b.x, b.y, b.r * 0.86, -2.7, -1.2); c.stroke();
-    c.globalAlpha = 0.28; c.strokeStyle = '#0c140c'; c.lineWidth = Math.max(1, b.r * 0.22); c.beginPath(); c.arc(b.x, b.y, b.r * 0.8, 0.2, 1.9); c.stroke();
+  // сзади вперёд: сначала верхние и дальние, нижние ложатся поверх
+  clumps.sort((p, q) => p.y - q.y);
+  // тёмная подложка всей кроны — глубина между кочанами
+  c.fillStyle = ramp(0.02); for (const b of blobs) scallop(b.x, b.y, b.r * 0.96, 9, b.x);
+  for (const q of clumps) {
+    const gx = (q.x - cxm) / hw, gy = (q.y - cym) / hh;                         // положение в кроне
+    const glob = -(gx * 0.45 + gy * 0.8) * 0.5;                                  // крона освещена сверху слева
+    const base = 0.24 + glob * 0.7 + (rnd() - 0.5) * 0.1;
+    const k = 7 + (rnd() * 4 | 0), ph = rnd() * 6;
+    c.fillStyle = ramp(base - 0.26); scallop(q.x, q.y, q.r, k, ph);                                             // тень кочана
+    c.fillStyle = ramp(base + 0.14); scallop(q.x - q.r * 0.14, q.y - q.r * 0.16, q.r * 0.8, k, ph + 1);          // середина
+    c.fillStyle = ramp(base + 0.42); scallop(q.x - q.r * 0.3, q.y - q.r * 0.34, q.r * 0.46, k + 2, ph + 2);   // освещённая шапка
+    if (glob > 0.05) rims.push(q);
+    // листья по освещённой кромке и прожилки-тени внизу
+    const ls = Math.max(1.1, Math.min(2.8, q.r * 0.16));
+    for (let i = 0, n = Math.round(q.r * 1.6); i < n; i++) {
+      const a = -2.4 + rnd() * 2.2, d = q.r * (0.55 + rnd() * 0.45), px = q.x + Math.cos(a) * d, py = q.y + Math.sin(a) * d;
+      c.fillStyle = ramp(base + 0.3 + rnd() * 0.35); c.beginPath(); c.ellipse(px, py, ls * 1.2, ls * 0.6, a + 1.2 + (rnd() - 0.5), 0, TAU); c.fill();
+    }
+    for (let i = 0, n = Math.round(q.r * 0.8); i < n; i++) {
+      const a = 0.4 + rnd() * 2.2, d = q.r * (0.5 + rnd() * 0.4), px = q.x + Math.cos(a) * d, py = q.y + Math.sin(a) * d;
+      c.fillStyle = ramp(base - 0.28); c.beginPath(); c.ellipse(px, py, ls, ls * 0.5, a + 1.2, 0, TAU); c.fill();
+    }
   }
+  // тёплый солнечный ободок на верхних кочанах
+  c.save(); c.lineCap = 'round'; c.strokeStyle = 'rgba(236,244,150,0.55)';
+  for (const q of rims) { c.lineWidth = Math.max(1, q.r * 0.14); c.beginPath(); c.arc(q.x, q.y, q.r * 0.86, -2.6, -1.5); c.stroke(); }
   c.restore();
 }
 function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
@@ -37,13 +69,19 @@ const DECOR = {
     c.fillStyle = hgrad(c, x - tw, x + tw, ['#6b4a2e', '#523620', '#2f1d10']);
     c.beginPath(); c.moveTo(x - tw * 1.2, y + 4); c.quadraticCurveTo(x - tw * 0.4, y - h * 0.35, tx - tw * 0.32, ty + h * 0.15);
     c.lineTo(tx + tw * 0.32, ty + h * 0.15); c.quadraticCurveTo(x + tw * 0.4, y - h * 0.35, x + tw * 1.2, y + 4); c.closePath(); c.fill();
+    // кора: продольные борозды, светлые гребни на солнечной стороне
+    c.save(); c.clip(); c.lineCap = 'round';
+    for (let i = 0; i < 9; i++) { const u = -1 + (i + r() * 0.6) / 4.5, x0 = x + u * tw, x1 = tx + u * tw * 0.3; c.strokeStyle = u < -0.2 && i % 2 ? 'rgba(160,120,80,0.45)' : 'rgba(30,16,8,0.5)'; c.lineWidth = (0.8 + r() * 0.8) * s;
+      c.beginPath(); c.moveTo(x0, y + 4); c.bezierCurveTo(x0 + (r() - 0.5) * 3, y - h * 0.3, x1 + (r() - 0.5) * 3, ty + h * 0.4, x1, ty + h * 0.15); c.stroke(); }
+    c.restore();
     c.strokeStyle = '#4a2f1b'; c.lineCap = 'round';
     for (let i = 0; i < 4; i++) {
       const k = r.range(0.45, 0.85); const bx = lerp(x, tx, k), by = y - h * k; const dir = i % 2 ? 1 : -1; const len = r.range(16, 28) * s;
       c.lineWidth = r.range(1.8, 3.2) * s; c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo(bx + dir * len * 0.6, by - len * 0.15, bx + dir * len, by - len * r.range(0.35, 0.7)); c.stroke();
     }
     const R = r.range(30, 40) * s; const cx = tx, cy = ty - R * 0.2;
-    const blobs = []; for (let i = 0; i < 18; i++) { const a = r() * TAU, d = Math.sqrt(r()) * R * 0.8; blobs.push({ x: cx + Math.cos(a) * d * 1.3, y: cy + Math.sin(a) * d * 0.75, r: R * r.range(0.32, 0.5) }); }
+    const blobs = [{ x: cx, y: cy, r: R * 0.72 }, { x: cx - R * 0.55, y: cy + R * 0.12, r: R * 0.55 }, { x: cx + R * 0.55, y: cy + R * 0.1, r: R * 0.55 }, { x: cx, y: cy - R * 0.4, r: R * 0.55 }];
+    for (let i = 0; i < 14; i++) { const a = r() * TAU, d = Math.sqrt(r()) * R * 0.75; blobs.push({ x: cx + Math.cos(a) * d * 1.3, y: cy + Math.sin(a) * d * 0.72, r: R * r.range(0.3, 0.46) }); }
     foliage(c, blobs, DECOR_THEME === 'castle' ? r.pick(CASTLE_PALS) : r.pick(OAK_PALS));
   },
   birch(c, g, x, y, s, r) {
@@ -52,23 +90,33 @@ const DECOR = {
     c.beginPath(); c.moveTo(x - tw, y + 4); c.lineTo(x - tw * 0.5, y - h); c.lineTo(x + tw * 0.5, y - h); c.lineTo(x + tw, y + 4); c.closePath(); c.fill();
     c.fillStyle = '#2a2a2a';
     for (let yy = y - 8; yy > y - h + 10; yy -= r.range(7, 14) * s) c.fillRect(x - tw * 0.7 + r() * tw * 0.5, yy, r.range(2, 5) * s, 1.4 * s);
-    const blobs = []; for (let i = 0; i < 14; i++) { const a = r() * TAU, d = Math.sqrt(r()) * 22 * s; blobs.push({ x: x + Math.cos(a) * d * 0.9, y: y - h + 6 * s + Math.sin(a) * d * 1.2, r: r.range(8, 13) * s }); }
-    foliage(c, blobs, ['#354f36', '#637d44', '#b0b878']);
+    const blobs = [{ x, y: y - h + 6 * s, r: 16 * s }, { x, y: y - h + 22 * s, r: 13 * s }]; for (let i = 0; i < 12; i++) { const a = r() * TAU, d = Math.sqrt(r()) * 20 * s; blobs.push({ x: x + Math.cos(a) * d * 0.9, y: y - h + 8 * s + Math.sin(a) * d * 1.2, r: r.range(8, 12) * s }); }
+    foliage(c, blobs, ['#1f3f1c', '#3f7a2e', '#86b84a', '#d6ec80']);
   },
   pine(c, g, x, y, s, r, snowy = false) {
     const h = r.range(78, 108) * s, w = h * r.range(0.3, 0.36);
-    c.fillStyle = '#4a3020'; c.fillRect(x - 2.5 * s, y - h * 0.22, 5 * s, h * 0.22 + 5);
-    const tiers = 5;
+    c.fillStyle = hgrad(c, x - 3 * s, x + 3 * s, ['#6b4a30', '#4a3020', '#2a1a10']); c.fillRect(x - 3 * s, y - h * 0.24, 6 * s, h * 0.24 + 5);
+    const tiers = 6, cols = snowy ? ['#4f8a7c', '#2f5e54', '#173a32'] : ['#5aa85a', '#2f7440', '#123a22'];
     for (let i = 0; i < tiers; i++) {
-      const k = i / tiers; const by = y - h * 0.14 - k * h * 0.74; const tw = w * (1 - k * 0.78); const th = h * 0.3;
-      c.fillStyle = hgrad(c, x - tw, x + tw, snowy ? ['#35675c', '#244a44', '#12291f'] : ['#338a4b', '#23613a', '#133a22']);
-      c.beginPath(); c.moveTo(x, by - th); c.lineTo(x + tw, by);
-      const n = 6; for (let j = n; j >= 0; j--) c.lineTo(x - tw + 2 * tw * j / n, by + (j % 2 ? 3 * s : 0));
-      c.closePath(); c.fill();
-      // иголки: короткие светлые штрихи от ствола, тёмная нижняя кромка яруса
-      c.save(); c.clip(); c.lineWidth = 0.9 * s; c.lineCap = 'round';
-      for (let q = 0; q < 14; q++) { const u = r() * 2 - 1, yy = by - th * (0.15 + r() * 0.7); c.strokeStyle = u < 0 ? 'rgba(170,220,140,0.35)' : 'rgba(10,30,15,0.3)'; c.beginPath(); c.moveTo(x + u * tw * 0.2, yy); c.lineTo(x + u * tw * 0.9, yy + th * 0.28); c.stroke(); }
-      c.fillStyle = 'rgba(5,20,10,0.3)'; c.fillRect(x - tw, by - 3 * s, tw * 2, 6 * s);
+      const k = i / tiers; const by = y - h * 0.12 - k * h * 0.76; const tw = w * (1 - k * 0.8); const th = h * 0.28;
+      // ярус: вогнутые бока, рваная провисающая кромка из пучков хвои
+      const path = new Path2D(); path.moveTo(x, by - th);
+      path.quadraticCurveTo(x + tw * 0.35, by - th * 0.35, x + tw, by + 2 * s);
+      const n = 9 + (tw / (6 * s) | 0);
+      for (let j = n; j >= 0; j--) { const px = x - tw + 2 * tw * j / n, dip = (j % 2 ? 4.5 : 0.5) * s * (0.7 + r() * 0.6); path.lineTo(px, by + dip - Math.abs(j / n - 0.5) * 3 * s); }
+      path.quadraticCurveTo(x - tw * 0.35, by - th * 0.35, x, by - th); path.closePath();
+      c.fillStyle = hgrad(c, x - tw, x + tw, cols); c.fill(path);
+      c.save(); c.clip(path); c.lineCap = 'round';
+      // хвоя: много коротких штрихов от оси вниз-наружу; слева — на свету, справа — в тени
+      for (let q = 0; q < 70; q++) {
+        const u = r() * 2 - 1, yy = by - th * (0.05 + r() * 0.85), len = tw * (0.25 + r() * 0.35);
+        const lit = u < 0 ? 1 - (u + 1) * 0.5 : 0;
+        c.strokeStyle = u < -0.1 ? `rgba(${180 + lit * 40},${230},${150},${0.18 + lit * 0.3})` : `rgba(6,26,14,${0.2 + r() * 0.25})`;
+        c.lineWidth = (0.7 + r() * 0.6) * s; const x0 = x + u * tw * 0.5;
+        c.beginPath(); c.moveTo(x0, yy); c.lineTo(x0 + Math.sign(u || 1) * len * 0.5, yy + len * 0.45); c.stroke();
+      }
+      const sh = c.createLinearGradient(0, by - 7 * s, 0, by + 4 * s); sh.addColorStop(0, 'rgba(5,20,10,0)'); sh.addColorStop(1, 'rgba(5,20,10,0.5)');
+      c.fillStyle = sh; c.fillRect(x - tw, by - 7 * s, tw * 2, 12 * s);
       c.restore();
       if (snowy) {
         c.fillStyle = '#f4f8ff';
@@ -419,7 +467,7 @@ const DECOR = {
   /* ---------- мелочь ---------- */
   bush(c, g, x, y, s, r) {
     const blobs = []; const n = r.int(5, 8); for (let i = 0; i < n; i++) blobs.push({ x: x + r.range(-13, 13) * s, y: y - r.range(4, 12) * s, r: r.range(6, 10) * s });
-    foliage(c, blobs, DECOR_THEME === 'castle' ? ['#3f5a1e', '#62822e', '#a4b85a'] : ['#2a6124', '#46913a', '#80c457']);
+    foliage(c, blobs, DECOR_THEME === 'castle' ? ['#26401a', '#4a7a26', '#8fb840', '#d8e670'] : ['#15401a', '#2f7d27', '#6cc03a', '#c8f060']);
   },
   bushFlower(c, g, x, y, s, r) {
     DECOR.bush(c, g, x, y, s, r); const col = r.pick(['#ff4f7b', '#ffcf3d', '#ff8a3d', '#ffffff']);
@@ -433,9 +481,21 @@ const DECOR = {
   rock(c, g, x, y, s, r, pal) {
     const w = r.range(9, 16) * s, h = r.range(6, 11) * s;
     const cols = pal || (DECOR_THEME === 'tropical' ? ['#a89880', '#7a6c58', '#4a4034'] : ['#a9a296', '#7c766c', '#4c4740']);
-    c.fillStyle = hgrad(c, x - w, x + w, cols);
-    c.beginPath(); c.moveTo(x - w, y + 3); c.lineTo(x - w * 0.8, y - h * 0.6); c.lineTo(x - w * 0.2, y - h); c.lineTo(x + w * 0.5, y - h * 0.8); c.lineTo(x + w, y - h * 0.2); c.lineTo(x + w * 0.9, y + 3); c.closePath(); c.fill();
-    c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - w * 0.75, y - h * 0.55); c.lineTo(x - w * 0.2, y - h * 0.95); c.stroke();
+    // гранёный валун: контур из 7 точек, каждая грань (центр → ребро) освещена по своей нормали
+    const pts = [[-w, 3], [-w * r.range(0.75, 0.9), -h * r.range(0.45, 0.65)], [-w * r.range(0.15, 0.35), -h], [w * r.range(0.3, 0.55), -h * r.range(0.75, 0.92)], [w, -h * r.range(0.15, 0.35)], [w * 0.92, 3]];
+    const cx = x + w * r.range(-0.2, 0.05), cy = y - h * r.range(0.45, 0.6);
+    c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(x + 2, y + 3, w * 1.1, 2.6 * s, 0, 0, TAU); c.fill();
+    const C = cols.map(hex2rgb), shade = (k) => { k = clamp(k, 0, 1); const i = k < 0.5 ? 0 : 1, f = k < 0.5 ? k * 2 : (k - 0.5) * 2, A = C[2 - i], B = C[1 - i]; return `rgb(${(A[0] + (B[0] - A[0]) * f) | 0},${(A[1] + (B[1] - A[1]) * f) | 0},${(A[2] + (B[2] - A[2]) * f) | 0})`; };
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[i + 1]; const mxp = (ax + bx) / 2, myp = (ay + by) / 2;
+      const nl = Math.hypot(mxp - (cx - x), myp - (cy - y)) || 1, nx = (mxp - (cx - x)) / nl, ny = (myp - (cy - y)) / nl;
+      c.fillStyle = shade(0.5 + (-(nx * 0.55 + ny * 0.83)) * 0.55);
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(x + ax, y + ay); c.lineTo(x + bx, y + by); c.closePath(); c.fill();
+    }
+    // верхняя площадка и светлые рёбра
+    c.fillStyle = shade(0.9); c.beginPath(); c.moveTo(cx, cy); c.lineTo(x + pts[1][0], y + pts[1][1]); c.lineTo(x + pts[2][0], y + pts[2][1]); c.lineTo(x + pts[3][0], y + pts[3][1]); c.closePath(); c.globalAlpha = 0.55; c.fill(); c.globalAlpha = 1;
+    c.strokeStyle = 'rgba(255,245,220,0.45)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x + pts[1][0], y + pts[1][1]); c.lineTo(x + pts[2][0], y + pts[2][1]); c.lineTo(x + pts[3][0], y + pts[3][1]); c.stroke();
+    c.fillStyle = 'rgba(0,0,0,0.18)'; for (let i = 0; i < 8; i++) circ(c, x + r.range(-w, w) * 0.7, y - r.range(0, h) * 0.8, r.range(0.5, 1.2) * s);
     if (DECOR_THEME === 'valley' && r() < 0.5) { c.fillStyle = 'rgba(90,150,50,0.8)'; c.beginPath(); c.ellipse(x - w * 0.1, y - h * 0.85, w * 0.45, h * 0.22, 0, 0, TAU); c.fill(); }
   },
   rockSnow(c, g, x, y, s, r) { DECOR.rock(c, g, x, y, s, r, ['#9fb0c6', '#6f8098', '#3f4c60']); c.fillStyle = '#f4f8ff'; c.beginPath(); c.ellipse(x - 2 * s, y - 8 * s, 9 * s, 3.5 * s, 0, 0, TAU); c.fill(); },
