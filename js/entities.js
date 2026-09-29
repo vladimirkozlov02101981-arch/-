@@ -64,13 +64,16 @@ function bounceStep(g, e, dt, o) {
         const material = T.materialAt ? T.materialAt(lx,ly) : 1;
         const response = {1:.55,2:.9,3:.82,4:.6,5:.85,6:1,7:1.22,8:1.05,9:.85}[material] || .8;
         const restitution = Math.min(.94,(o.rest ?? .45)*response);
-        const friction = material === 7 ? .96 : (o.fric ?? .8);
+        const friction = material === 7 ? .96 : material === 1 ? (o.fric ?? .8) * .92 : (o.fric ?? .8);
         e.vx = tx * friction - vn * nrm.x * restitution;
         e.vy = ty * friction - vn * nrm.y * restitution;
         if (o.onImpact && o.onImpact(-vn, nrm) === 'stop') return 'stop';
       }
       for (let k = 0; k < 8 && (T.isSolid(e.x, e.y) || T.isSolid(e.x - nrm.x * r, e.y - nrm.y * r)); k++) { e.x += nrm.x; e.y += nrm.y; }
-      if (Math.hypot(e.vx, e.vy) < 20 && nrm.y < -0.45) { e.vx = 0; e.vy = 0; e.rest = true; }
+      // качение: вращение от скорости по касательной; замирает только на почти ровном месте, со склона скатывается
+      { const tv = e.vx * -nrm.y + e.vy * nrm.x; e.spinV = tv / Math.max(2, r); }
+      if (Math.hypot(e.vx, e.vy) < 18 && nrm.y < -0.88) { e.vx = 0; e.vy = 0; e.rest = true; e.spinV = 0; }
+      else if (Math.hypot(e.vx, e.vy) < 40 && nrm.y < -0.45) { e.vx -= nrm.x * g.gravity * 0.35 * dt * n; }
       return 'bounce';
     }
     e.x = nx; e.y = ny;
@@ -183,7 +186,7 @@ class Thrown extends Ent {
           this.stuckTo = s; this.sx = this.x - s.x; this.sy = this.y - s.y; this.stuck = true; g.emit({ t: 'bounce', x: R1(this.x), y: R1(this.y) });
         }
       }
-      if (!this.rest) this.a += this.vx * dt * 0.06;
+      if (!this.rest) this.a += (this.spinV !== undefined ? clamp(this.spinV, -25, 25) : this.vx * 0.06) * dt;
     }
     if (this.k !== 'molotov') { this.f -= dt; if (this.f <= 0) this.boom(g); }
     else if (this.age > 8) this.dead = true;

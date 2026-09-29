@@ -259,7 +259,13 @@ const App = {
   handleKeys() {
     const P = Input.pressed;
     if (P.Escape) { if (UI.trayOpen) UI.setTray(false); else if (UI.cur === 's-help' || UI.cur === 's-online') this.back(); else this.togglePause(); }
-    if (P.Tab) this.toggleTray();
+    // Tab: сначала отменяет взятое оружие (зарядку или выбранную точку), иначе открывает арсенал
+    if (P.Tab) {
+      const ctl = this.ctl, T = this.sc && this.sc.turn;
+      if (ctl && ctl.charging) { ctl.cancelCharge(); Sfx.play('denied'); }
+      else if (ctl && ctl.mine && T && T.target && T.phase === 'aim') { ctl.send({ c: 'untarget' }); ctl.pendingTarget = false; Sfx.play('denied'); }
+      else this.toggleTray();
+    }
     if (P.KeyM) { Sfx.toggle(); UI.updateSoundIcon(); }
     if (!this.sc || this.demo) return;
     if (P.KeyB) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }

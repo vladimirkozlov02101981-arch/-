@@ -164,11 +164,14 @@ class LocalController {
             if ((mFire || kFire) && !this.pendingTarget) { this.send({ c: 'target', x: Math.round(this.mouseW.x), y: Math.round(this.mouseW.y) }); this.pendingTarget = true; Sfx.play('select'); }
             break;
           }
-          if (!this.charging) { if (mFire || kFire) { this.charging = true; this.power = 0; this.chargeByMouse = mFire; Sfx.chargeStart(); } }
+          if (!this.charging) { if (mFire || kFire) { this.charging = true; this.power = 0; this.chargeDir = 1; this.chargeByMouse = mFire; Sfx.chargeStart(); } }
           else {
             const held = this.chargeByMouse ? Input.mouse.down[0] : !!K.Enter;
-            this.power = Math.min(1, this.power + dt / 1.15); Sfx.chargeSet(this.power);
-            if (!held || this.power >= 1) { this.send({ c: 'fire', aim: this.aim, pw: Math.max(0.06, this.power) }); this.cancelCharge(); }
+            // сила «пульсирует»: до максимума и обратно, пока кнопка зажата; выстрел — только при отпускании
+            this.power += (this.chargeDir || 1) * dt / 1.15;
+            if (this.power >= 1) { this.power = 1; this.chargeDir = -1; } else if (this.power <= 0.06) { this.power = 0.06; this.chargeDir = 1; }
+            Sfx.chargeSet(this.power);
+            if (!held) { this.send({ c: 'fire', aim: this.aim, pw: Math.max(0.06, this.power) }); this.cancelCharge(); }
           }
           break;
         }

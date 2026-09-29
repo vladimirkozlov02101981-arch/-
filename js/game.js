@@ -84,7 +84,7 @@ class Game {
     // Sample cover BEFORE carving, so a wall absorbs this blast even if it breaks.
     const exposure = new Map();
     for (const s of this.soldiers) {
-      if (!s.gone && Math.hypot(s.x-x,s.y-13-y)<R+12) {
+      if (!s.gone && Math.hypot(s.x-x,s.y-13-y)<(R+12)*1.6) {
         exposure.set(s, (this.blastTransmission(x,y,s.x,s.y-25)+this.blastTransmission(x,y,s.x,s.y-13)+this.blastTransmission(x,y,s.x,s.y-3))/3);
       }
     }
@@ -95,21 +95,23 @@ class Game {
     const knock = o.knock ?? R * 8;
     for (const s of this.soldiers) {
       if (s.gone) continue;
-      const cx = s.x, cy = s.y - 13; const d = Math.hypot(cx - x, cy - y); const RR = R + 12;
-      if (d >= RR) continue;
-      const f = 1 - d / RR;
+      // ударная волна шире самого взрыва: урон — в радиусе RR, отбрасывание — до RW (в 1,6 раза дальше)
+      const cx = s.x, cy = s.y - 17; const d = Math.hypot(cx - x, cy - y); const RR = R + 12, RW = RR * 1.6;
+      if (d >= RW) continue;
+      const f = Math.max(0, 1 - d / RR), fw = 1 - d / RW;
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const shielding = exposure.get(s) ?? 1;
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
-      const imp = Math.min(680, knock * 1.2) * Math.pow(f,.75) * shielding;
+      const imp = Math.min(820, knock * 1.45) * Math.pow(fw, 1.1) * shielding;
+      if (imp < 25) continue;
       s.vx += dx * imp; s.vy += dy * imp; s.fly();
-      if (D > 0 && s.alive) this.damage(s, Math.round(D * Math.pow(f,1.25) * shielding), o.owner);
+      if (D > 0 && s.alive && f > 0) this.damage(s, Math.round(D * Math.pow(f,1.25) * shielding), o.owner);
     }
     for (const e of this.entities) {
-      if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > R + 20) continue;
+      if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > (R + 20) * 1.6) continue;
       if (e.k === 'mine') { e.trigger(this, true); }
       else if (e.k === 'crate') { e.dead = true; if (e.s === 1) this.pending.push([e.x, e.y, 'crate']); else this.emit({ t: 'boom', x: R1(e.x), y: R1(e.y), r: 12, k: 1 }); continue; }
-      const f = 1 - d / (R + 20); let dx = e.x - x, dy = e.y - y - 6; const l = Math.hypot(dx, dy) || 1;
+      const f = 1 - d / ((R + 20) * 1.6); let dx = e.x - x, dy = e.y - y - 6; const l = Math.hypot(dx, dy) || 1;
       e.push(dx / l * knock * f * 0.8, dy / l * knock * f * 0.8);
     }
   }
@@ -150,6 +152,7 @@ class Game {
         if (T.phase === 'aim' && T.shots === 0 && typeof c.id === 'string' && this.canUse(this.teams[team], c.id)) { T.weapon = c.id; T.target = null; }
         break;
       case 'target': if (T.phase === 'aim' && isNum(c.x) && isNum(c.y)) T.target = { x: clamp(c.x, -500, this.W + 500), y: clamp(c.y, -1500, this.H) }; break;
+      case 'untarget': if (T.phase === 'aim') T.target = null; break;   // Tab: отменить выбранную точку
       case 'rot': T.rot = ((T.rot + (c.d > 0 ? 1 : -1)) % 8 + 8) % 8; break;
       // подкрутка броска: 0 — нет, 1 — вперёд, -1 — назад
       case 'spin': if (T.phase === 'aim') T.spin = T.spin === 0 ? 1 : T.spin === 1 ? -1 : 0; break;

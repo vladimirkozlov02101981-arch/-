@@ -154,7 +154,14 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       const q = 1 - (ed - 7) / 39, ox = -V.vx[vi], oy = -V.vy[vi], ol = Math.sqrt(ox * ox + oy * oy) || 1;
       const f = 1 + q * q * 0.46 * (ox * LX + oy * LY) / ol; r *= f; g *= f; bl *= f;
     }
-    const f = 0.97 + (n1 - 0.5) * 0.06; r *= f; g *= f; bl *= f;
+    // фактура скалы: зерно, слои осадочной породы, объём плиты (светлее сверху), тёплые и холодные пятна
+    {
+      const big = tileAt(tl.t3, x, y, 4), strat = Math.sin(y * 0.55 + big * 9 + n3 * 3) * 0.5 + 0.5;
+      const vol = 1 + Math.max(-0.12, Math.min(0.1, (V.vy[vi] || 0) * 0.012));
+      const f = (0.9 + (n1 - 0.5) * 0.16 + (n2 - 0.5) * 0.08) * (0.95 + strat * strat * 0.08) * vol;
+      r *= f * (1 + (big - 0.5) * 0.08); g *= f; bl *= f * (1 - (big - 0.5) * 0.08);
+      if (n1 > 0.93) { r *= 1.12; g *= 1.12; bl *= 1.1; } else if (n1 < 0.05) { r *= 0.8; g *= 0.8; bl *= 0.82; }   // блёстки и поры
+    }
     if (S.veinC && t - capT > 8) {
       const dv = Math.abs(veinAt(tl.tv, x, y) - 0.5);
       if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } }

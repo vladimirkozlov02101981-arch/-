@@ -18,11 +18,12 @@ class PlasmaBall extends Ent {
 }
 // Кислотомёт: струя проходит сквозь землю и бойцов, прожигая узкий след; к концу опадает
 KIND_IDX.acid = KINDS.length; KINDS.push('acid');
+const ACID_RANGE = 280;
 class AcidShot extends Ent {
   constructor(g, s, aim) {
     const m = muzzle(s, aim, 22);
     super(g, 'acid', m.x, m.y, Math.cos(aim) * 950, Math.sin(aim) * 950);
-    this.owner = s; this.team = s.team; this.hit = new Set([s.id]); this.pushable = false; this.a = aim;
+    this.owner = s; this.team = s.team; this.hit = new Set([s.id]); this.pushable = false; this.a = aim; this.sx = m.x; this.sy = m.y;
   }
   update(g, dt) {
     this.age += dt;
@@ -35,6 +36,8 @@ class AcidShot extends Ent {
       if (o && !this.hit.has(o.id)) { this.hit.add(o.id); g.damage(o, 15, this.owner); o.vx += this.vx * 0.08; o.vy -= 40; }
     }
     if (this.y > g.waterY) { g.splash(this.x, 0); this.dead = true; return; }
+    // дальность ограничена: струя распадается примерно через 280 px
+    if (Math.hypot(this.x - this.sx, this.y - this.sy) > ACID_RANGE) { this.dead = true; return; }
     if (this.age > 1.6 || this.x < -300 || this.x > g.W + 300 || this.y > g.H + 100) this.dead = true;
   }
 }

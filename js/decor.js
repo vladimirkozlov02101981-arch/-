@@ -241,7 +241,15 @@ const DECOR = {
       c.beginPath(); c.moveTo(x - half * 0.95 * s, yy + 2 * s); c.lineTo(x + half * 0.95 * s, yy + 2 * s);
       c.quadraticCurveTo(x + half * 1.05 * s, yy + sh * 0.6, x + half * 0.85 * s, yy + sh);
       for (let i = 6; i >= 0; i--) c.lineTo(x - half * 0.85 * s + i / 6 * half * 1.7 * s, yy + sh + (i % 2 ? -8 : 2) * s);
-      c.quadraticCurveTo(x - half * 1.05 * s, yy + sh * 0.6, x - half * 0.95 * s, yy + 2 * s); c.closePath(); c.fill();
+      c.quadraticCurveTo(x - half * 1.05 * s, yy + sh * 0.6, x - half * 0.95 * s, yy + 2 * s); c.closePath(); c.fill();
+      // объём паруса: наполнен ветром — светлая середина, тени к краям, швы полотнищ
+      c.save(); c.clip();
+      { const gx = c.createLinearGradient(x - half * s, 0, x + half * s, 0); gx.addColorStop(0, 'rgba(60,40,20,0.35)'); gx.addColorStop(0.35, 'rgba(255,250,235,0.12)'); gx.addColorStop(0.5, 'rgba(255,255,245,0.22)'); gx.addColorStop(0.75, 'rgba(90,60,30,0.08)'); gx.addColorStop(1, 'rgba(50,30,15,0.4)'); c.fillStyle = gx; c.fillRect(x - half * 1.1 * s, yy, half * 2.2 * s, sh + 10 * s); }
+      { const gy = c.createLinearGradient(0, yy, 0, yy + sh); gy.addColorStop(0, 'rgba(40,25,10,0.28)'); gy.addColorStop(0.18, 'rgba(0,0,0,0)'); gy.addColorStop(1, 'rgba(60,40,20,0.18)'); c.fillStyle = gy; c.fillRect(x - half * 1.1 * s, yy, half * 2.2 * s, sh + 10 * s); }
+      c.strokeStyle = 'rgba(110,80,45,0.28)'; c.lineWidth = 0.8; c.beginPath();
+      for (let j = 1; j < 4; j++) { const sy = yy + sh * j / 4; c.moveTo(x - half * s, sy - 3 * s); c.quadraticCurveTo(x, sy + 4 * s, x + half * s, sy - 3 * s); }
+      c.stroke(); c.restore();
+      c.strokeStyle = 'rgba(80,55,30,0.55)'; c.lineWidth = 1; c.stroke();
       c.strokeStyle = 'rgba(120,90,50,0.35)'; c.beginPath(); c.moveTo(x, yy + 2); c.lineTo(x, yy + sh); c.stroke();
     }
     c.fillStyle = '#5a3a1e'; c.fillRect(x - 12 * s, y - h * 0.93, 24 * s, 9 * s);

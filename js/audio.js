@@ -198,7 +198,10 @@ const Sfx = (() => {
       // запись взрыва + синтезированный низкий удар для веса; крупные взрывы ниже и громче
       const size = clamp(arg || 1, 0.6, 3), n = pick(size > 1.6 ? ['boom3', 'boom4', 'boom1'] : ['boom1', 'boom2', 'boom4']);
       if (!sample(n, pos, Math.min(1.1, 0.62 + size * 0.2), rr([0.84, 0.98]) / Math.sqrt(Math.max(1, size * 0.8)), n === 'boom3' ? 0.45 : 0)) return false;
-      const t = ac.currentTime, d = out(pos, 0.55 + size * 0.15); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.8 }); return true;
+      const t = ac.currentTime, d = out(pos, 0.55 + size * 0.15); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.8 });
+      // эхо от рельефа: приглушённый повтор через четверть-полсекунды
+      setTimeout(() => { if (ac) sample(n, pos ? { x: pos.x, y: pos.y - 200 } : null, 0.22 + size * 0.06, 0.8); }, 250 + Math.random() * 200);
+      return true;
     }
     if (name === 'footstep') {
       const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1;

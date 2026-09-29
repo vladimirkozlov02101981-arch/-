@@ -28,13 +28,16 @@ function capsule(c, pts, w, col) {
   c.lineCap = 'round'; c.lineJoin = 'round';
   const path = (dx, dy) => { c.beginPath(); c.moveTo(pts[0][0] + dx, pts[0][1] + dy); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0] + dx, pts[i][1] + dy); };
   c.strokeStyle = OUTL; c.lineWidth = w + 1.5; path(0, 0); c.stroke();
-  c.strokeStyle = col; c.lineWidth = w; path(0, 0); c.stroke();
-  c.strokeStyle = 'rgba(255,255,255,0.24)'; c.lineWidth = w * 0.34; path(-w * 0.18, -w * 0.2); c.stroke();
+  // объём: тёмная нижняя сторона, основной цвет чуть выше, блик сверху
+  c.strokeStyle = css(shadec(col, 0.68)); c.lineWidth = w; path(0, 0); c.stroke();
+  c.strokeStyle = col; c.lineWidth = w * 0.7; path(-w * 0.06, -w * 0.12); c.stroke();
+  c.strokeStyle = 'rgba(255,255,255,0.26)'; c.lineWidth = w * 0.28; path(-w * 0.14, -w * 0.24); c.stroke();
 }
 function boot(c, x, y, face, back) {
-  c.fillStyle = OUTL; c.beginPath(); c.ellipse(x + face * 1.2, y - 1.2, 3.4, 2.1, 0, 0, TAU); c.fill();
-  c.fillStyle = back ? css(shadec(BOOT, 0.8)) : BOOT; c.beginPath(); c.ellipse(x + face * 1.2, y - 1.3, 2.7, 1.5, 0, 0, TAU); c.fill();
-  c.fillStyle = 'rgba(255,255,255,0.22)'; c.beginPath(); c.ellipse(x + face * 0.6, y - 2, 1.3, 0.5, 0, 0, TAU); c.fill();
+  c.fillStyle = OUTL; c.beginPath(); c.ellipse(x + face * 1.5, y - 1.5, 4, 2.4, 0, 0, TAU); c.fill();
+  c.fillStyle = back ? css(shadec(BOOT, 0.8)) : BOOT; c.beginPath(); c.ellipse(x + face * 1.5, y - 1.6, 3.3, 1.8, 0, 0, TAU); c.fill();
+  c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(x + face * 1.5 - 3.3, y - 0.5, 6.6, 0.8);   // подошва
+  c.fillStyle = 'rgba(255,255,255,0.22)'; c.beginPath(); c.ellipse(x + face * 0.8, y - 2.5, 1.5, 0.55, 0, 0, TAU); c.fill();
 }
 function hand(c, x, y) { c.fillStyle = OUTL; circ(c, x, y, 2.05); c.fillStyle = ballGrad(c, x, y, 1.6, SKIN); circ(c, x, y, 1.45); }
 
