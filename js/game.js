@@ -95,17 +95,17 @@ class Game {
     const knock = o.knock ?? R * 8;
     for (const s of this.soldiers) {
       if (s.gone) continue;
-      // ударная волна шире самого взрыва: урон — в радиусе RR, отбрасывание — до RW (в 1,6 раза дальше)
+      // ударная волна шире самого взрыва: урон и отбрасывание — до RW (в 1,6 раза дальше радиуса)
       const cx = s.x, cy = s.y - 17; const d = Math.hypot(cx - x, cy - y); const RR = R + 12, RW = RR * 1.6;
       if (d >= RW) continue;
-      const f = Math.max(0, 1 - d / RR), fw = 1 - d / RW;
+      const fw = 1 - d / RW;
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const shielding = exposure.get(s) ?? 1;
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
       const imp = Math.min(820, knock * 1.45) * Math.pow(fw, 1.1) * shielding;
-      if (imp < 25) continue;
-      s.vx += dx * imp; s.vy += dy * imp; s.fly();
-      if (D > 0 && s.alive && f > 0) this.damage(s, Math.round(D * Math.pow(f,1.25) * shielding), o.owner);
+      if (imp >= 25) { s.vx += dx * imp; s.vy += dy * imp; s.fly(); }
+      // урон ударной волны — по всему её радиусу RW с мягким спадом (в центре — полный D)
+      if (D > 0 && s.alive && fw > 0) this.damage(s, Math.round(D * Math.pow(fw, 0.8) * shielding), o.owner);
     }
     for (const e of this.entities) {
       if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > (R + 20) * 1.6) continue;
@@ -153,6 +153,7 @@ class Game {
         break;
       case 'target': if (T.phase === 'aim' && isNum(c.x) && isNum(c.y)) T.target = { x: clamp(c.x, -500, this.W + 500), y: clamp(c.y, -1500, this.H) }; break;
       case 'untarget': if (T.phase === 'aim') T.target = null; break;   // Tab: отменить выбранную точку
+      case 'holster': if (T.phase === 'aim' && T.shots === 0) { T.weapon = null; T.target = null; T.charge = -1; } break;   // Esc: убрать оружие из рук
       case 'rot': T.rot = ((T.rot + (c.d > 0 ? 1 : -1)) % 8 + 8) % 8; break;
       // подкрутка броска: 0 — нет, 1 — вперёд, -1 — назад
       case 'spin': if (T.phase === 'aim') T.spin = T.spin === 0 ? 1 : T.spin === 1 ? -1 : 0; break;

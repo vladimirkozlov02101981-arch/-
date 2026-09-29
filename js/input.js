@@ -115,7 +115,7 @@ class LocalController {
     if (this.base === undefined) this.base = this.aim;
     if (T.target) this.pendingTarget = false;
     const W = WEAPON[T.weapon] || WEAPON.bazooka; const phase = T.phase;
-    const canAct = phase === 'aim'; const jet = phase === 'use' && T.weapon === 'jetpack';
+    const canAct = phase === 'aim' && !!WEAPON[T.weapon]; const jet = phase === 'use' && T.weapon === 'jetpack';
     const canMove = phase === 'aim' || phase === 'retreat' || jet;
     const K = Input.keys, P = Input.pressed;
     const left = !!(K.KeyA || K.ArrowLeft), right = !!(K.KeyD || K.ArrowRight);
@@ -146,7 +146,7 @@ class LocalController {
       sway = this.swayAmp * (Math.sin(this.swayT * 1.4) * 0.8 + Math.sin(this.swayT * 3.1 + 1.3) * 0.45);
     }
     this.aim = this.base + sway;
-    if (canAct && T.shots === 0 && !this.charging) {
+    if (phase === 'aim' && T.shots === 0 && !this.charging) {
       if (P.KeyQ) this.cycle(sc, T, -1); if (P.KeyE) this.cycle(sc, T, 1);
       for (let i = 1; i <= 6; i++) if (P['Digit' + i]) this.category(sc, T, i - 1);
     }

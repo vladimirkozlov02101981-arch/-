@@ -363,6 +363,9 @@ class Renderer {
         c.textAlign = 'right'; c.fillText(am < 0 ? '∞' : `×${am}`, x + w - 14, y + 20);
         c.textAlign = 'left'; c.fillStyle = 'rgba(255,255,255,0.72)'; c.font = `12px ${FONT_UI}`;
         c.fillText(ctl.hint(sc, T), x + 66, y + 40);
+      } else {
+        c.textAlign = 'left'; c.font = `17px ${FONT_TITLE}`; c.fillStyle = '#fff'; c.fillText('Руки пусты', x + 66, y + 20);
+        c.fillStyle = 'rgba(255,255,255,0.72)'; c.font = `12px ${FONT_UI}`; c.fillText('Tab — арсенал, Q/E или 1–6 — взять оружие, Esc — пауза', x + 66, y + 40);
       }
       const wk = clamp(T.walk / WALK_BUDGET, 0, 1);
       c.fillStyle = 'rgba(255,255,255,0.12)'; rrect(c, x + 66, y + 51, w - 80, 5, 2.5); c.fill();

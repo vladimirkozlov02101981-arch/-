@@ -35,10 +35,13 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),41);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
     // A real input action and pause must neutralize movement on the authoritative host.
     await host.keyboard.down('KeyD');await host.waitForTimeout(160);await host.keyboard.press('Escape');await host.keyboard.up('KeyD');
-    await host.waitForSelector('#s-pause.show');assert.equal(await host.evaluate(()=>!!App.game.ctrl?.r),false);await host.click('[data-act="resume"]');
+    // First Esc holsters the weapon (empty hands, guest sees it too); second Esc opens pause.
+    await host.waitForFunction(()=>App.game.turn.weapon===null);await guest.waitForFunction(()=>App.remote.turn.weapon===null);
+    await host.keyboard.press('Escape');await host.waitForSelector('#s-pause.show');assert.equal(await host.evaluate(()=>!!App.game.ctrl?.r),false);await host.click('[data-act="resume"]');
     await guest.keyboard.press('KeyT');await guest.fill('#chat-input','Проверка связи');await guest.keyboard.press('Enter');await host.waitForFunction(()=>document.getElementById('chat-log').textContent.includes('Проверка связи'));
     const before=await mapHash(host);
     // Fire via the normal game command path. Vertical downward rocket must change terrain.
+    await host.keyboard.press('Digit1');await host.waitForFunction(()=>!!App.game.turn.weapon);
     await host.evaluate(()=>{App.ctl.aimMode='keys';App.ctl.aim=Math.PI/2;App.ctl.send({c:'fire',aim:Math.PI/2,pw:.22});});
     await host.waitForFunction(()=>App.game.turn.phase==='settle'||App.game.turn.team===1,{timeout:20000});await host.waitForTimeout(350);
     assert.notEqual(await mapHash(host),before);assert.equal(await mapHash(host),await mapHash(guest));

@@ -258,7 +258,14 @@ const App = {
   },
   handleKeys() {
     const P = Input.pressed;
-    if (P.Escape) { if (UI.trayOpen) UI.setTray(false); else if (UI.cur === 's-help' || UI.cur === 's-online') this.back(); else this.togglePause(); }
+    if (P.Escape) {
+      const ctl = this.ctl, T = this.sc && this.sc.turn;
+      if (UI.trayOpen) UI.setTray(false);
+      else if (UI.cur === 's-help' || UI.cur === 's-online') this.back();
+      // Esc: сначала полностью убирает оружие из рук (зарядку, цель), повторный Esc — пауза
+      else if (!UI.cur && ctl && ctl.mine && T && T.phase === 'aim' && T.shots === 0 && T.weapon) { ctl.cancelCharge(); ctl.pendingTarget = false; ctl.send({ c: 'holster' }); Sfx.play('denied'); }
+      else this.togglePause();
+    }
     // Tab: сначала отменяет взятое оружие (зарядку или выбранную точку), иначе открывает арсенал
     if (P.Tab) {
       const ctl = this.ctl, T = this.sc && this.sc.turn;
