@@ -1,0 +1,11 @@
+node_modules/
+test-results/
+.browser-profile/
+*.log
+.npm-cache/
+dev/cloudflared.exe
+dev/tunnel-*.txt
+dev/server.pid
+dev/tunnel.pid
+dev/tunnel-session.json
+dev/tunnel-knownhosts

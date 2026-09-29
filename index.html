@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Территория войны — Frontlines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <!-- Главное меню -->
+  <section class="screen" id="s-main">
+    <div class="menu-art" id="menu-art"></div><div class="menu-shade"></div>
+    <header class="menu-header"><a class="brand" href="#" aria-label="Главная"><span class="brand-symbol">✦</span> TERRITORY <b>WAR</b><span class="brand-edition">FRONTLINES</span></a><div class="header-right"><span class="build-label">ТАКТИКА. ХАРАКТЕР. БОЛЬШОЙ КАЛИБР.</span><button class="icon-btn" data-act="sound" title="Звук (M)" aria-label="Переключить звук"></button></div></header>
+    <div class="menu-wrap">
+      <div class="eyebrow"><span></span> ПОШАГОВЫЕ БОИ БЕЗ КОМПРОМИССОВ</div>
+      <h1 class="logo"><span class="l1">ТЕРРИТОРИЯ</span><span class="l2">ВОЙНЫ<span class="title-dot">.</span></span></h1>
+      <p class="tagline">Большие пушки. Маленькие бойцы.<br>И целый мир, который можно разнести.</p>
+      <div class="menu-btns">
+        <button class="btn big" data-act="online"><span class="btn-symbol">↗</span> Играть с другом <span class="btn-end">ОНЛАЙН</span></button>
+        <div class="local-modes"><button class="btn secondary" data-act="cpu">Против компьютера <span>↗</span></button><button class="btn secondary" data-act="hotseat">На одном экране <span>↗</span></button></div>
+        <button class="btn ghost" data-act="help"><span>⌘</span> Управление и арсенал</button>
+      </div>
+      <div class="menu-facts"><div><strong>34</strong><span>вида оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока.<br>один победитель.</span></div></div>
+    </div>
+    <div class="featured-map"><span class="eyebrow">ВЫБЕРИ СВОЁ ПОЛЕ БОЯ</span><div class="featured-title"><span id="featured-number">01 / 08</span><h2 id="featured-name">Зелёная долина</h2><div><button class="arrow-btn" data-act="map-prev" aria-label="Предыдущая карта">←</button><button class="arrow-btn" data-act="map-next" aria-label="Следующая карта">→</button></div></div><p id="featured-desc">Мельница на холме, пруд с мостом и тоннель под большим холмом</p><div class="map-dots" id="map-dots"></div><div class="static-label">◇ Фиксированная карта · Разрушаемое окружение</div></div>
+    <footer class="menu-footer"><span>FRONTLINES / 01</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+  </section>
+
+  <!-- Онлайн -->
+  <section class="screen" id="s-online">
+    <div class="panel narrow">
+      <div class="eyebrow">02 ИГРОКА / ОДНО ПОЛЕ БОЯ</div><h2>ВСТРЕТИМСЯ В БОЮ</h2>
+      <p class="muted">Создайте комнату и отправьте другу приглашение. Он откроет ту же игру и присоединится по ссылке или коду. В комнате — только вы двое.</p>
+      <div class="cards2">
+        <div class="card">
+          <h3>Создать комнату</h3>
+          <p class="muted small">Вы будете хостом: выбираете карту и настройки.</p>
+          <button class="btn" data-act="host">Создать комнату</button>
+        </div>
+        <div class="card">
+          <h3>Войти по коду</h3>
+          <input aria-label="Код комнаты" id="join-code" class="code-input" maxlength="5" placeholder="КОД" autocomplete="off" spellcheck="false">
+          <button class="btn" data-act="join">Подключиться</button>
+        </div>
+      </div>
+      <div id="online-status" class="status"></div>
+      <div class="row end"><button class="btn secondary" data-act="back">Назад</button></div>
+    </div>
+  </section>
+
+  <!-- Настройка боя / лобби -->
+  <section class="screen" id="s-setup">
+    <div class="panel wide">
+      <div class="setup-head">
+        <h2 id="setup-title">Настройка боя</h2>
+        <div id="room-box" class="room-box hidden">
+          <span>Код комнаты:</span> <b id="room-code">-----</b>
+          <button class="btn tiny" data-act="copy">Код</button><button class="btn tiny secondary" data-act="invite">Ссылка другу ↗</button>
+          <span id="peer-status" class="peer-status"></span>
+        </div>
+      </div>
+      <div class="setup-grid">
+        <div class="col-teams" id="team-cards"></div>
+        <div class="col-maps">
+          <h3>Поле боя <span class="small muted">/ 8 постоянных карт</span></h3>
+          <div id="map-grid" class="map-grid"></div>
+          <div class="opts" id="opts">
+            <label>Бойцов в команде<select id="o-perTeam"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+            <label>Здоровье<select id="o-hp"><option>50</option><option>75</option><option selected>100</option><option>150</option><option>200</option></select></label>
+            <label>Время хода<select id="o-turnTime"><option value="20">20 с</option><option value="30">30 с</option><option value="45" selected>45 с</option><option value="60">60 с</option><option value="90">90 с</option></select></label>
+            <label>Ветер<select id="o-wind"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
+            <label>Ящики с припасами<select id="o-crates"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
+            <label>Внезапная смерть<select id="o-sd"><option value="0">Выкл</option><option value="6">После 6 раундов</option><option value="10" selected>После 10 раундов</option><option value="15">После 15 раундов</option></select></label>
+            <label>Арсенал<select id="o-arsenal"><option value="all" selected>Все 34 вида</option><option value="classic">Классический</option></select></label>
+            <label id="o-ai-wrap">Сложность компьютера<select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
+          </div>
+        </div>
+      </div>
+      <div class="row between">
+        <button class="btn secondary" data-act="back">Назад</button>
+        <div id="setup-note" class="muted small"></div>
+        <button class="btn" data-act="start" id="btn-start">В бой!</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Как играть -->
+  <section class="screen" id="s-help">
+    <div class="panel wide">
+      <h2>Как играть</h2>
+      <div class="help-grid">
+        <div>
+          <h3>Управление</h3>
+          <table class="keys">
+            <tr><td><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></td><td>Ходьба (запас шагов ограничен)</td></tr>
+            <tr><td><kbd>Пробел</kbd></td><td>Прыжок</td></tr>
+            <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти, пробел — отпрыгнуть</td></tr>
+            <tr><td>Мышь</td><td>Прицеливание</td></tr>
+            <tr><td><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></td><td>Прицел с клавиатуры (<kbd>Shift</kbd> — точнее)</td></tr>
+            <tr><td>ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: чем дольше, тем сильнее</td></tr>
+            <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия</td></tr>
+            <tr><td><kbd>Q</kbd> <kbd>E</kbd>, <kbd>1</kbd>–<kbd>6</kbd></td><td>Сменить оружие / категорию</td></tr>
+            <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: вид плавно едет туда, куда ведёте мышь</td></tr>
+            <tr><td>Колесо / <kbd>C</kbd></td><td>Немного приблизить или отдалить / вернуть камеру к бойцу</td></tr>
+            <tr><td><kbd>R</kbd></td><td>Повернуть балку</td></tr>
+            <tr><td><kbd>P</kbd></td><td>Пропустить ход</td></tr>
+            <tr><td><kbd>T</kbd></td><td>Чат (в онлайне)</td></tr>
+            <tr><td><kbd>M</kbd> / <kbd>Esc</kbd></td><td>Звук / меню</td></tr>
+          </table>
+          <h3>Правила</h3>
+          <p class="muted">Команды ходят по очереди. Перемещение, прыжки и подъём по лестницам расходуют запас движения. За ход — одна атака (дробовик: 2 выстрела, револьвер: 3). После атаки есть 3 секунды для отступления. Вода и лава смертельны.</p>
+          <h3>Рельеф решает</h3><p class="muted">Все карты постоянные, шириной 4800–5400 пикселей. Тоннели позволяют обойти высоты, стены поглощают взрывную волну. Металл и бетон труднее разрушить; лёд сильнее отражает гранаты. У пуль есть скорость и падение, ветер сильнее влияет на ракеты. Всю карту сразу не увидеть: осматривайте поле боя в бинокль. Удары с воздуха не бьют точно в точку клика — бомбы сбрасываете сами, молнию сносит туча, у ракет есть разброс.</p>
+        </div>
+        <div>
+          <h3>Арсенал</h3>
+          <div id="help-weapons" class="help-weapons"></div>
+        </div>
+      </div>
+      <div class="row end"><button class="btn secondary" data-act="back">Назад</button></div>
+    </div>
+  </section>
+
+  <!-- Пауза -->
+  <section class="screen dim" id="s-pause">
+    <div class="panel narrow center">
+      <h2>Меню</h2>
+      <div class="menu-btns">
+        <button class="btn" data-act="resume">Продолжить</button>
+        <button class="btn secondary" data-act="sound2">Звук</button>
+        <label class="volume-control">Громкость <input id="volume" type="range" min="0" max="100" value="70" aria-label="Громкость звука"></label>
+        <button class="btn secondary" data-act="quit">Выйти в главное меню</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Итоги -->
+  <section class="screen dim" id="s-over">
+    <div class="panel narrow center">
+      <h2 id="over-title">Победа!</h2>
+      <div id="over-stats" class="over-stats"></div>
+      <div class="menu-btns">
+        <button class="btn" data-act="rematch" id="btn-rematch">Реванш</button>
+        <button class="btn secondary" data-act="quit">В главное меню</button>
+      </div>
+      <div id="over-note" class="muted small"></div>
+    </div>
+  </section>
+
+  <!-- Загрузка -->
+  <div id="loading" class="loading hidden"><div class="spinner"></div><div id="loading-text">Готовим поле боя…</div></div>
+
+  <!-- Диалог -->
+  <div id="dialog" class="dialog hidden"><div class="panel narrow center"><div id="dialog-text"></div><div class="row center"><button class="btn" id="dialog-ok">OK</button></div></div></div>
+
+  <!-- В игре -->
+  <div id="hud-btns" class="hud-btns hidden">
+    <button class="icon-btn" data-act="tray" title="Оружие (Tab / ПКМ)">⚔</button>
+    <button class="icon-btn" data-act="pause" title="Меню (Esc)">☰</button>
+  </div>
+  <div id="tray" class="tray hidden"><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
+  <div id="chat" class="chat hidden"><div id="chat-log" class="chat-log"></div><input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Сообщение… (Enter — отправить)"></div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/art.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/themes.js"></script>
+<script src="js/terrain.js"></script>
+<script src="js/terrain_visual.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/navcheck.js"></script>
+<script src="js/decor.js"></script>
+<script src="js/background.js"></script>
+<script src="js/particles.js"></script>
+<script src="js/weapons.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/arsenal.js"></script>
+<script src="js/soldier.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/remote.js"></script>
+<script src="js/draw.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/render.js"></script>
+<script src="js/input.js"></script>
+<script src="js/net.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

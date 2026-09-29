@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Просмотр карт</title>
+<style>
+body{margin:0;background:#000;color:#fff;font:14px sans-serif;overflow:hidden}
+#bar{position:fixed;top:0;left:0;right:0;padding:6px 10px;background:rgba(0,0,0,.55);z-index:2}
+#bar button{margin-right:4px}
+canvas{display:block}
+</style></head><body>
+<div id="bar"></div><canvas id="cv"></canvas>
+<script src="../js/util.js"></script>
+<script src="../js/themes.js"></script>
+<script src="../js/terrain.js"></script>
+<script src="../js/terrain_visual.js"></script>
+<script src="../js/maps.js"></script>
+<script src="../js/decor.js"></script>
+<script src="../js/background.js"></script>
+<script>
+const bar = document.getElementById('bar'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let cur = null, view = null;
+function load(id) {
+  const map = MAP_BY_ID[id], th = THEMES[map.theme]; const t0 = performance.now();
+  const ras = rasterizeMap(map); const t1 = performance.now();
+  const T = new Terrain(map.W, map.H, ras.mask); buildTerrainVisual(T, th, map, ras, map.water);
+  cur = { map, th, T, bg: new Background(th, map.seed), gen: [(t1 - t0) | 0, (performance.now() - t1) | 0] };
+  view = null; location.hash = id; render();
+}
+function render() {
+  const W = innerWidth, H = innerHeight; cv.width = W; cv.height = H;
+  const m = cur.map; let cam;
+  if (view) cam = view; else { const z = Math.min(W / m.W, H / m.H); cam = { x: m.W / 2, y: m.H - H / z / 2, z }; }
+  cur.bg.draw(ctx, cam, W, H, 0, m.water);
+  ctx.save(); ctx.translate(W / 2 - cam.x * cam.z, H / 2 - cam.y * cam.z); ctx.scale(cam.z, cam.z);
+  ctx.drawImage(cur.T.decor, 0, 0); ctx.drawImage(cur.T.canvas, 0, 0);
+  if (cur.T.glow) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.8; ctx.drawImage(cur.T.glow, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; }
+  const L = cur.th.liquid; const g = ctx.createLinearGradient(0, m.water, 0, m.H + 200);
+  g.addColorStop(0, L.top); g.addColorStop(0.3, L.mid); g.addColorStop(1, L.deep);
+  ctx.globalAlpha = L.alpha; ctx.fillStyle = g; ctx.fillRect(-3000, m.water, m.W + 6000, m.H); ctx.globalAlpha = 1;
+  ctx.restore();
+  bar.innerHTML = MAPS.map(mm => `<button onclick="load('${mm.id}')">${mm.name}</button>`).join('') + ` &nbsp; ${m.name}: маска ${cur.gen[0]} мс, текстура ${cur.gen[1]} мс. Клик — приблизить, правый клик — общий вид`;
+}
+cv.addEventListener('click', e => {
+  const m = cur.map, W = innerWidth, H = innerHeight;
+  const z0 = view ? view.z : Math.min(W / m.W, H / m.H);
+  const c0 = view || { x: m.W / 2, y: m.H - H / z0 / 2 };
+  const wx = (e.clientX - W / 2) / z0 + c0.x, wy = (e.clientY - H / 2) / z0 + c0.y;
+  view = { x: wx, y: wy, z: 1 }; render();
+});
+cv.addEventListener('contextmenu', e => { e.preventDefault(); view = null; render(); });
+addEventListener('resize', () => cur && render());
+load((location.hash || '#valley').slice(1));
+</script></body></html>
