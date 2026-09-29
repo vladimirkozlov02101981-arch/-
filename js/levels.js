@@ -77,6 +77,7 @@ function buildLevel(def, fn) {
 }
 
 const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1 };
+const P_TRIM = { base: '#8a8c90', alt: '#7e8084', mortar: '#2a2b2e', w: 32, h: 16, var: 0.06 };
 const P_KEEP = { base: '#5c5f64', alt: '#666a6f', mortar: '#1e1f22', w: 32, h: 16, var: 0.05 };
 const P_BARN = { base: '#8f4a2e', gap: '#3a1a0e', plank: 9, var: 0.16 };
 
@@ -152,7 +153,7 @@ const MAP_VALLEY = buildLevel({
   for (const px of [2303, 2497]) B.add(Sh.cut(Sh.ellipse(px, 1384, 8, 11, { rough: 0 }), true));
   // центральное плато: башня, руины со склепом, Орлиная гора
   B.ground([[2676, 1790], [2682, 1560], [2688, 1400], [2704, 1318, 1], [2760, 1302], [2860, 1290], [2960, 1266], [3060, 1254], [3180, 1250], [3300, 1256], [3420, 1270], [3540, 1292], [3660, 1296], [3760, 1270], [3860, 1214], [3960, 1150], [4040, 1086], [4120, 1020], [4190, 962], [4260, 916], [4330, 898], [4400, 906], [4480, 944], [4560, 1004], [4630, 1076], [4690, 1150], [4724, 1216, 1], [4744, 1400], [4756, 1600], [4780, 1810]]);
-  B.add(Sh.rect(2930, 1262, 150, 30, { mat: 'brick', pal: P_STONE }));
+  B.add(Sh.rect(2930, 1262, 150, 30, { mat: 'brick', pal: P_TRIM }));
   B.tower(2940, 1264, 130, { mat: 'brick', pal: P_KEEP, stories: [100, 100, 100, 100], ladders: [34, 96, 34, 96], crown: true });
   // руины часовни: обломки стен как укрытия и склеп под ними
   B.add(Sh.rect(3190, 1206, 18, 50, { mat: 'brick', pal: P_STONE }), Sh.rect(3208, 1206, 40, 14, { mat: 'brick', pal: P_STONE }), Sh.rect(3392, 1222, 18, 36, { mat: 'brick', pal: P_STONE }));

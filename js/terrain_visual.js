@@ -110,6 +110,7 @@ function stoneAt(S, o, ox, oy, rad, ph, pc, n1, n2, r, g, bl) {
     if (hs < 0.05) { const k = (1 - hs / 0.05); rr += k * k * 190; gg += k * k * 186; bb += k * k * 176; }                  // резкий блик
     else if (hs < 0.2) { const k = (1 - hs / 0.2) * 0.35; rr += k * 60; gg += k * 58; bb += k * 52; }                       // мягкий ореол блика
     if (e > 0.9) { const k = 0.78 + (1 - e) * 2.2; rr *= k; gg *= k; bb *= k; }
+    if (S.rimCol && e > 0.78 && ny < -0.2) { const q = Math.min(1, (e - 0.78) / 0.14) * 0.6; rr += (S.rimCol[0] - rr) * q; gg += (S.rimCol[1] - gg) * q; bb += (S.rimCol[2] - bb) * q; }   // цветной ободок (кристальная планета)
     o.r = rr; o.g = gg; o.b = bb; return;
   }
   if (e < 1) {
@@ -599,7 +600,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, smoothStones: !!G.smoothStones, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -958,7 +959,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         const u = tt / len; const lx = x + sw * 2 * u * (1 - u) * 1.2 + sw * 0.3 * u * u;
         c.fillStyle = (tt / 5) % 2 ? '#4caf3a' : '#63c24a'; c.beginPath(); c.ellipse(lx + ((tt / 5) % 2 ? 2.2 : -2.2), y + tt, 2.6, 1.3, (tt / 5) % 2 ? 0.5 : -0.5, 0, TAU); c.fill();
       }
-    } else if (kind === 'icicles' && x - lastX > 3 + rng() * 9 && rng() < (fbm1(x / 45, seed + 41, 2) > 0 ? 0.55 : 0.08)) {
+    } else if (kind === 'icicles' && x - lastX > 3 + rng() * 9 && rng() < (fbm1(x / 60, seed + 41, 2) > 0.2 ? 0.6 : 0)) {
       lastX = x; const q = rng(), len = 4 + q * q * 22; const w = 1.2 + rng() * 1.4 + len * 0.04;
       const g = c.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(255,255,255,0.85)'); g.addColorStop(0.35, 'rgba(207,230,255,0.7)'); g.addColorStop(1, 'rgba(120,170,225,0.45)');
       c.fillStyle = g; c.beginPath(); c.moveTo(x - w, y - 0.5); c.lineTo(x + w, y - 0.5); c.quadraticCurveTo(x + w * 0.3, y + len * 0.6, x + 0.2, y + len); c.quadraticCurveTo(x - w * 0.4, y + len * 0.6, x - w, y - 0.5); c.fill();
