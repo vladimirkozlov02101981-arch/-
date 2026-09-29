@@ -26,7 +26,7 @@ function foliage(c, blobs, pal) {
   const clumps = [];
   for (const b of blobs) {
     const m = Math.max(1, Math.round((b.r * b.r) / 130));
-    for (let i = 0; i < m; i++) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * b.r * 0.5; clumps.push({ x: b.x + Math.cos(a) * d, y: b.y + Math.sin(a) * d, r: Math.max(2.4, b.r * (0.5 + rnd() * 0.22)) }); }
+    for (let i = 0; i < m; i++) { const a = rnd() * TAU, d = Math.sqrt(rnd()) * b.r * 0.55; clumps.push({ x: b.x + Math.cos(a) * d, y: b.y + Math.sin(a) * d, r: Math.max(2.4, b.r * (0.42 + rnd() * 0.2)) }); }
   }
   // сзади вперёд: сначала верхние и дальние, нижние ложатся поверх
   clumps.sort((p, q) => p.y - q.y);
@@ -35,27 +35,27 @@ function foliage(c, blobs, pal) {
   for (const q of clumps) {
     const gx = (q.x - cxm) / hw, gy = (q.y - cym) / hh;                         // положение в кроне
     const glob = -(gx * 0.45 + gy * 0.8) * 0.5;                                  // крона освещена сверху слева
-    const base = 0.24 + glob * 0.7 + (rnd() - 0.5) * 0.1;
+    const base = 0.36 + glob * 0.7 + (rnd() - 0.5) * 0.1;
     const k = 7 + (rnd() * 4 | 0), ph = rnd() * 6;
-    c.fillStyle = ramp(base - 0.26); scallop(q.x, q.y, q.r, k, ph);                                             // тень кочана
+    c.fillStyle = ramp(base - 0.14); scallop(q.x, q.y, q.r, k, ph);                                             // тень кочана
     c.fillStyle = ramp(base + 0.14); scallop(q.x - q.r * 0.14, q.y - q.r * 0.16, q.r * 0.8, k, ph + 1);          // середина
     c.fillStyle = ramp(base + 0.42); scallop(q.x - q.r * 0.3, q.y - q.r * 0.34, q.r * 0.46, k + 2, ph + 2);   // освещённая шапка
     if (glob > 0.05) rims.push(q);
-    // листья по освещённой кромке и прожилки-тени внизу
-    const ls = Math.max(1.1, Math.min(2.8, q.r * 0.16));
-    for (let i = 0, n = Math.round(q.r * 1.6); i < n; i++) {
-      const a = -2.4 + rnd() * 2.2, d = q.r * (0.55 + rnd() * 0.45), px = q.x + Math.cos(a) * d, py = q.y + Math.sin(a) * d;
-      c.fillStyle = ramp(base + 0.3 + rnd() * 0.35); c.beginPath(); c.ellipse(px, py, ls * 1.2, ls * 0.6, a + 1.2 + (rnd() - 0.5), 0, TAU); c.fill();
+    // фактура листвы: заострённые листья по всему кочану, цвет — по нормали к солнцу; по кромке листья торчат наружу
+    const ls = Math.max(1.6, Math.min(3.6, q.r * 0.2));
+    const leaf = (px, py, a, L, col) => { const ca = Math.cos(a), sa = Math.sin(a), w = L * 0.42;
+      c.fillStyle = col; c.beginPath(); c.moveTo(px - ca * L * 0.5, py - sa * L * 0.5);
+      c.quadraticCurveTo(px - sa * w, py + ca * w, px + ca * L * 0.6, py + sa * L * 0.6); c.quadraticCurveTo(px + sa * w, py - ca * w, px - ca * L * 0.5, py - sa * L * 0.5); c.fill(); };
+    for (let i = 0, n = Math.round(q.r * q.r * 0.16); i < n; i++) {
+      const a = rnd() * TAU, d = Math.sqrt(rnd()) * q.r * 0.95, nx = Math.cos(a) * d / q.r, ny = Math.sin(a) * d / q.r;
+      const lit = -(nx * 0.55 + ny * 0.83);
+      leaf(q.x + Math.cos(a) * d, q.y + Math.sin(a) * d, a + (rnd() - 0.5) * 1.6, ls * (0.8 + rnd() * 0.5), ramp(base + lit * 0.42 + (rnd() - 0.5) * 0.22));
     }
-    for (let i = 0, n = Math.round(q.r * 0.8); i < n; i++) {
-      const a = 0.4 + rnd() * 2.2, d = q.r * (0.5 + rnd() * 0.4), px = q.x + Math.cos(a) * d, py = q.y + Math.sin(a) * d;
-      c.fillStyle = ramp(base - 0.28); c.beginPath(); c.ellipse(px, py, ls, ls * 0.5, a + 1.2, 0, TAU); c.fill();
+    for (let i = 0, n = Math.round(q.r * 1.3); i < n; i++) {                        // рваная кромка
+      const a = rnd() * TAU, d = q.r * (0.92 + rnd() * 0.16), lit = -(Math.cos(a) * 0.55 + Math.sin(a) * 0.83);
+      leaf(q.x + Math.cos(a) * d, q.y + Math.sin(a) * d, a + (rnd() - 0.5) * 0.8, ls * (0.9 + rnd() * 0.6), ramp(base + lit * 0.4 - 0.05));
     }
   }
-  // тёплый солнечный ободок на верхних кочанах
-  c.save(); c.lineCap = 'round'; c.strokeStyle = 'rgba(236,244,150,0.55)';
-  for (const q of rims) { c.lineWidth = Math.max(1, q.r * 0.14); c.beginPath(); c.arc(q.x, q.y, q.r * 0.86, -2.6, -1.5); c.stroke(); }
-  c.restore();
 }
 function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }

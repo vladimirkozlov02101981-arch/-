@@ -190,6 +190,10 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         r = o.r; g = o.g; bl = o.b;
       }
     }
+    if (sd > 18 && !S.snowy) {                                                                // крупные камни 25–45 px (каждый пятый)
+      const V = S.vl, vi = ((y & 511) << 9) | (x & 511), id = V.id[vi];
+      if (V.rnd[id] > 0.78) { const q2 = V.rnd2[id]; stoneAt(S, o, -V.vx[vi] * 0.5, -V.vy[vi] * 0.56, 12 + q2 * 10, id * 1.7, S.pebs[(id * 3) % S.pebs.length], n1, n2, r, g, bl); r = o.r; g = o.g; bl = o.b; }
+    }
     // разрез как иллюстрация: корни у поверхности, крупные валуны в глубине, порода темнее с глубиной
     if (sd < 70) {
       const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.016 * (1 - sd / 70);
@@ -211,6 +215,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (dv < S.veinW) {
         const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW, kk = k * 0.85 + 0.15;
         r += (vc[0] - r) * kk; g += (vc[1] - g) * kk; bl += (vc[2] - bl) * kk;
+        if (S.veinGlow && k > 0.55 && S.hotCore) { const q = (k - 0.55) / 0.45; r += (255 - r) * q; g += (228 - g) * q; bl += (150 - bl) * q; }
         if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; }
       } else if (S.veinGlow && dv < S.veinW * 5) {                                              // отсвет раскалённой трещины на породе вокруг
         const vc = n3 > 0.5 ? S.veinC : S.veinC2, q = 1 - dv / (S.veinW * 5), k = q * q * 0.32;
@@ -225,7 +230,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     const th = BH * (0.7 + hb * 0.24) + (tileAt(tl.t2, x, y, 4, 33) - 0.5) * BH * 0.3;                                                   // толщина пласта (часть полосы)
     const fyb = wy - bi * BH;
     let r0, g0, b0;
-    const rc = S.rockC[((bi % S.RL) + S.RL) % S.RL];
+    const rc0 = S.rockC[((bi % S.RL) + S.RL) % S.RL], bt = 1 + (hash3(bi, 19, 3) - 0.5) * 0.24, bh2 = (hash3(bi, 20, 3) - 0.5) * 0.1;
+    const rc = [rc0[0] * bt * (1 + bh2), rc0[1] * bt, rc0[2] * bt * (1 - bh2)];
     if (fyb > th) {                                                                        // тонкая прослойка между пластами — тёмная, мягкая порода
       const fade = tileAt(tl.t3, x, y, 5, 81), k = 0.55 + n2 * 0.15 + Math.max(0, fade - 0.5) * 0.8; r = rc[0] * k; g = rc[1] * k; bl = rc[2] * k;
       const q = (fyb - th) / Math.max(1, BH - th); if (q < 0.35) { const kk = 0.8; r *= kk; g *= kk; bl *= kk; }
@@ -257,6 +263,9 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (n1 > 0.94) f *= 1.12; else if (n1 < 0.05) f *= 0.78;
       const big = tileAt(tl.t3, x, y, 4);
       const big2 = tileAt(tl.t2, x, y, 5, 71); f *= 0.9 + big2 * 0.2;
+      f *= 0.9 + tileAt(tl.t1, x * 1.5, y * 3, 1, 47) * 0.2;                                      // зерно песчаника вдоль слоя
+      if (capT > 0 && sd2 < 8) f *= sd2 < 2.5 ? 0.5 : 0.7 + (sd2 - 2.5) * 0.055;                  // тень под шапкой
+      { const PK = 26, px2 = Math.floor(x / PK), py2 = Math.floor(y / PK), hp = hash3(px2, py2, 61); if (hp > 0.9 && e > 3) { const cx2 = px2 * PK + PK * 0.5, cy2 = py2 * PK + PK * 0.5, rr2 = 3 + (hp - 0.9) * 40, dx2 = (x - cx2) / (rr2 * 1.6), dy2 = (y - cy2) / rr2, e2 = dx2 * dx2 + dy2 * dy2; if (e2 < 1) f *= 0.55 + e2 * 0.3 + (dy2 > 0 ? 0 : -dy2 * 0.1); } }   // выветренные ниши
       r *= f * (1 + (big - 0.5) * 0.1); g *= f; bl *= f * (1 - (big - 0.5) * 0.1);
       // вкрапления гальки в пласте
       if (e > 4 && sd2 > 6) { const V = S.vs, vi = ((y & 255) << 8) | ((x + 97) & 255), id = V.id[vi];
@@ -268,7 +277,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     }
     if (S.veinC && t - capT > 8) {
       const dv = tileAt(tl.t3, x, y, 5, 61) < 0.56 ? 1 : Math.abs(veinAt(tl.tv, x * 1.5 + (tileAt(tl.t1, x, y, 1, 3) - 0.5) * 9 + (n2 - 0.5) * 6, y * 1.5 + (tileAt(tl.t1, x, y, 1, 11) - 0.5) * 9) - 0.5) * 1.5;   // рваные трещины, не везде
-      if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } }
+      if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } } else if (S.veinGlow && dv < S.veinW * 5) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, q = 1 - dv / (S.veinW * 5), k = q * q * 0.32; r += (vc[0] - r) * k; g += (vc[1] - g) * k * 0.7; bl += (vc[2] - bl) * k * 0.5; }
     }
   } else if (mt === 12) {
     // задняя стена земляной пещеры: неровные скруглённые плиты разного размера с глубокими швами
@@ -291,7 +300,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const row = Math.floor(ly / bh); const off = (row & 1) ? bw * (0.42 + hash3(row, 1, info.idx) * 0.16) : 0;
         const col = Math.floor((lx + off) / bw);
         const fx = lx + off - col * bw, fy = ly - row * bh;
-        const h = hash3(col, row, info.idx * 31 + 7), hc = hash3(col, row, info.idx * 17 + 3);
+        const h = hash3(col, row, info.idx * 31 + 7), hc = hash3(col, row, info.idx * 17 + 3); let sunK = 0;
         // неровный край блока: шов «гуляет» от шума, углы скруглены
         const wob = (tileAt(tl.t2, x * 2, y * 2, 2, 13) - 0.5) * 2.2;
         const ex = Math.min(fx, bw - fx), ey = Math.min(fy, bh - fy);
@@ -300,6 +309,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const chip = (hc > 0.78 && fx + fy * 1.3 < 6 + hc * 3) || (hc < 0.14 && (bw - fx) + (bh - fy) * 1.2 < 7);   // сколы углов
         if (edge < 1.3 || chip) {
           const f = (0.55 + n1 * 0.25) * (chip ? 0.85 : 0.75); r = P.mortar[0] * f; g = P.mortar[1] * f; bl = P.mortar[2] * f;
+          if (!P.nomoss && S.grassy && tileAt(tl.t3, x * 1.3 + 40, y * 1.3, 3, 57) > 0.66) { const k = 0.75 + n1 * 0.3; r = 62 * k; g = 104 * k; bl = 34 * k; }   // мох в швах
         } else {
           const c = h > 0.8 ? P.alt : P.base;
           const tone = 1 + (h - 0.5) * (P.var || 0.1) * 3.2;
@@ -310,7 +320,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
             let nx = 0, ny = 0;
             if (ex < ey) nx = fx < bw * 0.5 ? -1 : 1; else ny = fy < bh * 0.5 ? -1 : 1;
             if (cx2 > 0 && cy2 > 0) { nx = (fx < bw * 0.5 ? -cx2 : cx2); ny = (fy < bh * 0.5 ? -cy2 : cy2); const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l; }
-            f *= 1 + qq * 0.62 * (nx * LX + ny * LY) / Math.hypot(LX, LY) - qq * 0.06;
+            const lit = (nx * LX + ny * LY) / Math.hypot(LX, LY); f *= 1 + qq * 0.62 * lit - qq * 0.06; if (lit > 0.3 && S.sun) sunK = qq * lit * 0.5;
           }
           // камень: крупные пятна, зерно, выветренные раковины, мягкий свет «подушки» блока
           const bl1 = tileAt(tl.t3, x * 1.3 + h * 300, y * 1.3, 2), bl2 = tileAt(tl.t2, x + h * 500, y, 1);
@@ -326,6 +336,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           // мох: на верхних кромках и в сырых блоках
           const moss = tileAt(tl.t3, x * 0.7 + 90, y * 0.7, 3);
           const mk = Math.max(0, (moss - 0.62) * 3.2) * (fy < 5 ? 1 : 0.25) + (h < 0.06 ? 0.5 * n3 : 0);
+          if (sunK > 0) { r += (S.sun[0] - r) * sunK; g += (S.sun[1] - g) * sunK; bl += (S.sun[2] - bl) * sunK; }
           if (mk > 0.05 && !P.nomoss) { const k = Math.min(0.85, mk) * (0.7 + n1 * 0.5); r += (58 * f - r) * k; g += (104 * f - g) * k; bl += (34 * f - bl) * k; }
         }
         break;
@@ -335,7 +346,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const row = Math.floor(ly / ph), fy = ly - row * ph;
         const off = hash3(row, 3, info.idx) * 190; const segL = 60 + hash3(row, 4, info.idx) * 120;
         const seg = Math.floor((x + off) / segL), fx = x + off - seg * segL;
-        if (fy < 1.1 || fx < 1.2) { r = P.gap[0]; g = P.gap[1]; bl = P.gap[2]; }
+        if (fy < 2.3 || fx < 1.6) { const k = fy < 1.2 || fx < 0.8 ? 0.7 : 1; r = P.gap[0] * k; g = P.gap[1] * k; bl = P.gap[2] * k; }
         else {
           const h = hash3(seg, row, info.idx + 5);
           const gr = tl.tg[((y & 255) << 8) | ((x >> 1) & 255)];
@@ -344,6 +355,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           let f = 0.86 + h * (P.var || 0.16) * 2.2 + (gr - 0.5) * 0.34 + wv * 0.08;
           const wth = tileAt(tl.t3, x * 0.6 + h * 300, y * 2, 3, 43); f *= 0.84 + wth * 0.3;                   // выветренные пятна вдоль доски
           const hue = (hash3(seg, row, info.idx + 9) - 0.5) * 0.16;
+          { const gl = Math.abs(Math.sin((fy * 1.9 + Math.sin(fx * 0.045 + h * 20) * 2.2 + gr * 3) * 1.6)); if (gl < 0.12) f *= 0.8; }   // тёмные прожилки волокон
           const kx = 10 + h * (segL - 20), kd = Math.hypot((fx - kx) * 0.55, fy - ph * 0.5);
           if (h > 0.55 && kd < 3.2) f *= 0.72 + Math.sin(kd * 3.1) * 0.12;
           if (fx < 7 || fx > segL - 7) f *= 1.05;                                                           // выгоревшие торцы
@@ -376,8 +388,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           const col = Math.floor((lx - mx) / cw), fl = Math.floor((ly - my) / fh);
           const fx = (lx - mx) - col * cw, fy = (ly - my) - fl * fh;
           if (lx >= mx && col >= 0 && col < cols && fx < 14 && ly >= my && fy < 21) {
-            const hw = hash3(col, fl, info.idx * 13 + 1), hv = hash3(col, fl, info.idx * 13 + 2);
-            if (fy >= 18.5) {                                                                // подоконник с тенью под ним
+            const hw = hash3(col >> 1, fl, info.idx * 13 + 1) * 0.7 + hash3(col, fl, info.idx * 13 + 5) * 0.3, hv = hash3(col, fl, info.idx * 13 + 2);
+            if (fy >= 18.5) {                                                                // подоконник с тенью под ним (под светящимся окном — тёплый отсвет)
               if (fy < 19.8) { r = r * 0.4 + 120; g = g * 0.4 + 122; bl = bl * 0.4 + 128; } else { r *= 0.55; g *= 0.55; bl *= 0.58; }
             } else if (fx < 0.9 || fy < 0.9) { r *= 0.42; g *= 0.42; bl *= 0.45; }           // рама: тёмный контур, светлый откос сверху слева
             else if (fx < 2 || fy < 2) { r *= 1.3; g *= 1.3; bl *= 1.3; }
@@ -399,7 +411,10 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           } else if (ly > 0 && (ly - my + 5) % fh < 3) { const u = (ly - my + 5) % fh; const f = u < 1.2 ? 1.22 : 0.9; r *= f; g *= f; bl *= f; }   // междуэтажный пояс
           else if (ly > 0 && (ly - my + 5) % fh < 5) { r *= 0.74; g *= 0.74; bl *= 0.76; }                                                            // тень под поясом
           else if (lx % 60 < 1.5) { r *= 0.86; g *= 0.86; bl *= 0.86; }
-          else { const st = tileAt(S.tiles.t3, x * 3, y * 0.3, 3, 23); if (st > 0.66) { const k = 1 - (st - 0.66) * 0.6; r *= k; g *= k; bl *= k; } }   // потёки на фасаде
+          else { const st = tileAt(S.tiles.t3, x * 3, y * 0.3, 3, 23); if (st > 0.66) { const k = 1 - (st - 0.66) * 0.6; r *= k; g *= k; bl *= k; } else if (st < 0.2) { const k = 1 + (0.2 - st) * 0.9; r *= k; g *= k; bl *= k * 1.05; } }   // потёки и мокрые блики на фасаде
+          // тёплый отсвет на стене под светящимся окном
+          if (lx >= mx && col >= 0 && col < cols && fx < 16 && fy >= 21 && fy < 31 && hash3(col >> 1, fl, info.idx * 13 + 1) * 0.7 + hash3(col, fl, info.idx * 13 + 5) * 0.3 < Math.min(0.8, P.lit * 1.6)) { const k = (1 - (fy - 21) / 10) * 0.35; r += (255 - r) * k * 0.55; g += (190 - g) * k * 0.45; bl += (120 - bl) * k * 0.3; }
+          if (prm.h > 80) { const vg = 1.12 - Math.min(1, ly / prm.h) * 0.24; r *= vg; g *= vg; bl *= vg; }
         }
         break;
       }
@@ -555,7 +570,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, neon: G.neonRim ? G.neonRim.map(hex2rgb) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -631,7 +646,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
         shadeMaterial(S, back[i] === 1 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
-        const k = (back[i] === 1 ? 0.3 + (1 - occ) * 0.5 : 0.44 + (1 - occ) * 0.42) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3); const j = i * 4;
+        let wd = 16; for (let q = 1; q < 16; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
+        const k = (back[i] === 1 ? 0.3 + (1 - occ) * 0.5 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (0.55 + 0.45 * Math.min(1, wd / 16)); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
@@ -683,6 +699,10 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         L.quadraticCurveTo(bx + w * 0.4 + lean * 0.35, y - h * 0.45, bx + w, y + 2.5); L.closePath();
       }
     }
+    // высокие пучки через 20–40 px: травяной край не ровной полосой
+    { let nx = -1; for (let k = 0; k < tops.length; k += 2) { const x = tops[k], y = tops[k + 1]; if (x < nx || y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y)) continue; nx = x + 20 + rng() * 20;
+      for (let j = 0, nb = 6 + (rng() * 6 | 0); j < nb; j++) { const h = 18 + rng() * 14, lean = (rng() - 0.5) * 14, w = 1.2 + rng() * 1.2, bx = x + (rng() - 0.5) * 7, L = layers[(rng() * 3) | 0];
+        L.moveTo(bx - w, y + 2.5); L.quadraticCurveTo(bx - w * 0.2 + lean * 0.35, y - h * 0.55, bx + lean, y - h); L.quadraticCurveTo(bx + w * 0.4 + lean * 0.35, y - h * 0.45, bx + w, y + 2.5); L.closePath(); } } }
     const pick = (i) => cols[Math.min(cols.length - 1, i)];
     c.save();
     c.fillStyle = css(shadec(pick(3), 0.8)); c.fill(layers[0]);
@@ -819,7 +839,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         const u = tt / len; const lx = x + sw * 2 * u * (1 - u) * 1.2 + sw * 0.3 * u * u;
         c.fillStyle = (tt / 5) % 2 ? '#4caf3a' : '#63c24a'; c.beginPath(); c.ellipse(lx + ((tt / 5) % 2 ? 2.2 : -2.2), y + tt, 2.6, 1.3, (tt / 5) % 2 ? 0.5 : -0.5, 0, TAU); c.fill();
       }
-    } else if (kind === 'icicles' && x - lastX > 2 + rng() * 7 && rng() < 0.5) {
+    } else if (kind === 'icicles' && x - lastX > 3 + rng() * 9 && rng() < (fbm1(x / 45, seed + 41, 2) > 0 ? 0.55 : 0.08)) {
       lastX = x; const q = rng(), len = 4 + q * q * 22; const w = 1.2 + rng() * 1.4 + len * 0.04;
       const g = c.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(255,255,255,0.98)'); g.addColorStop(0.5, 'rgba(200,236,255,0.9)'); g.addColorStop(1, 'rgba(120,180,230,0.7)');
       c.fillStyle = g; c.beginPath(); c.moveTo(x - w, y - 0.5); c.lineTo(x + w, y - 0.5); c.quadraticCurveTo(x + w * 0.3, y + len * 0.6, x + 0.2, y + len); c.quadraticCurveTo(x - w * 0.4, y + len * 0.6, x - w, y - 0.5); c.fill();
