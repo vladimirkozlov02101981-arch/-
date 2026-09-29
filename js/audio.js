@@ -201,15 +201,25 @@ const Sfx = (() => {
       const t = ac.currentTime, d = out(pos, 0.55 + size * 0.15); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.8 });
       // эхо от рельефа: приглушённый повтор через четверть-полсекунды
       setTimeout(() => { if (ac) sample(n, pos ? { x: pos.x, y: pos.y - 200 } : null, 0.22 + size * 0.06, 0.8); }, 250 + Math.random() * 200);
+      // осыпание: мелкие камешки падают ещё около секунды
+      if (pos) for (let i = 0, k = 3 + Math.round(size * 2); i < k; i++) setTimeout(() => { if (ac) sample(pick(R4('stone')), { x: pos.x + (Math.random() - 0.5) * 120, y: pos.y }, 0.08 + Math.random() * 0.06, rr([1.3, 1.8])); }, 450 + i * 160 + Math.random() * 150);
       return true;
     }
     if (name === 'footstep') {
-      const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1;
-      return sample(pick(R4(STEPS[mat] || 'stepStone')), pos, mat === 1 ? 0.6 : 0.45, rr([0.92, 1.08]));
+      // шаг: левая и правая нога звучат чуть по-разному + тихий шорох снаряжения
+      const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1; footSide = -footSide;
+      const ok = sample(pick(R4(STEPS[mat] || 'stepStone')), pos, mat === 1 ? 0.6 : 0.45, rr([0.92, 1.08]) * (1 + footSide * 0.035));
+      if (ok) { const t = ac.currentTime, d = out(pos, 0.25); noise(d, t + 0.02, 0.07, { type: 'bandpass', f0: 2600 + Math.random() * 800, q: 1.6, gain: 0.07, attack: 0.01 }); }
+      return ok;
     }
     const e = REAL[name]; if (!e) return false;
-    return sample(pick(e.f), e.ui ? null : pos, e.v, rr(e.r), e.o || 0);
+    const ok = sample(pick(e.f), e.ui ? null : pos, e.v, rr(e.r), e.o || 0);
+    // гильза звенит, падая на землю, через четверть-полсекунды после выстрела
+    if (ok && pos && CASINGS.has(name)) setTimeout(() => { if (ac) sample(pick(R4('metal')), { x: pos.x - 10, y: pos.y + 20 }, 0.09, rr([2.1, 2.7])); }, 240 + Math.random() * 220);
+    return ok;
   }
+  let footSide = 1;
+  const CASINGS = new Set(['shot', 'revolver', 'sniper', 'shotgun', 'autocannon']);
   let silent = false;
   function setSilent(v) { silent = !!v; if (silent) chargeStop(); }
   function play(name, pos, arg) {
