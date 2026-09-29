@@ -69,8 +69,9 @@ class Game {
   soldierAt(x, y, r, ignore) {
     for (const s of this.soldiers) {
       if (!s.alive || s === ignore) continue;
-      if (x < s.x - 6 - r || x > s.x + 6 + r || y < s.y - 32 - r || y > s.y + 1 + r) continue;
-      if (pointSegDist2(x, y, s.x, s.y - 4, s.x, s.y - 26) <= (5 + r) * (5 + r)) return s;
+      // зона попадания совпадает с фигурой бойца (рост ~36 px)
+      if (x < s.x - 7 - r || x > s.x + 7 + r || y < s.y - 40 - r || y > s.y + 1 + r) continue;
+      if (pointSegDist2(x, y, s.x, s.y - 4, s.x, s.y - 33) <= (5.5 + r) * (5.5 + r)) return s;
     }
     return null;
   }

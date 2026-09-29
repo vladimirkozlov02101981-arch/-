@@ -69,7 +69,7 @@ function bounceStep(g, e, dt, o) {
   if (e.x < -900 || e.x > g.W + 900) return 'out';
   return null;
 }
-function muzzle(s, aim, d) { return { x: s.x + Math.cos(aim) * d, y: s.y - 17 + Math.sin(aim) * d }; }
+function muzzle(s, aim, d) { return { x: s.x + Math.cos(aim) * d, y: s.y - GUN_Y + Math.sin(aim) * d }; }
 function hitscan(g, x0, y0, ang, range, ignore) {
   const dx = Math.cos(ang), dy = Math.sin(ang), T = g.terrain;
   for (let d = 0; d <= range; d += 2) {
@@ -582,7 +582,7 @@ const FIRE = {
     } } };
   },
   railgun(g, s, p) {
-    let t = 0; g.emit({ t: 'charge', x: R1(s.x), y: R1(s.y - 17) });
+    let t = 0; g.emit({ t: 'charge', x: R1(s.x), y: R1(s.y - GUN_Y) });
     return { usage: { update(gg, dt) {
       t += dt; if (t < 0.45) return false;
       const a = s.aim; const m = muzzle(s, a, 18); const dx = Math.cos(a), dy = Math.sin(a); const L = 2800;

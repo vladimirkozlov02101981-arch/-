@@ -15,7 +15,7 @@ class Camera {
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
   /** на широких мониторах ширина обзора тоже ограничена (не больше ~2000 px карты) */
-  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 800, 0.62, 1.6), sw / 2000); }
+  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 680, 0.72, 1.9), sw / 1800); }
   zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.84, sw / 2300), b * 1.7]; }
   reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; }
   update(dt, sc, fx, sw, sh, mouse) {
@@ -45,7 +45,7 @@ class Camera {
         else if (best && best.k === 'storm') target = { x: best.x, y: best.y + 250 };
         else if (best && bp >= 2) target = { x: best.x, y: best.k === 'orbital' ? best.v : best.y };
         else if (fx.focus) target = fx.focus;
-        else { const a = sc.soldiers.find(s => s.id === sc.turn.sid); if (a && !a.gone) target = { x: a.x, y: a.y - 50 }; }
+        else { const a = sc.soldiers.find(s => s.id === sc.turn.sid); if (a && !a.gone) target = { x: a.x, y: a.y - 58 }; }
       }
     }
     if (target) {
@@ -200,7 +200,7 @@ class Renderer {
     const mine = ctl && ctl.mine;
     const aim = mine ? ctl.aim : s.aim;
     if (T.weapon === 'sniper') {
-      const mx = s.x + Math.cos(aim) * 16, my = s.y - 17 + Math.sin(aim) * 16;
+      const mx = s.x + Math.cos(aim) * 16, my = s.y - GUN_Y + Math.sin(aim) * 16;
       let d = sc.terrain.raycast(mx, my, Math.cos(aim), Math.sin(aim), 2400, 3); if (d < 0) d = 2400;
       c.save(); c.strokeStyle = 'rgba(255,40,40,0.55)'; c.lineWidth = 1.2; c.setLineDash([6, 4]); c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + Math.cos(aim) * d, my + Math.sin(aim) * d); c.stroke(); c.setLineDash([]);
       c.fillStyle = 'rgba(255,60,60,0.9)'; circ(c, mx + Math.cos(aim) * d, my + Math.sin(aim) * d, 2.2); c.restore();
@@ -241,7 +241,7 @@ class Renderer {
     c.save(); c.textAlign = 'center'; c.textBaseline = 'middle';
     for (const s of sc.soldiers) {
       if (s.gone || !s.alive) continue;
-      const [x, y] = cam.toScreen(s.x, s.y - 34, sw, sh);
+      const [x, y] = cam.toScreen(s.x, s.y - 46, sw, sh);
       if (x < -60 || x > sw + 60 || y < -60 || y > sh + 60) continue;
       const team = sc.teams[s.team]; const col = team ? team.color : '#fff';
       const hpTxt = String(s.hp); c.font = `600 13px ${FONT_UI}`;
@@ -260,7 +260,7 @@ class Renderer {
     const W = WEAPON[T.weapon];
     if (s && s.alive && !s.gone && T.phase === 'aim' && W && (W.mode === 'charge' || W.mode === 'tcharge' || W.mode === 'instant')) {
       const mine = ctl && ctl.mine; const aim = mine ? ctl.aim : s.aim;
-      const [sx, sy] = cam.toScreen(s.x, s.y - 17, sw, sh); const R = 62 * cam.z;
+      const [sx, sy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh); const R = 62 * cam.z;
       const cx = sx + Math.cos(aim) * R, cy = sy + Math.sin(aim) * R;
       const col = sc.teams[s.team] ? sc.teams[s.team].color : '#fff';
       c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, 7, 0, TAU); c.stroke();

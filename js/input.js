@@ -124,7 +124,7 @@ class LocalController {
     if ((up || down) && !jet) this.aimMode = 'keys';
     // в бинокль мышь двигает обзор, а не ствол (кроме оружия с выбором точки)
     const pickPoint = W.mode === 'target' || W.mode === 'place' || (W.mode === 'tcharge' && !T.target);
-    if (this.aimMode === 'mouse' && (!this.binoc || pickPoint)) this.base = Math.atan2(this.mouseW.y - (s.y - 17), this.mouseW.x - s.x);
+    if (this.aimMode === 'mouse' && (!this.binoc || pickPoint)) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
     else if (this.aimMode === 'keys') {
       let face = Math.cos(this.base) >= 0 ? 1 : -1;
       if (left !== right && !jet) face = left ? -1 : 1;

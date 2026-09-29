@@ -59,7 +59,7 @@ class AISearch {
     const own = (x, r) => g.soldiers.some(o => o.alive && o.team === this.team && Math.abs(o.x - x) < r);
     for (const e of this.enemies) {
       const ex = e.x, ey = e.y - 14;
-      const a = Math.atan2(ey - (s.y - 17), ex - s.x); const dist = Math.hypot(ex - s.x, ey - s.y + 17);
+      const a = Math.atan2(ey - (s.y - GUN_Y), ex - s.x); const dist = Math.hypot(ex - s.x, ey - s.y + GUN_Y);
       const m = muzzle(s, a, 16); const h = hitscan(g, m.x, m.y, a, 2600, s);
       const clear = h.type === 'soldier' && h.s === e;
       const kb = (dmg) => dmg >= e.hp ? 40 : 0;
@@ -78,7 +78,7 @@ class AISearch {
       if (avail('railgun')) {
         // луч пробивает землю: считаем всех бойцов на линии
         let sc = 0; const cx = Math.cos(a), cy = Math.sin(a);
-        for (const o of g.soldiers) { if (!o.alive || o === s) continue; const rx = o.x - s.x, ry = o.y - 14 - (s.y - 17), along = rx * cx + ry * cy; if (along < 0 || Math.abs(rx * cy - ry * cx) > 16) continue; sc += o.team === this.team ? -70 : 40 + (o.hp <= 45 ? 40 : 0); }
+        for (const o of g.soldiers) { if (!o.alive || o === s) continue; const rx = o.x - s.x, ry = o.y - 14 - (s.y - GUN_Y), along = rx * cx + ry * cy; if (along < 0 || Math.abs(rx * cy - ry * cx) > 16) continue; sc += o.team === this.team ? -70 : 40 + (o.hp <= 45 ? 40 : 0); }
         if (sc > 0) this.consider({ w: 'railgun', aim: a, pw: 1, score: sc - 10 + vary() });
       }
       if (clear && dist < 420 && avail('shotgun')) { const dmg = dist < 150 ? 40 : dist < 280 ? 30 : 18; this.consider({ w: 'shotgun', aim: a, pw: 1, score: dmg + kb(dmg) }); }

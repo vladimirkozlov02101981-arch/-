@@ -104,96 +104,98 @@ function drawSoldier(c, s, team, t, an) {
   const colD = css(shadec(col, 0.66));
   const dead = !s.alive;
   c.save(); c.translate(s.x, s.y);
-  if ((s.st === 'stand' || s.st === 'walk' || s.st === 'climb') && !dead) { c.fillStyle = 'rgba(10,6,4,0.28)'; c.beginPath(); c.ellipse(0, 0.6, 8.5, 2.1, 0, 0, TAU); c.fill(); }
-  if (s.st === 'fly') { c.translate(0, -13); c.rotate(s.rot); c.translate(0, 13); }
+  if ((s.st === 'stand' || s.st === 'walk' || s.st === 'climb') && !dead) { c.fillStyle = 'rgba(10,6,4,0.28)'; c.beginPath(); c.ellipse(0, 0.6, 10, 2.4, 0, 0, TAU); c.fill(); }
+  if (s.st === 'fly') { c.translate(0, -18); c.rotate(s.rot); c.translate(0, 18); }
   else if (s.st === 'dead') { c.translate(0, -2); c.rotate(face * 1.45); c.translate(0, 2); }
   const climb = s.st === 'climb';
   const bob = s.st === 'stand' && !dead ? Math.sin(t * 2.4 + s.id) * 0.45 : 0;
   const lean = s.st === 'walk' ? face * 1.2 : 0;
-  const hipX = lean * 0.3, hipY = -9.4;
-  const nX = lean, nY = -18.2 + bob;
+  // реалистичные пропорции: рост ~36 px, голова ~1/7 роста, плечо на высоте GUN_Y
+  const hipX = lean * 0.3, hipY = -15.5;
+  const nX = lean, nY = -27 + bob;
   let f1, f2;
-  if (s.st === 'walk') { const ph = an.walk; f1 = [Math.sin(ph) * 4.4, -Math.max(0, Math.cos(ph)) * 2.6]; f2 = [Math.sin(ph + Math.PI) * 4.4, -Math.max(0, Math.cos(ph + Math.PI)) * 2.6]; }
+  if (s.st === 'walk') { const ph = an.walk; f1 = [Math.sin(ph) * 6, -Math.max(0, Math.cos(ph)) * 3.4]; f2 = [Math.sin(ph + Math.PI) * 6, -Math.max(0, Math.cos(ph + Math.PI)) * 3.4]; }
   else if (climb) { const ph = s.y * 0.35; f1 = [2.4, -Math.max(0, Math.sin(ph)) * 3.2]; f2 = [-2.4, -Math.max(0, -Math.sin(ph)) * 3.2]; }
-  else if (s.st === 'air' || s.st === 'jet') { f1 = [face * 3.2, -3.8]; f2 = [-face * 1.8, -1.4]; }
-  else if (s.st === 'fly' || s.st === 'dead') { f1 = [4.6, -0.6]; f2 = [-4.2, -1.6]; }
-  else { f1 = [2.6, 0]; f2 = [-2.6, 0]; }
-  const k1 = ik2(hipX, hipY, f1[0], f1[1], 5.2, 5, -face), k2 = ik2(hipX, hipY, f2[0], f2[1], 5.2, 5, -face);
+  else if (s.st === 'air' || s.st === 'jet') { f1 = [face * 4.4, -5.6]; f2 = [-face * 2.6, -2]; }
+  else if (s.st === 'fly' || s.st === 'dead') { f1 = [6.2, -1]; f2 = [-5.6, -2.2]; }
+  else { f1 = [2.9, 0]; f2 = [-2.9, 0]; }
+  const k1 = ik2(hipX, hipY, f1[0], f1[1], 8.2, 8, -face), k2 = ik2(hipX, hipY, f2[0], f2[1], 8.2, 8, -face);
   // джетпак / ранец за спиной
   const jet = s.wpn === 'jetpack' || s.st === 'jet';
   if (jet) {
-    c.fillStyle = OUTL; rrect(c, -face * 8 - 3.3, -21, 6.6, 12, 2.6); c.fill();
-    c.fillStyle = ballGrad(c, -face * 8, -16, 6, '#6a7382'); rrect(c, -face * 8 - 2.6, -20.3, 5.2, 10.6, 2); c.fill();
-    c.fillStyle = '#d0402f'; c.fillRect(-face * 8 - 2.6, -17.2, 5.2, 2);
-    if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 8 - 6.5, -11, 13, 18 + Math.random() * 7); c.restore(); }
+    c.fillStyle = OUTL; rrect(c, -face * 7.5 - 3.5, -27, 7, 14, 2.6); c.fill();
+    c.fillStyle = ballGrad(c, -face * 7.5, -21, 6, '#6a7382'); rrect(c, -face * 7.5 - 2.8, -26.3, 5.6, 12.6, 2); c.fill();
+    c.fillStyle = '#d0402f'; c.fillRect(-face * 7.5 - 2.8, -22.6, 5.6, 2);
+    if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 7.5 - 6.5, -15, 13, 18 + Math.random() * 7); c.restore(); }
   } else {
-    c.fillStyle = OUTL; rrect(c, nX - face * 6.6 - 2.8, nY + 0.6, 5.6, 8.4, 2.2); c.fill();
-    c.fillStyle = ballGrad(c, nX - face * 6.6, nY + 4, 5, '#5f6b4a'); rrect(c, nX - face * 6.6 - 2.2, nY + 1.2, 4.4, 7.2, 1.8); c.fill();
+    c.fillStyle = OUTL; rrect(c, nX - face * 6 - 3, nY + 0.8, 6, 11, 2.2); c.fill();
+    c.fillStyle = ballGrad(c, nX - face * 6, nY + 5, 6, '#5f6b4a'); rrect(c, nX - face * 6 - 2.4, nY + 1.4, 4.8, 9.8, 1.8); c.fill();
+    c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(nX - face * 6 - 2.4, nY + 5, 4.8, 0.8);
   }
   // задняя нога
-  capsule(c, [[hipX, hipY], k2, [f2[0], f2[1] - 1.2]], 3.5, css(shadec(PANTS, 0.78)));
+  capsule(c, [[hipX, hipY], k2, [f2[0], f2[1] - 1.2]], 3.3, css(shadec(PANTS, 0.78)));
   boot(c, f2[0], f2[1], face, true);
   // торс: скруглённый мундир с ремнём
   const th = hipY - nY + 2.6;
-  c.fillStyle = OUTL; rrect(c, nX - 5.9, nY - 0.7, 11.8, th + 1.4, 4.2); c.fill();
+  c.fillStyle = OUTL; rrect(c, nX - 5.3, nY - 0.7, 10.6, th + 1.4, 3.6); c.fill();
   { const g = c.createLinearGradient(nX - 5, nY, nX + 5, nY + th); g.addColorStop(0, css(shadec(col, 1.22))); g.addColorStop(0.5, css(col)); g.addColorStop(1, colD); c.fillStyle = g; }
-  rrect(c, nX - 5.2, nY, 10.4, th, 3.6); c.fill();
+  rrect(c, nX - 4.6, nY, 9.2, th, 3); c.fill();
+  // разгрузка: карманы и воротник
+  c.fillStyle = css(shadec(col, 0.55)); rrect(c, nX + face * 0.6 - 2.4, nY + th * 0.36, 4.8, 3.4, 0.8); c.fill(); rrect(c, nX + face * 0.6 - 2.4, nY + th * 0.36 + 4, 4.8, 3, 0.8); c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(nX + face * 0.6 - 2.2, nY + th * 0.36 + 0.4, 4.4, 0.7);
+  c.fillStyle = css(shadec(col, 0.7)); rrect(c, nX - 3.4, nY - 0.6, 6.8, 2.2, 1); c.fill();
   c.fillStyle = 'rgba(0,0,0,0.18)'; rrect(c, nX + face * 1.2 - 0.6, nY + 1.2, 1.2, th - 3.4, 0.6); c.fill();
-  c.fillStyle = '#2e2622'; c.fillRect(nX - 5.2, hipY - 1.6, 10.4, 2.3);
+  c.fillStyle = '#2e2622'; c.fillRect(nX - 4.6, hipY - 1.6, 9.2, 2.3);
   c.fillStyle = '#d8b04a'; c.fillRect(nX + face * 1.4 - 1.1, hipY - 1.5, 2.2, 2.1);
   c.fillStyle = 'rgba(255,255,255,0.22)'; rrect(c, nX - 4.2, nY + 1, 3, th * 0.5, 1.4); c.fill();
   // передняя нога
-  capsule(c, [[hipX, hipY], k1, [f1[0], f1[1] - 1.2]], 3.7, PANTS);
+  capsule(c, [[hipX, hipY], k1, [f1[0], f1[1] - 1.2]], 3.5, PANTS);
   boot(c, f1[0], f1[1], face, false);
   // руки и оружие
-  const shX = nX, shY = nY + 2.4;
+  const shX = nX, shY = nY + 3;
   const holding = s.wpn && !dead && s.st !== 'fly' && !climb && s.wpn !== 'jetpack';
   if (holding) {
     const a = s.aim; const dx = Math.cos(a), dy = Math.sin(a);
-    const gx = shX + dx * 5.6, gy = shY + dy * 5.6;
+    const gx = shX + dx * 7.2, gy = shY + dy * 7.2;
     const two = !['grenade', 'cluster', 'sticky', 'blackhole', 'mine', 'dynamite', 'molotov', 'robot', 'medkit', 'skip', 'airstrike', 'lightning', 'orbital', 'nuke', 'teleport', 'girder'].includes(s.wpn);
-    const bx = two ? gx + dx * 5.4 : gx + dx * 0.5, by = two ? gy + dy * 5.4 : gy + dy * 0.5 + 1;
-    const ke = ik2(shX, shY, bx, by, 4.4, 4.4, face); capsule(c, [[shX, shY], ke, [bx, by]], 3.2, colD); hand(c, bx, by);
+    const bx = two ? gx + dx * 6.4 : gx + dx * 0.5, by = two ? gy + dy * 6.4 : gy + dy * 0.5 + 1;
+    const ke = ik2(shX, shY, bx, by, 6.4, 6.4, face); capsule(c, [[shX, shY], ke, [bx, by]], 2.9, colD); hand(c, bx, by);
     c.save(); c.translate(gx, gy); c.rotate(a); if (face < 0) c.scale(1, -1); drawHeld(c, s.wpn, t); c.restore();
-    const kf = ik2(shX, shY, gx, gy, 4.4, 4.4, face); capsule(c, [[shX, shY], kf, [gx, gy]], 3.3, col); hand(c, gx, gy);
+    const kf = ik2(shX, shY, gx, gy, 6.4, 6.4, face); capsule(c, [[shX, shY], kf, [gx, gy]], 3, col); hand(c, gx, gy);
   } else {
     let h1, h2;
     const fX = shX + face * 2.2, bX = shX - face * 2.6;
-    if (climb) { const ph = s.y * 0.35; h1 = [shX + 2.4, shY - 9 - Math.sin(ph) * 2]; h2 = [shX - 2.4, shY - 9 + Math.sin(ph) * 2]; }
-    else if (s.st === 'fly' || s.st === 'dead') { h1 = [shX + 6.5, shY - 5]; h2 = [shX - 6.5, shY - 4]; }
-    else if (s.st === 'air' || s.st === 'jet') { h1 = [fX + face * 4.2, shY - 4]; h2 = [bX - face * 3.6, shY - 2.6]; }
-    else { const sw = s.st === 'walk' ? Math.sin(an.walk) * 3.2 : Math.sin(t * 2.4 + s.id) * 0.4; h1 = [fX + sw + face * 1.2, shY + 7.4]; h2 = [bX - sw - face * 0.8, shY + 7.2]; }
-    const e2 = ik2(bX, shY, h2[0], h2[1], 4.4, 4.4, face); capsule(c, [[bX, shY], e2, h2], 3.2, colD); hand(c, h2[0], h2[1]);
-    const e1 = ik2(fX, shY, h1[0], h1[1], 4.4, 4.4, face); capsule(c, [[fX, shY], e1, h1], 3.3, col); hand(c, h1[0], h1[1]);
+    if (climb) { const ph = s.y * 0.35; h1 = [shX + 2.6, shY - 11 - Math.sin(ph) * 2.6]; h2 = [shX - 2.6, shY - 11 + Math.sin(ph) * 2.6]; }
+    else if (s.st === 'fly' || s.st === 'dead') { h1 = [shX + 9, shY - 6]; h2 = [shX - 9, shY - 5]; }
+    else if (s.st === 'air' || s.st === 'jet') { h1 = [fX + face * 5.6, shY - 5.4]; h2 = [bX - face * 4.8, shY - 3.4]; }
+    else { const sw = s.st === 'walk' ? Math.sin(an.walk) * 4.2 : Math.sin(t * 2.4 + s.id) * 0.4; h1 = [fX + sw + face * 1.4, shY + 11.4]; h2 = [bX - sw - face * 1, shY + 11.2]; }
+    const e2 = ik2(bX, shY, h2[0], h2[1], 6.2, 6.2, face); capsule(c, [[bX, shY], e2, h2], 2.9, colD); hand(c, h2[0], h2[1]);
+    const e1 = ik2(fX, shY, h1[0], h1[1], 6.2, 6.2, face); capsule(c, [[fX, shY], e1, h1], 3, col); hand(c, h1[0], h1[1]);
   }
-  // голова: объёмная, с румянцем и большими глазами
-  const hx = nX + face * 0.7, hy = nY - 6.3, R = 6.9;
-  c.fillStyle = OUTL; circ(c, hx, hy, R + 0.8);
-  c.fillStyle = ballGrad(c, hx, hy, R, SKIN, 1.18, 0.72); circ(c, hx, hy, R);
-  c.fillStyle = 'rgba(255,120,110,0.35)'; c.beginPath(); c.ellipse(hx + face * 4.6, hy + 2.6, 1.7, 1.1, 0, 0, TAU); c.fill();
-  c.fillStyle = css(shadec(SKIN, 0.82)); c.beginPath(); c.ellipse(hx - face * 4.8, hy + 0.8, 1.4, 2, 0, 0, TAU); c.fill();
+  // голова: реалистичные пропорции — шея, небольшое лицо с носом, каска по размеру
+  const hx = nX + face * 0.6, hy = nY - 5.6, R = 4.7;
+  c.fillStyle = OUTL; rrect(c, nX - 1.9, nY - 2.6, 3.8, 3.6, 1); c.fill(); c.fillStyle = css(shadec(SKIN, 0.85)); rrect(c, nX - 1.4, nY - 2.4, 2.8, 3.2, 0.8); c.fill();
+  c.fillStyle = OUTL; c.beginPath(); c.ellipse(hx, hy, R + 0.7, R * 1.12 + 0.7, 0, 0, TAU); c.fill();
+  c.fillStyle = ballGrad(c, hx, hy, R, SKIN, 1.12, 0.78); c.beginPath(); c.ellipse(hx, hy, R, R * 1.12, 0, 0, TAU); c.fill();
+  c.fillStyle = css(shadec(SKIN, 0.82)); c.beginPath(); c.ellipse(hx - face * 3.4, hy + 0.6, 1, 1.4, 0, 0, TAU); c.fill();   // ухо
+  c.fillStyle = 'rgba(60,40,30,0.18)'; c.beginPath(); c.ellipse(hx + face * 1.6, hy + 3.4, 2.6, 1.3, 0, 0, TAU); c.fill();      // щетина
+  c.fillStyle = css(shadec(SKIN, 0.9)); c.beginPath(); c.moveTo(hx + face * 4, hy - 0.2); c.lineTo(hx + face * 5.5, hy + 1.8); c.lineTo(hx + face * 3.8, hy + 2.1); c.closePath(); c.fill();   // нос
   const look = holding ? s.aim : (face > 0 ? 0 : Math.PI);
-  const ex = Math.cos(look), ey = Math.sin(look);
+  const ex = Math.cos(look), ey = Math.sin(look), eyeX = hx + face * 2.4, eyeY = hy - 0.2;
+  c.lineCap = 'round';
   if (dead) {
-    c.strokeStyle = '#3a2418'; c.lineWidth = 1.1; c.lineCap = 'round';
-    for (const ox of [1.8, 4.7]) { const cx = hx + face * ox, cy = hy + 0.5; c.beginPath(); c.moveTo(cx - 1.1, cy - 1.1); c.lineTo(cx + 1.1, cy + 1.1); c.moveTo(cx + 1.1, cy - 1.1); c.lineTo(cx - 1.1, cy + 1.1); c.stroke(); }
+    c.strokeStyle = '#3a2418'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(eyeX - 0.8, eyeY - 0.8); c.lineTo(eyeX + 0.8, eyeY + 0.8); c.moveTo(eyeX + 0.8, eyeY - 0.8); c.lineTo(eyeX - 0.8, eyeY + 0.8); c.stroke();
   } else if (an.blink > 0 || s.hurt > 0) {
-    c.strokeStyle = '#3a2418'; c.lineWidth = 1.1; c.lineCap = 'round';
-    for (const ox of [1.8, 4.7]) { c.beginPath(); c.moveTo(hx + face * ox - 1.2, hy + 0.6); c.quadraticCurveTo(hx + face * ox, hy + 1.5, hx + face * ox + 1.2, hy + 0.6); c.stroke(); }
+    c.strokeStyle = '#3a2418'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(eyeX - 0.9, eyeY + 0.2); c.lineTo(eyeX + 0.9, eyeY + 0.2); c.stroke();
   } else {
-    for (const ox of [1.8, 4.7]) {
-      const cx = hx + face * ox, cy = hy + 0.5;
-      c.fillStyle = OUTL; c.beginPath(); c.ellipse(cx, cy, 2, 2.5, 0, 0, TAU); c.fill();
-      c.fillStyle = '#fff'; c.beginPath(); c.ellipse(cx, cy, 1.55, 2.05, 0, 0, TAU); c.fill();
-      c.fillStyle = '#2a1c16'; circ(c, cx + ex * 0.55, cy + ey * 0.75 + 0.2, 1.02);
-      c.fillStyle = '#fff'; circ(c, cx + ex * 0.55 - 0.38, cy + ey * 0.75 - 0.28, 0.4);
-    }
-    c.strokeStyle = '#4a2c1c'; c.lineWidth = 0.95; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(hx + face * 0.8, hy - 2.4); c.lineTo(hx + face * 2.8, hy - 2); c.moveTo(hx + face * 3.8, hy - 2); c.lineTo(hx + face * 5.7, hy - 2.5); c.stroke();
-    c.beginPath(); c.moveTo(hx + face * 2.7, hy + 4.1); c.quadraticCurveTo(hx + face * 3.7, hy + 4.8, hx + face * 4.7, hy + 3.9); c.stroke();
+    c.fillStyle = '#f4efe8'; c.beginPath(); c.ellipse(eyeX, eyeY, 1.05, 0.72, 0, 0, TAU); c.fill();
+    c.fillStyle = '#2a1c16'; circ(c, eyeX + ex * 0.35, eyeY + ey * 0.3, 0.52);
   }
-  const hat = team ? team.hat : 'helmet'; drawHat(c, hat, col, hx, hat === 'helmet' || !hat ? hy : hy - 1.2, face);
-  if (s.hurt > 0 && !dead) { c.globalAlpha = Math.min(0.55, s.hurt * 2.5); c.fillStyle = '#ff3030'; circ(c, hx, hy, R + 0.6); c.globalAlpha = 1; }
+  c.strokeStyle = '#4a2c1c'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(eyeX - 1.1, eyeY - 1.5); c.lineTo(eyeX + 1.2, eyeY - 1.3); c.stroke();   // бровь
+  c.strokeStyle = 'rgba(80,40,30,0.7)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(hx + face * 2.2, hy + 3); c.lineTo(hx + face * 3.8, hy + 2.9); c.stroke();   // рот
+  const hat = team ? team.hat : 'helmet';
+  c.save(); c.translate(hx, hy); c.scale(0.74, 0.74); drawHat(c, hat, col, 0, hat === 'helmet' || !hat ? -0.6 : -1.8, face); c.restore();
+  if (s.hurt > 0 && !dead) { c.globalAlpha = Math.min(0.5, s.hurt * 2.5); c.fillStyle = '#ff3030'; c.beginPath(); c.ellipse(hx, hy, R + 0.6, R * 1.12 + 0.6, 0, 0, TAU); c.fill(); c.globalAlpha = 1; }
   c.restore();
 }
 

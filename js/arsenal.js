@@ -42,7 +42,7 @@ Object.assign(FIRE, {
   },
   // РПГ: ракета летит строго по прямой — без гравитации и без ветра
   rpg(g,s,p) { shootProj(g,s,{aim:p.aim,pw:1},'rocket',1150,{grav:0,wind:0,r:3}); },
-  plasma(g,s,p) { g.spawn(new PlasmaBall(g,s,p)); g.emit({t:'launch',x:s.x,y:s.y-17,w:'plasma'}); },
+  plasma(g,s,p) { g.spawn(new PlasmaBall(g,s,p)); g.emit({t:'launch',x:s.x,y:s.y-GUN_Y,w:'plasma'}); },
   autocannon(g,s,p) {
     let t=0,n=0;
     return {usage:{update(gg,dt){
