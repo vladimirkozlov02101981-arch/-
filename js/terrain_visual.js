@@ -1,5 +1,11 @@
 'use strict';
 /** прожилки: билинейная выборка сетки 4×4 px — гладкие края вместо «лесенки» */
+/** крупномасштабный шум: билинейная выборка тайла с шагом 2^sh px (без ступенек) */
+function tileAt(t, x, y, sh, ox = 0) {
+  const k = 1 << sh, fx = x / k - 0.5 + ox, fy = y / k - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0;
+  const r0 = (y0 & 255) << 8, r1 = ((y0 + 1) & 255) << 8, c0 = x0 & 255, c1 = (x0 + 1) & 255;
+  return (t[r0 | c0] * (1 - ax) + t[r0 | c1] * ax) * (1 - ay) + (t[r1 | c0] * (1 - ax) + t[r1 | c1] * ax) * ay;
+}
 function veinAt(tv, x, y) {
   const fx = x / 4 - 0.5, fy = y / 4 - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0;
   const r0 = (y0 & 255) << 8, r1 = ((y0 + 1) & 255) << 8, c0 = x0 & 255, c1 = (x0 + 1) & 255;
@@ -105,18 +111,20 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     r *= f; g *= f; bl *= f;
   } else if (mt === 1) {
     const sd = t - capT;
-    const v = (y + S.colOff[x] + (n3 - 0.5) * 56) / S.band;
+    // крупный масштаб: пятна тона, изгиб пластов и скопления камней (не равномерная сетка)
+    const big = tileAt(tl.t3, x, y, 4), big2 = tileAt(tl.t2, x, y, 5, 97);
+    const v = (y + S.colOff[x] + (n3 - 0.5) * 70 + (big2 - 0.5) * 120) / S.band;
     const bi = Math.floor(v), fr = v - bi, L = S.L;
     const c0 = S.strata[((bi % L) + L) % L], c1 = S.strata[(((bi + 1) % L) + L) % L];
     let bm = fr < S.st ? 0 : (fr - S.st) / (1 - S.st); bm = bm * bm * (3 - 2 * bm);
-    const lv = 0.93 + n3 * 0.12 + (n2 - 0.5) * 0.05;
+    const lv = (0.9 + n3 * 0.1 + (n2 - 0.5) * 0.05 + (big - 0.5) * 0.16) * (1 - Math.min(0.2, sd / 1100));
     r = (c0[0] + (c1[0] - c0[0]) * bm) * lv; g = (c0[1] + (c1[1] - c0[1]) * bm) * lv; bl = (c0[2] + (c1[2] - c0[2]) * bm) * lv;
     if (sd < S.soilDepth) { const k = sd / S.soilDepth, q = k * k; const so = S.soil; r = so[0] + (r - so[0]) * q; g = so[1] + (g - so[1]) * q; bl = so[2] + (bl - so[2]) * q; }
     if (capT > 0 && sd < 8) { const k = 0.58 + 0.42 * sd / 8; r *= k; g *= k; bl *= k; }        // тень под травяной губой
     if (sd > 10) {                                                                            // скруглённые камни в толще
       const V = S.vs, vi = ((y & 255) << 8) | (x & 255), id = V.id[vi];
-      if (V.rnd[id] > 0.62) {
-        const rad = V.cell * (0.13 + 0.24 * V.rnd2[id]);
+      if (V.rnd[id] > 1.05 - big * big * 0.95) {
+        const rad = Math.min(V.cell * 0.42, V.cell * (0.1 + 0.22 * V.rnd2[id]) * (0.65 + big * 0.9));
         const ox = -V.vx[vi] * 0.5, oy = -V.vy[vi] * 0.66;
         const e2 = (ox * ox + oy * oy) / (rad * rad);
         if (e2 < 1) {
