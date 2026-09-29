@@ -645,11 +645,11 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         let f = 1 + (lam - LZ) * 1.05; if (f < 0.5) f = 0.5;
         // затенение впадин и глубина массива
         const aoW = d < 36 ? 1 : d > 90 ? 0 : 1 - (d - 36) / 54;
-        f *= 1 + aoW * (occ < 0.5 ? (0.5 - occ) * 0.34 : -(occ - 0.5) * 0.62);
+        f *= 1 + aoW * (occ < 0.5 ? (0.5 - occ) * 0.34 : -(occ - 0.5) * (mt === 3 ? 0.3 : 0.62));
         if (d > 14) f *= 1 - Math.min(1, (d - 14) / 260) * (mt === 1 ? 0.26 : mt >= 3 && mt <= 6 ? 0.12 : 0.4);                 // глубина массива заметно темнее — объём как в CGI
         if (BD[i] < 10 && mt !== 8) f *= 0.7 + BD[i] * 0.03;                  // низ навесов темнее
         const shd = dd <= 30 ? shadowAt(x, y) : 0;                              // отброшенная тень
-        if (shd > 0.02) f *= 1 - shd * 0.42;
+        if (shd > 0.02) f *= 1 - shd * (mt === 3 ? 0.18 : 0.42);
         // блик на гладких материалах
         if (o.spec > 0) { const sp = nx * HX + ny * HY + nz * HZ, base = HZ; if (sp > base) { const k = Math.min(1, (sp - base) / (1 - base)); const s = k * k * 120 * o.spec; r += s; g += s; bl += s; } }
         // тёплый свет — холодная тень
@@ -690,7 +690,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
     const sw2 = Math.ceil(W / 2), sh2 = Math.ceil(H / 2);
     const sil = makeCanvas(sw2, sh2); const sc = sil.getContext('2d');
     sc.filter = 'blur(5px) brightness(0)'; sc.drawImage(T.canvas, 0, 0, sw2, sh2); sc.filter = 'none';
-    const dc = T.dctx; dc.save(); dc.globalCompositeOperation = 'source-atop'; dc.globalAlpha = 0.7; dc.drawImage(sil, 7, 10, W, H); dc.restore();
+    const dc = T.dctx; dc.save(); dc.globalCompositeOperation = 'source-atop'; dc.globalAlpha = 0.42; dc.drawImage(sil, 6, 8, W, H); dc.restore();
   }
   if (gimg) {
     const tmp = makeCanvas(W, H); tmp.getContext('2d').putImageData(new ImageData(gimg, W, H), 0, 0);
