@@ -110,6 +110,21 @@ class Renderer {
     if (x1 > x0 && y1 > y0) c.drawImage(img, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
   }
   wave(x, t, ph) { return Math.sin(x * 0.018 + t * 1.5 + ph) * 3 + Math.sin(x * 0.047 - t * 2.1 + ph * 2) * 1.8 + Math.sin(x * 0.11 + t * 3.2) * 0.7; }
+  /** отражение в воде: полосы кадра над линией воды зеркально переносятся вниз, дрожат по волнам и гаснут с глубиной */
+  drawReflection(c, wy, t) {
+    const m = c.getTransform(), cv = c.canvas, sy = Math.round(wy * m.d + m.f);
+    if (sy <= 0 || sy >= cv.height - 2) return;
+    const depth = Math.min(sy, cv.height - sy, Math.round(260 * m.d)), band = Math.max(3, Math.round(4 * this.dpr));
+    if (!this.reflCv || this.reflCv.width !== cv.width || this.reflCv.height < depth) this.reflCv = makeCanvas(cv.width, Math.max(depth, 8));
+    const r = this.reflCv.getContext('2d'); r.setTransform(1, 0, 0, 1, 0, 0); r.clearRect(0, 0, cv.width, depth);
+    r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, cv.width, depth);       // снимок полосы над водой
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    for (let k = 0; k < depth; k += band) {
+      const a = 0.46 * (1 - k / depth), dx = Math.sin(t * 2.2 + k * 0.09) * (1 + k * 0.035) * this.dpr;
+      c.globalAlpha = a; c.drawImage(this.reflCv, 0, depth - k - band, cv.width, band, dx, sy + k, cv.width, band);
+    }
+    c.restore();
+  }
   drawLiquid(c, sc, v, t, back) {
     const L = sc.theme.liquid, wy = sc.waterY; if (v.y1 < wy - 20) return;
     const lava = L.kind === 'lava'; const tt = lava ? t * 0.35 : t; const amp = lava ? 1.4 : 1;
@@ -120,6 +135,7 @@ class Renderer {
     if (back) { c.fillStyle = css(shadec(L.mid, lava ? 1 : 0.8)); c.fill(); return; }
     const g = c.createLinearGradient(0, wy - 6, 0, wy + 280); g.addColorStop(0, L.top); g.addColorStop(0.22, L.mid); g.addColorStop(1, L.deep);
     c.save(); c.globalAlpha = L.alpha; c.fillStyle = g; c.fill(); c.restore();
+    if (!lava) this.drawReflection(c, wy, t);
     c.save();
     c.lineWidth = lava ? 3 : 2; c.strokeStyle = lava ? 'rgba(255,240,170,0.9)' : rgba(L.foam, 0.85); c.beginPath();
     for (let x = x0; x <= x1 + step; x += step) { const y = wy + this.wave(x, tt, 0) * amp; if (x === x0) c.moveTo(x, y); else c.lineTo(x, y); }
