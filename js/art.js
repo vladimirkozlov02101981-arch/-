@@ -17,11 +17,11 @@ const MapArt = {
     let s = this.softs.get(id); if (s) return s;
     const W = img.naturalWidth, H = img.naturalHeight;
     s = makeCanvas(W, H); const c = s.getContext('2d', { willReadFrequently: true });
-    c.filter = 'saturate(1.06) contrast(1.04)'; c.drawImage(img, 0, 0); c.filter = 'none';
+    c.drawImage(img, 0, 0);   // исходные цвета панорамы без фильтров
     try {
       const bl = makeCanvas(W, H), bc = bl.getContext('2d', { willReadFrequently: true });
       bc.filter = 'blur(1.2px)'; bc.drawImage(s, 0, 0); bc.filter = 'none';
-      const A = c.getImageData(0, 0, W, H), Bd = bc.getImageData(0, 0, W, H).data, d = A.data, k = 0.7;
+      const A = c.getImageData(0, 0, W, H), Bd = bc.getImageData(0, 0, W, H).data, d = A.data, k = 0.35;
       for (let i = 0; i < d.length; i += 4) for (let j = 0; j < 3; j++) { const v = d[i + j] + (d[i + j] - Bd[i + j]) * k; d[i + j] = v < 0 ? 0 : v > 255 ? 255 : v; }
       c.putImageData(A, 0, 0);
     } catch (e) { /* без резкости, если холст недоступен для чтения */ }

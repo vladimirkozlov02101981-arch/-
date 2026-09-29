@@ -13,7 +13,7 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
 
 (async () => {
   const assets = {};
-  // панорамы: PNG → WebP через canvas браузера (качество 0.92)
+  // панорамы: PNG → WebP через canvas браузера (качество 0.95)
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : { channel: 'chrome' });
   try {
     const page = await browser.newPage(); await page.goto(process.env.TEST_URL || 'http://localhost:3000');
@@ -23,7 +23,7 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
         assets[p] = await page.evaluate(async (src) => {
           const im = new Image(); im.src = src; await im.decode();
           const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0);
-          return c.toDataURL('image/webp', 0.92);
+          return c.toDataURL('image/webp', 0.95);
         }, '/' + p);
       } else assets[p] = dataUri(p);
     }

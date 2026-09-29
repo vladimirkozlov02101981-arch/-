@@ -53,7 +53,7 @@ class Background {
       if (this.clouds.length) { const a = this.th.clouds.alpha; this.th.clouds.alpha = a * 0.32; this.drawClouds(c, cam, sw, sh * 0.62); this.th.clouds.alpha = a; }
       this.drawBirds(c, t, sh * 0.62);
       const hz = hex2rgb(this.th.sky[2]); const haze = c.createLinearGradient(0, sh * .3, 0, sh);
-      haze.addColorStop(0, `rgba(${hz[0]},${hz[1]},${hz[2]},0)`); haze.addColorStop(0.7, `rgba(${hz[0]},${hz[1]},${hz[2]},0.16)`); haze.addColorStop(1, `rgba(${hz[0]},${hz[1]},${hz[2]},0.3)`);
+      haze.addColorStop(0, `rgba(${hz[0]},${hz[1]},${hz[2]},0)`); haze.addColorStop(0.7, `rgba(${hz[0]},${hz[1]},${hz[2]},0.04)`); haze.addColorStop(1, `rgba(${hz[0]},${hz[1]},${hz[2]},0.1)`);
       c.fillStyle = haze; c.fillRect(0, 0, sw, sh);
       return;
     }
