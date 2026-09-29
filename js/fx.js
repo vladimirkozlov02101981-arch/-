@@ -32,7 +32,14 @@ class FX {
         if (!isHost) sc.terrain.addGirder(ev.x, ev.y, ev.a);
         Sfx.play('build', ev); for (let i = 0; i < 8; i++) P.smoke(ev.x + rand(-40, 40), ev.y + rand(-6, 6), rand(-20, 20), rand(-30, -5), rand(5, 9), rand(0.6, 1.2), '#b8b0a0', 2, 0.5);
         break;
-      case 'boom': this.explosion(ev.x, ev.y, ev.r, ev.k, sc); break;
+      case 'boom': this.explosion(ev.x, ev.y, ev.r, ev.k, sc); if (ev.w > ev.r * 2.7) P.ring(ev.x, ev.y, ev.r, ev.w, 0.55, 'rgba(255,230,190,0.55)', 1.5); break;
+      case 'frags':
+        // осколки: короткие раскалённые трассы и искры там, где осколок ударился
+        for (const [x2, y2] of ev.e || []) {
+          const f = 0.35 + Math.random() * 0.4; this.traces.push({ x1: ev.x + (x2 - ev.x) * f * 0.5, y1: ev.y + (y2 - ev.y) * f * 0.5, x2: ev.x + (x2 - ev.x) * f, y2: ev.y + (y2 - ev.y) * f, k: 3, life: 0.12, max: 0.12 });
+          if (Math.random() < 0.5) P.spark(x2, y2, rand(-60, 60), rand(-90, -10), 0.25, '#ffd08a');
+        }
+        break;
       case 'nuke': this.nukeFx(ev.x, ev.y, sc); break;
       case 'dmg': {
         const now = this.t; let o = this.texts.find(x => x.id === ev.id && now - x.born < 0.4 && x.dmg);
@@ -232,6 +239,7 @@ class FX {
     for (const tr of this.traces) {
       const k = tr.life / tr.max;
       if (tr.k === 0) { c.strokeStyle = `rgba(255,230,150,${0.8 * k})`; c.lineWidth = 1.3; c.beginPath(); c.moveTo(tr.x1, tr.y1); c.lineTo(tr.x2, tr.y2); c.stroke(); }
+      else if (tr.k === 3) { c.strokeStyle = `rgba(255,190,90,${0.9 * k})`; c.lineWidth = 1.2; c.beginPath(); c.moveTo(tr.x1, tr.y1); c.lineTo(tr.x2, tr.y2); c.stroke(); }
       else if (tr.k === 1) { c.strokeStyle = `rgba(255,255,255,${0.9 * k})`; c.lineWidth = 1.6; c.beginPath(); c.moveTo(tr.x1, tr.y1); c.lineTo(tr.x2, tr.y2); c.stroke(); c.strokeStyle = `rgba(255,180,120,${0.3 * k})`; c.lineWidth = 5; c.stroke(); }
       else { for (const [w, col] of [[16 * k + 4, `rgba(40,200,255,${0.35 * k})`], [7 * k + 2, `rgba(120,240,255,${0.8 * k})`], [2.5 * k + 1, `rgba(255,255,255,${k})`]]) { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(tr.x1, tr.y1); c.lineTo(tr.x2, tr.y2); c.stroke(); } }
     }

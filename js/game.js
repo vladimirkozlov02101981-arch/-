@@ -84,29 +84,32 @@ class Game {
     // Sample cover BEFORE carving, so a wall absorbs this blast even if it breaks.
     const exposure = new Map();
     for (const s of this.soldiers) {
-      if (!s.gone && Math.hypot(s.x-x,s.y-13-y)<(R+12)*1.6) {
+      if (!s.gone && Math.hypot(s.x-x,s.y-13-y)<Math.max((R+12)*1.6,(o.frag&&FRAGS[o.frag]?FRAGS[o.frag].L:0)+20)) {
         exposure.set(s, (this.blastTransmission(x,y,s.x,s.y-25)+this.blastTransmission(x,y,s.x,s.y-13)+this.blastTransmission(x,y,s.x,s.y-3))/3);
       }
     }
     const material = this.terrain.materialAt(x,y) || this.terrain.materialAt(x,y+3);
     const craterScale = {2:.75,3:.7,4:1.1,5:.6,6:.4,7:.85,8:.7,9:.65}[material] || 1;
     this.carve(x, y, Math.max(3,R*craterScale), true);
-    this.emit({ t: 'boom', x, y, r: R, k: o.k || 0 });
+    // радиус поражения: ударная волна дотягивается до места, где падают осколки
+    const FR = o.frag && FRAGS[o.frag], RD = Math.max((R + 12) * 1.6, FR ? FR.L : 0);
+    this.emit({ t: 'boom', x, y, r: R, k: o.k || 0, w: Math.round(RD) });
     const knock = o.knock ?? R * 8;
     for (const s of this.soldiers) {
       if (s.gone) continue;
       // ударная волна: радиус RW; расстояние считается до ближайшей точки тела бойца (попадание в упор — полный урон)
       const cx = s.x, cy = s.y - 17, by = clamp(y, s.y - 33, s.y - 4); const d = Math.max(0, Math.hypot(s.x - x, by - y) - 6); const RR = R + 12, RW = RR * 1.6;
-      if (d >= RW) continue;
-      const fw = 1 - d / RW;
+      if (d >= RD) continue;
+      const fw = Math.max(0, 1 - d / RW), fd = 1 - d / RD;
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const shielding = exposure.get(s) ?? 1;
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
       const imp = Math.min(820, knock * 1.45) * Math.pow(fw, 1.1) * shielding;
       if (imp >= 25) { s.vx += dx * imp; s.vy += dy * imp; s.fly(); }
       // урон: максимум D в эпицентре, линейно убывает с расстоянием до нуля на краю волны
-      if (D > 0 && s.alive && fw > 0) this.damage(s, Math.round(D * fw * shielding), o.owner);
+      if (D > 0 && s.alive && fd > 0) this.damage(s, Math.round(D * fd * shielding), o.owner);
     }
+    if (o.frag && FRAGS[o.frag]) this.fragments(x, y - 3, FRAGS[o.frag], o.owner);
     for (const e of this.entities) {
       if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > (R + 20) * 1.6) continue;
       if (e.k === 'mine') { e.trigger(this, true); }
@@ -114,6 +117,28 @@ class Game {
       const f = 1 - d / ((R + 20) * 1.6); let dx = e.x - x, dy = e.y - y - 6; const l = Math.hypot(dx, dy) || 1;
       e.push(dx / l * knock * f * 0.8, dy / l * knock * f * 0.8);
     }
+  }
+  /** осколки: лучи во все стороны, останавливаются о камень; попавший осколок ранит тем слабее, чем дальше пролетел.
+      Урон от всех осколков по бойцу суммируется — чем ближе к взрыву, тем больше осколков в него попадает */
+  fragments(x, y, F, owner) {
+    const hits = new Map(), ends = [];
+    for (let i = 0; i < F.n; i++) {
+      const a = (i + Math.random()) / F.n * TAU, cx = Math.cos(a), cy = Math.sin(a), L = F.L * (0.75 + Math.random() * 0.5);
+      let ex = x + cx * L, ey = y + cy * L, done = false;
+      for (let t = 2; t <= L && !done; t += 3) {
+        const px = x + cx * t, py = y + cy * t;
+        if (px < 0 || px >= this.W || py < 0 || py >= this.H || (t > 6 && this.terrain.isSolid(px, py))) { ex = px; ey = py; break; }
+        for (const s of this.soldiers) {
+          if (!s.alive || s.gone || px < s.x - 7 || px > s.x + 7 || py < s.y - 36 || py > s.y + 1) continue;
+          const dmg = F.d * (1 - t / L);
+          const h = hits.get(s) || { d: 0, vx: 0, vy: 0 }; h.d += dmg; h.vx += cx * 14; h.vy += cy * 14; hits.set(s, h);
+          ex = px; ey = py; done = true; break;
+        }
+      }
+      ends.push([Math.round(ex), Math.round(ey)]);
+    }
+    this.emit({ t: 'frags', x: R1(x), y: R1(y), e: ends });
+    for (const [s, h] of hits) { if (!s.alive) continue; s.vx += h.vx; s.vy += h.vy; const v = Math.round(h.d); if (v > 0) this.damage(s, v, owner); }
   }
   blastTransmission(x,y,tx,ty) {
     const d=Math.hypot(tx-x,ty-y);if(d<8)return 1;
@@ -196,7 +221,7 @@ class Game {
     const sctrl = lockFeet && this.ctrl ? { l: false, r: false, u: false, d: false } : this.ctrl;
     for (const s of this.soldiers) s.update(this, dt, ctrlOk && s === act ? sctrl : null);
     for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!e.dead) e.update(this, dt); }
-    if (this.pending.length) { const p = this.pending; this.pending = []; for (const [x, y, k] of p) { const B = BLAST[k]; this.explode(x, y, B.R, B.D, { knock: B.K }); } }
+    if (this.pending.length) { const p = this.pending; this.pending = []; for (const [x, y, k] of p) { const B = BLAST[k]; this.explode(x, y, B.R, B.D, { knock: B.K, frag: k }); } }
     this.entities = this.entities.filter(e => !e.dead);
     for (const s of this.soldiers) s.wpn = (s === act && s.alive && (T.phase === 'aim' || T.phase === 'use')) ? T.weapon : null;
     if (this.usage) {

@@ -14,6 +14,13 @@ const BLAST = {
   bomblet: { R: 20, D: 16, K: 180 }, sticky: { R: 42, D: 46, K: 330 }, dynamite: { R: 76, D: 72, K: 520 }, mine: { R: 42, D: 45, K: 340 },
   robot: { R: 62, D: 56, K: 460 }, bomb: { R: 32, D: 26, K: 280 }, nukem: { R: 135, D: 82, K: 760 }, crate: { R: 36, D: 25, K: 300 },
 };
+/** осколки: n — сколько разлетается, d — урон одного осколка вплотную (убывает с пролётом до нуля на дальности L) */
+const FRAGS = {
+  rocket: { n: 22, d: 3.5, L: 210 }, homing: { n: 20, d: 3.5, L: 200 }, mortar: { n: 30, d: 3, L: 230 }, grenade: { n: 34, d: 3, L: 240 },
+  cluster: { n: 16, d: 2.5, L: 170 }, bomblet: { n: 10, d: 2.2, L: 130 }, frag: { n: 10, d: 2.2, L: 130 }, sticky: { n: 22, d: 3.5, L: 210 },
+  dynamite: { n: 40, d: 4, L: 290 }, mine: { n: 34, d: 4, L: 230 }, robot: { n: 28, d: 3.5, L: 230 }, bomb: { n: 18, d: 3, L: 200 },
+  drill: { n: 14, d: 3, L: 170 }, mini: { n: 10, d: 2.2, L: 130 }, crate: { n: 18, d: 3, L: 190 },
+};
 const R1 = (v) => Math.round(v * 10) / 10;
 
 /* ---------- физика ---------- */
@@ -159,7 +166,7 @@ class Proj extends Ent {
     if (this.dead) return; this.dead = true;
     if (this.k === 'nukem') { g.nuke(this.x, this.y, this.owner); return; }
     const B = BLAST[this.k];
-    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, k: (this.k === 'frag' || this.k === 'bomblet' || this.k === 'mini') ? 1 : 0 });
+    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: this.k, k: (this.k === 'frag' || this.k === 'bomblet' || this.k === 'mini') ? 1 : 0 });
   }
 }
 
@@ -208,7 +215,7 @@ class Thrown extends Ent {
     if (this.dead) return; this.dead = true;
     if (this.k === 'bholeg') { g.spawn(new BlackHole(g, this.x, this.y - 14, this.owner)); return; }
     const B = BLAST[this.k];
-    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, k: this.k === 'dynamite' ? 6 : 0 });
+    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: this.k, k: this.k === 'dynamite' ? 6 : 0 });
     if (this.k === 'cluster') for (let i = 0; i < 5; i++) g.spawn(new Proj(g, 'bomblet', this.x, this.y - 5, rand(-210, 210), rand(-460, -280), this.owner, { r: 2 }));
   }
 }
@@ -234,7 +241,7 @@ class Mine extends Ent {
     this.busy = this.s !== 1 || !this.rest;
   }
   trigger(g, fast) { if (this.s === 2) return; this.s = 2; this.f = fast ? 0.25 : 1.2; g.emit({ t: 'beep', x: R1(this.x), y: R1(this.y) }); }
-  boom(g) { if (this.dead) return; this.dead = true; const B = BLAST.mine; g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K }); }
+  boom(g) { if (this.dead) return; this.dead = true; const B = BLAST.mine; g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: 'mine' }); }
 }
 
 /* ---------- робо-бомба ---------- */
@@ -280,7 +287,7 @@ class Robot extends Ent {
     if (this.f <= 0) this.boom(g);
   }
   push(vx, vy) { this.vx += vx; this.vy += vy; this.air = true; }
-  boom(g) { if (this.dead) return; this.dead = true; const B = BLAST.robot; g.explode(this.x, this.y - 6, B.R, B.D, { owner: this.owner, knock: B.K }); }
+  boom(g) { if (this.dead) return; this.dead = true; const B = BLAST.robot; g.explode(this.x, this.y - 6, B.R, B.D, { owner: this.owner, knock: B.K, frag: 'robot' }); }
 }
 
 /* ---------- чёрная дыра ---------- */
