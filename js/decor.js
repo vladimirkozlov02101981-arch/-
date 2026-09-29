@@ -37,8 +37,8 @@ function foliage(c, blobs, pal) {
     const glob = -(gx * 0.45 + gy * 0.8) * 0.5;                                  // крона освещена сверху слева
     const base = 0.36 + glob * 0.7 + (rnd() - 0.5) * 0.1;
     const k = 7 + (rnd() * 4 | 0), ph = rnd() * 6;
-    c.fillStyle = ramp(base - 0.14); scallop(q.x, q.y, q.r, k, ph);                                             // тень кочана
-    c.fillStyle = ramp(base + 0.14); scallop(q.x - q.r * 0.14, q.y - q.r * 0.16, q.r * 0.8, k, ph + 1);          // середина
+    c.fillStyle = ramp(base - 0.36); scallop(q.x, q.y, q.r, k, ph);                                             // тень кочана
+    c.fillStyle = ramp(base + 0.1); scallop(q.x - q.r * 0.16, q.y - q.r * 0.2, q.r * 0.78, k, ph + 1);          // середина
     c.fillStyle = ramp(base + 0.42); scallop(q.x - q.r * 0.3, q.y - q.r * 0.34, q.r * 0.46, k + 2, ph + 2);   // освещённая шапка
     if (glob > 0.05) rims.push(q);
     // фактура листвы: заострённые листья по всему кочану, цвет — по нормали к солнцу; по кромке листья торчат наружу
@@ -49,7 +49,7 @@ function foliage(c, blobs, pal) {
     for (let i = 0, n = Math.round(q.r * q.r * 0.16); i < n; i++) {
       const a = rnd() * TAU, d = Math.sqrt(rnd()) * q.r * 0.95, nx = Math.cos(a) * d / q.r, ny = Math.sin(a) * d / q.r;
       const lit = -(nx * 0.55 + ny * 0.83);
-      leaf(q.x + Math.cos(a) * d, q.y + Math.sin(a) * d, a + (rnd() - 0.5) * 1.6, ls * (0.8 + rnd() * 0.5), ramp(base + lit * 0.42 + (rnd() - 0.5) * 0.22));
+      leaf(q.x + Math.cos(a) * d, q.y + Math.sin(a) * d, a + (rnd() - 0.5) * 1.6, ls * (0.8 + rnd() * 0.5), ramp(base + lit * 0.56 + (rnd() - 0.5) * 0.2));
     }
     for (let i = 0, n = Math.round(q.r * 1.3); i < n; i++) {                        // рваная кромка
       const a = rnd() * TAU, d = q.r * (0.92 + rnd() * 0.16), lit = -(Math.cos(a) * 0.55 + Math.sin(a) * 0.83);
