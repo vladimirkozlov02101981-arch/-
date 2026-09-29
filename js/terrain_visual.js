@@ -96,8 +96,22 @@ function boxBlurF32(a, W, H, r) {
     тёплый отсвет почвы снизу и контактная тень. Меняет o.r/o.g/o.b (вне камня — только тень) */
 function stoneAt(S, o, ox, oy, rad, ph, pc, n1, n2, r, g, bl) {
   const a = Math.atan2(oy, ox);
-  const R = rad * (1 + 0.14 * Math.sin(3 * a + ph) + 0.08 * Math.sin(5 * a + ph * 1.7) + 0.04 * Math.sin(9 * a + ph * 2.3));
+  const irr = S.smoothStones ? 0.4 : 1;
+  const R = rad * (1 + irr * (0.14 * Math.sin(3 * a + ph) + 0.08 * Math.sin(5 * a + ph * 1.7) + 0.04 * Math.sin(9 * a + ph * 2.3)));
   const e = Math.sqrt(ox * ox + oy * oy) / R;
+  if (e < 1 && S.smoothStones) {
+    // обкатанный валун как в мультфильме: гладкая сфера, тёмный тон, яркий резкий блик сверху слева, отсвет земли снизу
+    const nx = ox / R, ny = oy / R, nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
+    const lam = nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z;
+    let f = 0.66 + 0.95 * Math.max(0, lam) + (n1 - 0.5) * 0.08;
+    const so = S.soil, lo = ny > 0.2 ? (ny - 0.2) * 0.5 : 0;
+    let rr = (pc[0] * (1 - lo) + so[0] * 1.3 * lo) * f, gg = (pc[1] * (1 - lo) + so[1] * 1.1 * lo) * f, bb = (pc[2] * (1 - lo) + so[2] * 0.9 * lo) * f;
+    const hx = nx + 0.36, hy = ny + 0.42, hs = hx * hx + hy * hy;
+    if (hs < 0.05) { const k = (1 - hs / 0.05); rr += k * k * 190; gg += k * k * 186; bb += k * k * 176; }                  // резкий блик
+    else if (hs < 0.2) { const k = (1 - hs / 0.2) * 0.35; rr += k * 60; gg += k * 58; bb += k * 52; }                       // мягкий ореол блика
+    if (e > 0.9) { const k = 0.78 + (1 - e) * 2.2; rr *= k; gg *= k; bb *= k; }
+    o.r = rr; o.g = gg; o.b = bb; return;
+  }
   if (e < 1) {
     // грань: сектор по углу — плоская площадка с собственной нормалью, вершина плоская
     const nf = 5 + ((ph * 3) % 3 | 0), sec = Math.floor((a + Math.PI + ph) / TAU * nf), ca = (sec + 0.5) / nf * TAU - Math.PI - ph;
@@ -585,7 +599,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, smoothStones: !!G.smoothStones, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -769,6 +783,16 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       c.fillStyle = '#6a3a10'; c.beginPath(); c.arc(x, y - h, 1.3 * sc, 0, TAU); c.fill();
       c.fillStyle = '#ffd84a'; c.beginPath(); c.arc(x - 0.3, y - h - 0.3, 0.9 * sc, 0, TAU); c.fill();
     };
+    // россыпь мелких полевых цветов по всей траве: цветные точки-головки на коротких стеблях
+    for (let k = 0; k < tops.length; k += 2) {
+      const x = tops[k], y = tops[k + 1];
+      if (y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || rng() > 0.09 || !flatTop(x, y)) continue;
+      const h = 4 + rng() * 11, fx = x + (rng() - 0.5) * 3, col = rng.pick(G.cap.flowers), rr = 1.1 + rng() * 1.1;
+      c.strokeStyle = '#3e6e1e'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(fx, y + 1); c.lineTo(fx + (rng() - 0.5) * 2, y - h); c.stroke();
+      c.fillStyle = css(shadec(col, 0.7)); c.beginPath(); c.arc(fx + 0.4, y - h + 0.4, rr, 0, TAU); c.fill();
+      c.fillStyle = col; c.beginPath(); c.arc(fx, y - h, rr * 0.85, 0, TAU); c.fill();
+      if (rr > 1.6) { c.fillStyle = '#ffe36b'; c.beginPath(); c.arc(fx, y - h, 0.6, 0, TAU); c.fill(); }
+    }
     let nextX = -1;
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
