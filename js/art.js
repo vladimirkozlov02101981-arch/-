@@ -37,3 +37,28 @@ const MapArt = {
     return true;
   }
 };
+
+/** фотореалистичные бесшовные текстуры карт (рендер Blender, dev/blender/make_textures.py).
+    Загружаются сразу при старте; если файла нет — карта рисуется процедурно, как раньше */
+const TexLib = {
+  names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall'],
+  data: {},
+  ready: null,
+  load() {
+    if (this.ready) return this.ready;
+    this.ready = Promise.all(this.names.map((n) => new Promise((res) => {
+      const im = new Image();
+      im.onload = () => {
+        try {
+          const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
+          x.drawImage(im, 0, 0); this.data[n] = { w: c.width, h: c.height, d: x.getImageData(0, 0, c.width, c.height).data };
+        } catch (e) { /* холст недоступен — без текстуры */ }
+        res();
+      };
+      im.onerror = () => res();
+      im.src = `assets/tex/${n}.png`;
+    })));
+    return this.ready;
+  },
+};
+TexLib.load();

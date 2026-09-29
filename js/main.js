@@ -80,12 +80,14 @@ const App = {
   launch(build, done) {
     UI.hideScreens(); UI.loading(true, 'Готовим поле боя…');
     this.clearGame(); this.demo = false; Sfx.setSilent(false);
-    setTimeout(() => {
+    const go = () => {
       let g;
       try { g = build(); } catch (e) { console.error(e); UI.loading(false); UI.dialog('Ошибка при создании карты: ' + e.message, () => this.toMenu()); return; }
       UI.loading(false); done(g); UI.showHud(true);
       document.getElementById('chat').classList.toggle('hidden', !(this.mode === 'host' || this.mode === 'guest'));
-    }, 40);
+    };
+    // текстуры карт из Blender должны успеть загрузиться (не дольше 3 с)
+    Promise.race([TexLib.load(), new Promise((r) => setTimeout(r, 3000))]).then(() => setTimeout(go, 40));
   },
   teamCfgs() { return UI.teamsCfg.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])); },
   startFromSetup() {

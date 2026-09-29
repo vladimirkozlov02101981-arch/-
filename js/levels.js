@@ -76,9 +76,9 @@ function buildLevel(def, fn) {
   return Object.assign(def, { shapes: L.shapes.concat(L.late), ladders: L.ladders, decor: L.decor, props: L.props, fixtures: L.fixtures });
 }
 
-const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1 };
-const P_TRIM = { base: '#8a8c90', alt: '#7e8084', mortar: '#2a2b2e', w: 32, h: 16, var: 0.06 };
-const P_KEEP = { base: '#5c5f64', alt: '#666a6f', mortar: '#1e1f22', w: 32, h: 16, var: 0.05 };
+const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1, tex: 'brick_light' };
+const P_TRIM = { base: '#8a8c90', alt: '#7e8084', mortar: '#2a2b2e', w: 32, h: 16, var: 0.06, tex: 'brick_light' };
+const P_KEEP = { base: '#5c5f64', alt: '#666a6f', mortar: '#1e1f22', w: 32, h: 16, var: 0.05, tex: 'brick_keep' };
 const P_BARN = { base: '#8f4a2e', gap: '#3a1a0e', plank: 9, var: 0.16 };
 
 /* =========================================================

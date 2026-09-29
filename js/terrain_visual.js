@@ -146,12 +146,18 @@ function veinDist(tl, x, y, n2) {
   const gl = Math.abs(gx) + Math.abs(gy); if (gl < 0.01) return 1;
   return Math.abs(v0 - 0.5) * 1.5 * Math.min(3, 0.03 / gl + 0.6);
 }
+/** пиксель бесшовной текстуры (отрендерена в Blender), координаты мира 1:1 */
+function texAt(T, x, y, o) {
+  const tx = ((x | 0) % T.w + T.w) % T.w, ty = ((y | 0) % T.h + T.h) % T.h, j = (ty * T.w + tx) * 4, d = T.d;
+  o.r = d[j]; o.g = d[j + 1]; o.b = d[j + 2];
+}
+
 /** цвет материала в точке. Результат в o: r,g,b; свечение ga/gr/gg/gb; блеск spec */
 function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
   const ty = (y & 255) << 8, ty2 = ((y >> 1) & 255) << 8, ty3 = ((y >> 2) & 255) << 8;
   const n1 = tl.t1[ty | (x & 255)], n2 = tl.t2[ty2 | ((x >> 1) & 255)], n3 = tl.t3[ty3 | ((x >> 2) & 255)];
-  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false;
+  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false; o.tex = false;
   let r, g, bl;
   if (t < capT) {
     // шапка (трава/снег/песок): светлая кромка, сочная середина, тёмная «губа» снизу
@@ -177,6 +183,12 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (k > 0.8) f *= 1 - (k - 0.8) * 1.4;
     }
     r *= f; g *= f; bl *= f;
+  } else if (mt === 1 && S.tx.dirt) {
+    // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
+    const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
+    if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
+    if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
+    { const dk = Math.min(1, sd / 600); r *= 1 - 0.3 * dk; g *= 1 - 0.32 * dk; bl *= 1 - 0.3 * dk; }
   } else if (mt === 1) {
     const sd = t - capT;
     // крупный масштаб: пятна тона, изгиб пластов и скопления камней (не равномерная сетка)
@@ -303,6 +315,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : 0.56) ? 1 : veinDist(tl, x, y, n2);   // рваные трещины, не везде
       if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } } else if (S.veinGlow && dv < S.veinW * 5) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, q = 1 - dv / (S.veinW * 5), k = q * q * 0.32; r += (vc[0] - r) * k; g += (vc[1] - g) * k * 0.7; bl += (vc[2] - bl) * k * 0.5; }
     }
+  } else if (mt === 12 && S.tx.cave) {
+    texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; o.tex = true;
   } else if (mt === 12) {
     // задняя стена земляной пещеры: неровные скруглённые плиты разного размера с глубокими швами
     const V = S.vl, vi = ((y & 511) << 9) | (x & 511), id = V.id[vi];
@@ -318,7 +332,9 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   } else {
     const P = info.pal, prm = info.prm;
     switch (mt) {
-      case 3: { // кладка: тёсаные блоки с объёмной фаской, сколами, пятнами, мхом; глубокий раствор
+      case 3: if (P.tex && TexLib.data[P.tex]) {
+        texAt(TexLib.data[P.tex], x - (prm ? prm.x0 : 0), y - (prm ? prm.y0 : 0), o); r = o.r; g = o.g; bl = o.b; o.tex = true; break;
+      } else { // кладка: тёсаные блоки с объёмной фаской, сколами, пятнами, мхом; глубокий раствор
         const lx = x - (prm ? prm.x0 : 0), ly = y - (prm ? prm.y0 : 0);
         const bw = P.w || 20, bh = P.h || 10;
         const row = Math.floor(ly / bh); const off = (row & 1) ? bw * (0.42 + hash3(row, 1, info.idx) * 0.16) : 0;
@@ -600,7 +616,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave] }, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -667,6 +683,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (shd > 0.02) f *= 1 - shd * (mt === 3 ? 0.18 : 0.42);
         // блик на гладких материалах
         if (o.spec > 0) { const sp = nx * HX + ny * HY + nz * HZ, base = HZ; if (sp > base) { const k = Math.min(1, (sp - base) / (1 - base)); const s = k * k * 120 * o.spec; r += s; g += s; bl += s; } }
+        if (o.tex) f = 1 + (f - 1) * 0.55;                                     // в текстуре из Blender свет уже есть — наш только поддерживает форму
         // тёплый свет — холодная тень
         const w = f - 1;
         if (w > 0) { r = r * f + w * 24; g = g * f + w * 12; bl = bl * f - w * 6; }
@@ -684,7 +701,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (S.neon && dd > 3 && dd <= 9 && !o.cap) { const nc = S.neon[(x >> 8) & 1], q = 1 - (dd - 3) / 6, k = q * q * 0.85; r += (nc[0] - r) * k; g += (nc[1] - g) * k; bl += (nc[2] - bl) * k; if (gimg && q > 0.5) { const j2 = i * 4; gimg[j2] = nc[0]; gimg[j2 + 1] = nc[1]; gimg[j2 + 2] = nc[2]; gimg[j2 + 3] = 150 * q; } }
         // отражённый свет неба: поверхность получает оттенок горизонта — передний план в тон картине
         if (dd < 60 && ny < 0 && !(o.cap && S.grassy)) { const kb = (1 - dd / 60) * Math.min(1, -ny * 2.5) * 0.16; r += (bounce[0] - r) * kb; g += (bounce[1] - g) * kb; bl += (bounce[2] - bl) * kb; }
-        r += (r - 118) * 0.12; g += (g - 118) * 0.12; bl += (bl - 118) * 0.12;   // S-кривая: глубже тени, ярче свет
+        if (!o.tex) r += (r - 118) * 0.12, g += (g - 118) * 0.12, bl += (bl - 118) * 0.12;   // S-кривая: глубже тени, ярче свет
         // солнечный тёплый тон у освещённой поверхности
         if (dd < 50) { const kw = (1 - dd / 50) * (1 - shd) * 0.9; r *= 1 + kw * 0.08; g *= 1 + kw * 0.025; bl *= 1 - kw * 0.08; }
         if (o.emit) { r = o.r * 1.05; g = o.g * 1.02; bl = o.b; }                    // светящиеся окна не темнеют от теней и глубины
