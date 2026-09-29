@@ -58,11 +58,11 @@ def reset():
     cam_data.clip_end = 50
     # небо: мягкий рассеянный свет
     w = bpy.data.worlds.new('world'); sc.world = w; w.use_nodes = True
-    bg = w.node_tree.nodes['Background']; bg.inputs[0].default_value = (0.62, 0.7, 0.85, 1); bg.inputs[1].default_value = 0.55
+    bg = w.node_tree.nodes['Background']; bg.inputs[0].default_value = (0.62, 0.7, 0.85, 1); bg.inputs[1].default_value = 0.45
     # солнце сверху слева (в кадре верх = +Y), чуть со стороны зрителя
-    sd = bpy.data.lights.new('sun', 'SUN'); sd.energy = 4.2; sd.angle = math.radians(6); sd.color = (1.0, 0.95, 0.86)
+    sd = bpy.data.lights.new('sun', 'SUN'); sd.energy = 3.3; sd.angle = math.radians(3); sd.color = (1.0, 0.94, 0.84)
     sun = bpy.data.objects.new('sun', sd); sc.collection.objects.link(sun)
-    d = Vector((0.52, -0.78, -0.62)).normalized()
+    d = Vector((0.55, -0.8, -0.5)).normalized()        # низкое солнце — рельеф читается сильнее
     sun.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     return sc
 
@@ -110,9 +110,15 @@ def mat_vertex_color(name, rough=0.9, spec=0.25):
     return m
 
 
-def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0):
-    """камень: цвет между dark и light по шуму в координатах объекта и по свойству объекта tone;
+def lin(c):
+    """цвет sRGB 0..1 → линейный (цвета в узлах Blender линейные)"""
+    return tuple(v ** 2.2 for v in c)
+
+
+def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bumpk=0.6):
+    """камень: цвет между dark и light (sRGB) по шуму в координатах объекта и по свойству объекта tone;
     moss > 0 — мох на верхних (к +Y) гранях"""
+    dark, light = lin(dark), lin(light)
     m, nt, b = principled(name, rough, spec)
     N = nt.nodes; L = nt.links
     tc = N.new('ShaderNodeTexCoord')
@@ -130,7 +136,7 @@ def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0):
     # мелкая шероховатость для бампа
     nb = N.new('ShaderNodeTexNoise'); nb.inputs['Scale'].default_value = scale * 12; nb.inputs['Detail'].default_value = 10
     L.new(tc.outputs['Object'], nb.inputs['Vector'])
-    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.35
+    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = bumpk
     L.new(nb.outputs['Fac'], bump.inputs['Height']); L.new(bump.outputs['Normal'], b.inputs['Normal'])
     if moss > 0:
         geo = N.new('ShaderNodeNewGeometry')
@@ -143,7 +149,7 @@ def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0):
         L.new(add.outputs[0], th.inputs['Value'])
         mm = N.new('ShaderNodeMix'); mm.data_type = 'RGBA'
         L.new(th.outputs['Result'], sock(mm.inputs, 'Factor_Float')); L.new(col, sock(mm.inputs, 'A_Color'))
-        sock(mm.inputs, 'B_Color').default_value = (0.16, 0.27, 0.05, 1)
+        sock(mm.inputs, 'B_Color').default_value = (*lin((0.30, 0.40, 0.14)), 1)
         col = sock(mm.outputs, 'Result_Color')
     L.new(col, b.inputs['Base Color'])
     return m
@@ -202,107 +208,120 @@ def place(me, mat, x, y, z, rot, tone, name='o'):
 
 # ---------------------------------------------------------------- текстуры
 def dirt_stones(name, seed, dirt_a, dirt_b, stone_dark, stone_light, density=1.0):
-    """разрез грунта: рыхлая земля с комьями и крошкой, в ней утоплены округлые камни разного размера"""
+    """разрез грунта: рыхлая комковатая земля с крошкой, в ней густо утоплены округлые камни разного размера"""
     sc = reset(); rng = random.Random(seed)
-    n = 384
-    H = fft_noise(n, 1.4, seed) * 0.7 + fft_noise(n, 0.9, seed + 1) * 0.3
+    n = 512
+    clod = fft_noise(n, 0.8, seed + 7)
+    H = fft_noise(n, 1.5, seed) * 0.5 + fft_noise(n, 1.0, seed + 1) * 0.3 + clod * 0.2
     tone = fft_noise(n, 1.6, seed + 2)
-    grit = fft_noise(n, 0.4, seed + 3)
+    grit = fft_noise(n, 0.3, seed + 3)
     A = np.array(dirt_a); B = np.array(dirt_b)
-    t = np.clip(tone * 0.8 + grit * 0.35 - 0.1, 0, 1)[..., None]
+    t = np.clip(tone * 0.9 + grit * 0.3 - 0.15, 0, 1)[..., None]
     cols = A * (1 - t) + B * t
-    cols *= (0.85 + 0.3 * grit)[..., None]
-    height_plane('dirt', H, 0.035, cols ** 2.2)                        # линейные цвета для рендера
-    mdirt = mat_vertex_color('dirt', rough=0.95, spec=0.2)
+    cols *= (0.8 + 0.4 * grit + 0.25 * (clod - 0.5))[..., None]
+    height_plane('dirt', H, 0.09, np.clip(cols, 0, 1) ** 2.2)
+    mdirt = mat_vertex_color('dirt', rough=0.97, spec=0.15)
     bpy.data.objects['dirt'].data.materials.append(mdirt)
-    mst = mat_stone('stone', stone_dark, stone_light, rough=0.42, spec=0.5, scale=5)
-    # камни: много мелких, меньше средних, немного крупных
-    count = int(95 * density)
+    mst = mat_stone('stone', stone_dark, stone_light, rough=0.38, spec=0.55, scale=5, bumpk=0.5)
+    # камни: много мелких и средних, немного крупных валунов; наполовину в земле
+    count = int(190 * density)
     for i in range(count):
         q = rng.random()
-        r = 0.03 + 0.05 * q * q + (0.12 * rng.random() if rng.random() < 0.1 else 0)
-        me = rock_mesh('rock%d' % i, r, rng.uniform(0.85, 1.35), rng.uniform(0.7, 1.05), rng.uniform(0.55, 0.9), rng.random() * 100)
-        place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.02 - r * 0.25,
-              (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.25, 0.25), 'rock')
-    # крошка: мелкие камешки
-    for i in range(int(260 * density)):
-        r = rng.uniform(0.006, 0.016)
+        r = 0.018 + 0.03 * q if q < 0.6 else (0.05 + 0.06 * rng.random() if q < 0.92 else 0.11 + 0.11 * rng.random())
+        sz = rng.uniform(0.6, 0.95)
+        me = rock_mesh('rock%d' % i, r, rng.uniform(0.9, 1.4), rng.uniform(0.75, 1.05), sz, rng.random() * 100, rough=0.22)
+        place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.045 - r * sz * rng.uniform(0.1, 0.5),
+              (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.3, 0.3), 'rock')
+    # крошка
+    for i in range(int(520 * density)):
+        r = rng.uniform(0.005, 0.014)
         me = rock_mesh('pebble%d' % i, r, 1.2, 1, 0.7, rng.random() * 100, sub=2)
-        place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.02, (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.3, 0.1), 'peb')
+        place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.05, (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.4, 0.2), 'peb')
     render(sc, name)
 
 
-def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=0.1, round_=0.35):
-    """кладка: скруглённые неровные блоки со сколами, утопленный раствор. bw/bh — размер блока в px"""
+def block_mesh(sx, sy, sz, rng, jitter):
+    """неровный тёсаный блок: скруглённый параллелепипед, бугристая лицевая сторона, сколы на углах"""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=4, use_grid_fill=True)
+    me = bpy.data.meshes.new('blk'); bm.to_mesh(me); bm.free()
+    ob = bpy.data.objects.new('tmp', me); bpy.context.scene.collection.objects.link(ob)
+    sub = ob.modifiers.new('s', 'SUBSURF'); sub.levels = 2; sub.render_levels = 2
+    bpy.context.view_layer.objects.active = ob; ob.select_set(True)
+    bpy.ops.object.modifier_apply(modifier='s')
+    ofs = Vector((rng.random() * 50, rng.random() * 50, rng.random() * 50))
+    chips = [(rng.choice((-1, 1)) * sx, rng.choice((-1, 1)) * sy, rng.uniform(0.25, 0.5) * min(sx, sy)) for _ in range(rng.randint(0, 2))]
+    for v in me.vertices:
+        p = v.co
+        q = Vector((p.x * sx * 2, p.y * sy * 2, p.z * sz * 2))
+        top = max(0.0, p.z * 2)                                # 1 на лицевой стороне
+        q.z += (noise.noise(q * 14 + ofs) * 0.012 + noise.noise(q * 45 + ofs) * 0.004) * jitter * top
+        q.x += noise.noise(q * 8 + ofs) * 0.012 * jitter
+        q.y += noise.noise(q * 8 + ofs + Vector((5, 5, 5))) * 0.008 * jitter
+        for cx, cy, cr in chips:                               # скол угла
+            dd = math.hypot(q.x - cx, q.y - cy)
+            if dd < cr and top > 0: q.z -= (1 - dd / cr) * 0.03
+        v.co = q
+    for p in me.polygons: p.use_smooth = True
+    bpy.data.objects.remove(ob)
+    return me
+
+
+def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=1.0):
+    """кладка из тёсаного камня: блоки разной длины, неровные, со сколами; глубокий тёмный раствор"""
     sc = reset(); rng = random.Random(seed)
     n = 256
-    Hm = fft_noise(n, 1.1, seed)
-    gm = fft_noise(n, 0.5, seed + 5)
-    cols = np.array(mortar)[None, None, :] * (0.7 + 0.5 * gm)[..., None]
-    height_plane('mortar', Hm, 0.01, cols ** 2.2, z0=-0.03)
+    cols = np.array(mortar)[None, None, :] * (0.6 + 0.7 * fft_noise(n, 0.5, seed + 5))[..., None]
+    height_plane('mortar', fft_noise(n, 1.1, seed), 0.01, np.clip(cols, 0, 1) ** 2.2, z0=-0.035)
     bpy.data.objects['mortar'].data.materials.append(mat_vertex_color('mortar', rough=1.0, spec=0.1))
-    mst = mat_stone('block', dark, light, rough=0.6, moss=moss, spec=0.35, scale=4)
+    mst = mat_stone('block', dark, light, rough=0.72, moss=moss, spec=0.3, scale=3.5, bumpk=0.9)
     w, h = bw / 100.0, bh / 100.0
-    rows = int(round(S / h)); cols_n = int(round(S / w))
-    gap = 0.012
+    rows = int(round(S / h)); h = S / rows
+    gap = 0.014
     for j in range(rows):
-        off = (w * 0.5) if j % 2 else 0
-        for i in range(cols_n):
-            x = -S / 2 + off + i * w + w / 2; y = -S / 2 + j * h + h / 2
-            bm = bmesh.new()
-            bmesh.ops.create_cube(bm, size=1)
-            bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=3, use_grid_fill=True)
-            me = bpy.data.meshes.new('blk'); bm.to_mesh(me); bm.free()
-            ob = bpy.data.objects.new('tmp', me); bpy.context.scene.collection.objects.link(ob)
-            sub = ob.modifiers.new('s', 'SUBSURF'); sub.levels = 2; sub.render_levels = 2
-            bpy.context.view_layer.objects.active = ob; ob.select_set(True)
-            bpy.ops.object.modifier_apply(modifier='s')
-            sx = (w - gap) / 2; sy = (h - gap) / 2; sz = 0.04
-            ofs = Vector((rng.random() * 50, rng.random() * 50, rng.random() * 50))
-            for v in me.vertices:
-                p = v.co.copy()
-                # подушка: края скругляются, поверхность неровная, сколы на углах
-                q = Vector((p.x * sx * 2, p.y * sy * 2, p.z * sz * 2))
-                d = noise.noise(q * 18 + ofs) * jitter * 0.02 + noise.noise(q * 60 + ofs) * 0.002
-                q.z += d + (0.006 if p.z > 0 else 0)
-                q.x += noise.noise(q * 9 + ofs) * jitter * 0.01
-                q.y += noise.noise(q * 9 + ofs + Vector((5, 5, 5))) * jitter * 0.01
-                v.co = q
-            for p in me.polygons: p.use_smooth = True
+        y = -S / 2 + j * h + h / 2
+        widths = []; tot = 0
+        while tot < S - 0.6 * w:
+            ww = w * rng.uniform(0.7, 1.55); widths.append(ww); tot += ww
+        widths[-1] += S - tot                                   # ряд ровно на плитку — бесшовно
+        x = -S / 2 + rng.uniform(0, w)
+        for ww in widths:
+            me = block_mesh((ww - gap) / 2, (h - gap) / 2, 0.04, rng, jitter)
             me.materials.append(mst)
-            bpy.data.objects.remove(ob)
-            place(me, mst, x, y, 0.0, (0, 0, rng.uniform(-0.01, 0.01)), rng.uniform(-0.35, 0.3), 'blk')
+            place(me, mst, x + ww / 2, y, 0.0, (0, 0, rng.uniform(-0.008, 0.008)), rng.uniform(-0.4, 0.35), 'blk')
+            x += ww
     render(sc, name)
 
 
 def slab_wall(name, seed, dark, light, mortar):
-    """стена пещеры: плотно уложенные плоские плиты разного размера"""
+    """стена пещеры: плотно уложенные неровные плиты разного размера"""
     sc = reset(); rng = random.Random(seed)
     n = 256
     cols = np.array(mortar)[None, None, :] * (0.6 + 0.6 * fft_noise(n, 0.6, seed))[..., None]
-    height_plane('back', fft_noise(n, 1.2, seed + 1), 0.02, cols ** 2.2, z0=-0.05)
+    height_plane('back', fft_noise(n, 1.2, seed + 1), 0.02, np.clip(cols, 0, 1) ** 2.2, z0=-0.05)
     bpy.data.objects['back'].data.materials.append(mat_vertex_color('back', rough=1.0, spec=0.1))
-    mst = mat_stone('slab', dark, light, rough=0.7, spec=0.3, scale=3)
-    k = 6
+    mst = mat_stone('slab', dark, light, rough=0.75, spec=0.3, scale=3, bumpk=1.0)
+    k = 9
     for j in range(k):
         for i in range(k):
             x = -S / 2 + (i + 0.5 + rng.uniform(-0.25, 0.25)) * S / k
             y = -S / 2 + (j + 0.5 + rng.uniform(-0.25, 0.25)) * S / k
-            r = S / k * rng.uniform(0.5, 0.62)
-            me = rock_mesh('slab', r, rng.uniform(1.0, 1.3), rng.uniform(0.8, 1.05), 0.12, rng.random() * 100, rough=0.12)
-            place(me, mst, x, y, 0, (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.3, 0.3), 'slab')
+            r = S / k * rng.uniform(0.5, 0.64)
+            me = rock_mesh('slab', r, rng.uniform(1.0, 1.35), rng.uniform(0.75, 1.0), 0.14, rng.random() * 100, rough=0.16)
+            place(me, mst, x, y, 0, (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.35, 0.35), 'slab')
     render(sc, name)
 
 
-# ---------------------------------------------------------------- набор
+# ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
-    # долина и замки: тёплая бурая земля, серые обкатанные камни
-    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.42, 0.27, 0.16), (0.30, 0.19, 0.11), (0.20, 0.19, 0.18), (0.58, 0.56, 0.52)),
-    # тёмная башня (P_KEEP 32×16) и светлая кладка стен и моста (P_STONE 32×16)
-    'brick_keep': lambda: masonry('brick_keep', 21, 32, 16, (0.13, 0.135, 0.15), (0.36, 0.37, 0.39), (0.08, 0.08, 0.085), moss=0.35),
-    'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.36, 0.34, 0.31), (0.70, 0.67, 0.62), (0.16, 0.155, 0.15), moss=0.45),
+    # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
+    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.40, 0.26, 0.16), (0.23, 0.145, 0.085), (0.20, 0.19, 0.18), (0.55, 0.53, 0.50)),
+    # тёмная башня и светлая кладка стен и моста
+    'brick_keep': lambda: masonry('brick_keep', 21, 32, 16, (0.22, 0.225, 0.235), (0.48, 0.48, 0.49), (0.10, 0.10, 0.10), moss=0.35),
+    'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.42, 0.40, 0.37), (0.74, 0.71, 0.66), (0.17, 0.16, 0.15), moss=0.45),
     # задняя стена пещер
-    'cave_wall': lambda: slab_wall('cave_wall', 31, (0.10, 0.10, 0.105), (0.27, 0.27, 0.28), (0.03, 0.03, 0.03)),
+    'cave_wall': lambda: slab_wall('cave_wall', 31, (0.16, 0.16, 0.165), (0.36, 0.36, 0.37), (0.05, 0.05, 0.05)),
 }
 
 if __name__ == '__main__':
