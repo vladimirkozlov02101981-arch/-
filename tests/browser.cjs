@@ -14,7 +14,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     const ctx=await browser.newContext({viewport:{width:1440,height:900}}),host=await ctx.newPage();await ready(host);
     await host.screenshot({path:'test-results/menu.png'});
     await host.click('[data-act="hotseat"]');await imageReady(host);await host.screenshot({path:'test-results/setup.png'});
-    const dimensions=await host.evaluate(()=>MAPS.map(m=>({id:m.id,W:m.W,H:m.H,shafts:m.ladders.length})));assert.equal(dimensions.length,8);assert(dimensions.every(m=>m.W>=4800&&m.shafts>=2));
+    const dimensions=await host.evaluate(()=>MAPS.map(m=>({id:m.id,W:m.W,H:m.H,shafts:m.ladders.length})));assert.equal(dimensions.length,8);assert(dimensions.every(m=>m.W===4800&&m.H===1800&&m.shafts>=1));
     console.log('Map sizes',dimensions);
     const deterministic=await host.evaluate(()=>{
       const result=[];

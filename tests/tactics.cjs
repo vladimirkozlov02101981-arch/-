@@ -8,9 +8,10 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
       const cfg={mapId:m.id,settings:{...App.prefs.settings,perTeam:6,crates:false,sd:0},teams:App.prefs.teams};
       const g=new Game(cfg);
       const ladders=m.ladders.map(l=>{for(let y=l.y1;y<=l.y2;y++)if(!bodyFree(g.terrain,l.x,y))return false;return true;});
-      return {id:m.id,safe:g.soldiers.length===12&&g.soldiers.every(s=>bodyFree(g.terrain,s.x,s.y)&&onGround(g.terrain,s.x,s.y)),ladders};
+      const nav=NavCheck.analyze(g);
+      return {id:m.id,safe:g.soldiers.length===12&&g.soldiers.every(s=>bodyFree(g.terrain,s.x,s.y)&&onGround(g.terrain,s.x,s.y)),ladders,traps:nav.traps.length};
     }));
-    assert(maps.every(m=>m.safe&&m.ladders.every(Boolean)));console.log('All 8 maps: 12 safe spawns and unobstructed ladder shafts PASS',maps);
+    assert(maps.every(m=>m.safe&&m.ladders.every(Boolean)&&m.traps===0));console.log('All 8 maps: 12 safe spawns, unobstructed ladder shafts, no navigation traps PASS',maps.map(m=>({id:m.id,traps:m.traps})));
     assert(await page.evaluate(()=>{
       const g=new Game({mapId:'valley',settings:{...App.prefs.settings,perTeam:2,crates:false,sd:0},teams:App.prefs.teams});
       const s=g.soldiers[0],l=g.map.ladders[0];s.x=l.x;s.y=(l.y1+l.y2)/2;s.st='climb';s.die(g,'hit');

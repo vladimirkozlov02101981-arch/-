@@ -289,15 +289,17 @@ class Renderer {
       c.textAlign = 'center'; c.font = `18px ${FONT_TITLE}`; c.fillStyle = val <= 5 && T.phase === 'aim' && Math.sin(t * 10) > 0 ? '#ff6b6b' : '#fff';
       c.fillText(String(Math.ceil(Math.max(0, val))), cx, cy + 1);
       // ветер
-      const wy = y + h + 16; const ww = 180;
-      hudPanel(c, sw / 2 - ww / 2 - 10, wy - 12, ww + 20, 24, 10);
+      // стрелки растут от своей оси, подпись стоит слева от них и не перекрывается
+      const wy = y + h + 16, ax = sw / 2 + 22;
+      hudPanel(c, ax - 136, wy - 12, 231, 24, 10);
       const k = clamp(T.wind / MAX_WIND, -1, 1); const segs = 8;
       for (let i = 0; i < segs; i++) {
         const on = Math.abs(k) * segs > i; const dir = k >= 0 ? 1 : -1;
-        const bx = sw / 2 + dir * (8 + i * 10); c.fillStyle = on ? (Math.abs(k) > 0.66 ? '#ff7a4a' : '#6fd0ff') : 'rgba(255,255,255,0.12)';
+        const bx = ax + dir * (8 + i * 10); c.fillStyle = on ? (Math.abs(k) > 0.66 ? '#ff7a4a' : '#6fd0ff') : 'rgba(255,255,255,0.12)';
         c.beginPath(); c.moveTo(bx, wy - 6); c.lineTo(bx + dir * 7, wy); c.lineTo(bx, wy + 6); c.lineTo(bx + dir * 3, wy); c.closePath(); c.fill();
       }
-      c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = `10px ${FONT_UI}`; c.fillText('ВЕТЕР', sw / 2, wy);
+      c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = `10px ${FONT_UI}`; c.textAlign = 'right'; c.fillText('ВЕТЕР', ax - 94, wy); c.textAlign = 'center';
+      c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(ax - 0.5, wy - 7, 1, 14);
     }
     // команды
     let by = sh - 16 - sc.teams.length * 30;
