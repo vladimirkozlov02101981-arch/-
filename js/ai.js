@@ -67,6 +67,10 @@ class AISearch {
       // прямой огонь: небольшой случайный бонус, чтобы компьютер не повторял одно и то же оружие
       const vary = () => Math.random() * 10;
       if (clear && dist < 750 && avail('assault')) { const dmg = dist < 350 ? 26 : 18; this.consider({ w: 'assault', aim: a, pw: 1, score: dmg + kb(dmg) + vary() }); }
+      if (clear && dist < 900 && avail('magnum')) this.consider({ w: 'magnum', aim: a, pw: 1, score: 42 + kb(42) - 6 + vary() });
+      if (clear && dist < 380 && avail('uzi')) this.consider({ w: 'uzi', aim: a, pw: 1, score: 30 + kb(30) - 6 + vary() });
+      // РПГ: прямой полёт — нужна чистая линия до цели (ракета взрывается и рядом с бойцом)
+      if (avail('rpg')) { const hh = hitscan(g, m.x, m.y, a, 2600, s); if (hh.type === 'soldier' && hh.s.team !== this.team || Math.hypot((hh.x ?? 1e9) - ex, (hh.y ?? 1e9) - ey) < 30) this.consider({ w: 'rpg', aim: a, pw: 1, score: this.blastScore(ex, ey, BLAST.rocket.R, BLAST.rocket.D) - 6 + vary(), ix: ex }); }
       if (clear && dist < 600 && avail('revolver')) this.consider({ w: 'revolver', aim: a, pw: 1, score: 40 + kb(45) - 6 + vary() });
       if (clear && dist < 550 && avail('minigun')) this.consider({ w: 'minigun', aim: a, pw: 1, score: 34 + kb(34) - 6 + vary() });
       if (clear && dist < 520 && avail('tesla')) { const chain = this.enemies.filter(o => o !== e && Math.hypot(o.x - e.x, o.y - e.y) < 160).length; this.consider({ w: 'tesla', aim: a, pw: 1, score: 32 + 14 * chain + kb(32) - 6 + vary() }); }

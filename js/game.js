@@ -98,7 +98,8 @@ class Game {
       const f = 1 - d / RR;
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const shielding = exposure.get(s) ?? 1;
-      const imp = Math.min(520, knock) * Math.pow(f,.75) * shielding;
+      // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
+      const imp = Math.min(680, knock * 1.2) * Math.pow(f,.75) * shielding;
       s.vx += dx * imp; s.vy += dy * imp; s.fly();
       if (D > 0 && s.alive) this.damage(s, Math.round(D * Math.pow(f,1.25) * shielding), o.owner);
     }

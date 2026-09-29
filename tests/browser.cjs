@@ -32,7 +32,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await guest.waitForFunction(()=>UI.settings.perTeam===2&&UI.settings.turnTime===90);
     await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game.turn.phase==='aim',{timeout:60000});await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});
     await host.waitForTimeout(800);assert.equal(await mapHash(host),await mapHash(guest));
-    await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),34);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
+    await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),37);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
     // A real input action and pause must neutralize movement on the authoritative host.
     await host.keyboard.down('KeyD');await host.waitForTimeout(160);await host.keyboard.press('Escape');await host.keyboard.up('KeyD');
     await host.waitForSelector('#s-pause.show');assert.equal(await host.evaluate(()=>!!App.game.ctrl?.r),false);await host.click('[data-act="resume"]');
@@ -54,7 +54,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await host.waitForSelector('#s-over.show',{timeout:10000});await guest.waitForSelector('#s-over.show',{timeout:10000});
     await host.click('[data-act="rematch"]');await guest.waitForFunction(()=>UI.cur==='s-setup');await host.click('#btn-start');
     await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});assert.equal(await mapHash(host),await mapHash(guest));
-    console.log('Two clients: lobby, name editing, 34 weapon buttons, input reset, shot, terrain sync, hidden-tab recovery, chat, victory, rematch PASS');
+    console.log('Two clients: lobby, name editing, 37 weapon buttons, input reset, shot, terrain sync, hidden-tab recovery, chat, victory, rematch PASS');
     await guestCtx.close();await ctx.close();
     const checks=await browser.newContext({viewport:{width:1440,height:900}}),page=await checks.newPage();await ready(page);
     const physics=await page.evaluate(()=>{
@@ -81,7 +81,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
       return {burst,noFreeJump,delayed,bulletHit,openDamage,coveredDamage,noTunneling,effects,climbed};
     });
     assert.deepEqual(physics.burst,{shots:3,ammo:0,phase:'retreat'});for(const key of ['noFreeJump','delayed','bulletHit','noTunneling','climbed'])assert(physics[key],key);assert(physics.coveredDamage<physics.openDamage*.5);assert(Object.values(physics.effects).every(e=>e.handler&&e.finite));
-    console.log('Physics and 34 weapon simulations',physics);
+    console.log('Physics and 37 weapon simulations',physics);
     fs.writeFileSync('test-results/physics.json',JSON.stringify(physics,null,2));
     for(const id of dimensions.map(m=>m.id)) {
       await page.evaluate(id=>{const settings={...App.prefs.settings,mapId:id,perTeam:2,turnTime:90,sd:0,crates:false};App.startLocal({mapId:id,settings,teams:App.prefs.teams},'hotseat');},id);

@@ -9,10 +9,13 @@ const WEAPON_CATS = ['Ракеты', 'Гранаты', 'Огнестрел', 'В
 const WEAPONS = [
   { id: 'assault', name: 'Штурмовая винтовка', cat: 2, ammo: -1, mode: 'instant', desc: 'Очередь из пяти пуль. Прицел можно вести; эффективна на средней дистанции.' },
   { id: 'revolver', name: 'Револьвер «Шериф»', cat: 2, ammo: 3, mode: 'instant', shots: 3, desc: 'Три точных выстрела по 18 урона за ход. Между выстрелами можно сменить цель.' },
+  { id: 'magnum', name: 'Магнум', cat: 2, ammo: 2, mode: 'instant', desc: 'Один тяжёлый выстрел: 42 урона и сильный толчок. Пуля почти не падает.' },
+  { id: 'uzi', name: 'Узи', cat: 2, ammo: 2, mode: 'instant', desc: 'Очередь из десяти пуль с заметным разбросом. Ствол можно вести во время стрельбы; лучше всего вблизи.' },
   { id: 'plasma', name: 'Плазменная пушка', cat: 0, ammo: 3, mode: 'charge', desc: 'Энергетический шар рикошетит от стен и взрывается при контакте с бойцом или через 3 секунды.' },
   { id: 'autocannon', name: 'Автопушка', cat: 0, ammo: 2, mode: 'instant', desc: 'Три скоростных разрывных снаряда. Небольшая дуга и три отдельных взрыва.' },
   { id: 'tesla', name: 'Тесла-карабин', cat: 2, ammo: 2, mode: 'instant', desc: 'Направленный разряд: 32 урона цели, затем цепь до двух соседей. Сквозь стены не стреляет.' },
   { id: 'repulsor', name: 'Импульсная пушка', cat: 2, ammo: 2, mode: 'instant', desc: 'Конус ударной волны. Отбрасывает противников на ближней дистанции, сохраняя ландшафт.' },
+  { id: 'rpg', name: 'РПГ', cat: 0, ammo: 3, mode: 'instant', desc: 'Ракета летит строго прямо: без дуги и без сноса ветром. Взрыв при попадании — как у базуки.' },
   { id: 'bazooka', name: 'Базука', cat: 0, ammo: -1, mode: 'charge', desc: 'Ракета летит по дуге и сносится ветром. Взрыв при попадании.' },
   { id: 'homing', name: 'Самонаводка', cat: 0, ammo: 2, mode: 'tcharge', desc: 'Кликните по цели и стреляйте. Головка захватывает цель с ошибкой и поворачивает плавно — за угол не залетит.' },
   { id: 'mortar', name: 'Миномёт', cat: 0, ammo: 3, mode: 'charge', desc: 'Тяжёлый снаряд, после взрыва разлетается осколками.' },
@@ -51,44 +54,77 @@ function makeAmmo(arsenal) {
   return a;
 }
 
-/* ---------- рисование оружия в руках (начало координат — рукоять, ствол вдоль +x) ---------- */
+/* ---------- рисование оружия в руках (начало координат — рукоять, ствол вдоль +x) ----------
+   Каждая деталь — объёмная: градиент сверху вниз, тонкая обводка и блик по верхней грани */
+function _shade(hex, k) { const n = parseInt(hex.slice(1), 16); const f = (v) => Math.max(0, Math.min(255, Math.round(v * k))); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; }
+function _part(c, x, y, w, h, col, r = 0.8) {
+  const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, _shade(col, 1.45)); g.addColorStop(0.45, col); g.addColorStop(1, _shade(col, 0.55));
+  c.fillStyle = g; rrect(c, x, y, w, h, Math.min(r, h / 2, w / 2)); c.fill();
+  c.lineWidth = 0.5; c.strokeStyle = 'rgba(8,10,12,0.75)'; c.stroke();
+  c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillRect(x + 0.6, y + 0.35, Math.max(0, w - 1.2), Math.min(0.7, h * 0.25));
+}
+function _wood(c, x, y, w, h, col = '#8a5530') {
+  _part(c, x, y, w, h, col, 1.2); c.strokeStyle = 'rgba(40,20,8,0.35)'; c.lineWidth = 0.35;
+  c.beginPath(); for (let i = 1; i < 3; i++) { c.moveTo(x + 1, y + h * i / 3); c.quadraticCurveTo(x + w / 2, y + h * i / 3 + 0.6, x + w - 1, y + h * i / 3); } c.stroke();
+}
+function _grip(c, x, y, w, h, col, tilt = 0.35) {
+  c.save(); c.translate(x, y); c.rotate(tilt); _part(c, 0, 0, w, h, col, 1); c.restore();
+}
+function _muzzle(c, x, y, h) { c.fillStyle = '#0b0d0f'; c.fillRect(x, y, 1.2, h); }
+function _tube(c, x, y, w, h, col) {
+  const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, _shade(col, 0.7)); g.addColorStop(0.3, _shade(col, 1.5)); g.addColorStop(0.55, col); g.addColorStop(1, _shade(col, 0.45));
+  c.fillStyle = g; rrect(c, x, y, w, h, h / 2.4); c.fill(); c.lineWidth = 0.5; c.strokeStyle = 'rgba(8,10,12,0.75)'; c.stroke();
+}
+function _glowDot(c, x, y, r, col, a = 1) { c.save(); c.globalAlpha *= a; c.shadowColor = col; c.shadowBlur = 5; c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.restore(); }
 function drawHeld(c, id, t = 0) {
-  const R = (x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
   switch (id) {
-    case 'assault': R(-11,-2,8,5,'#6d7960'); R(-3,-3,16,5,'#343f43'); R(13,-2,12,2,'#151d22'); R(2,2,4,7,'#556250'); R(-3,-5,7,2,'#85947b'); break;
-    case 'revolver': R(-4,-3,8,6,'#bfc9c6'); R(3,-3,15,3,'#879893'); R(-5,2,4,7,'#975f39'); R(-2,-1,5,2,'#505f5e'); break;
+    case 'assault':
+      _wood(c, -12, -2, 9, 5, '#5d6a52'); _part(c, -4, -3.2, 17, 5.2, '#3b464b'); _part(c, 12, -2.2, 12, 2.4, '#1c2428', 0.5); _muzzle(c, 23.5, -2.2, 2.4);
+      _grip(c, 1, 1.8, 3.2, 6.5, '#2f3a3d', 0.25); _grip(c, 5.5, 1.5, 3.4, 7, '#4a5646', -0.12); _part(c, -1, -5.3, 9, 2, '#1d2326', 0.4); _part(c, 5, -6.4, 2, 1.4, '#111', 0.2); break;
+    case 'uzi':
+      _part(c, -5, -3, 15, 5.4, '#2b2f33'); _part(c, 9, -1.8, 7, 2.2, '#16191b', 0.4); _muzzle(c, 15.5, -1.8, 2.2);
+      _grip(c, 2, 2, 3.4, 9, '#1f2224', 0.05); _part(c, -8, -2.2, 4, 1.6, '#3a3f44', 0.3); c.fillStyle = 'rgba(255,255,255,0.18)'; for (let i = 0; i < 4; i++) c.fillRect(-2 + i * 3, -2.2, 1, 3.4); break;
+    case 'revolver': case 'magnum': {
+      const big = id === 'magnum';
+      _part(c, -4, -3.4, 9, 6.6, big ? '#9aa4a8' : '#c3ccc8', 1.6); _part(c, 4, -3, big ? 18 : 14, 3.2, big ? '#7d8a90' : '#8f9e99', 0.6); _muzzle(c, big ? 21.6 : 17.6, -3, 3.2);
+      if (big) _part(c, 5, -4.4, 16, 1.6, '#6a7479', 0.3);
+      _grip(c, -4.5, 2, 4.4, 7.5, big ? '#3a2416' : '#8a5530', 0.35); c.fillStyle = '#2a2f31'; c.beginPath(); c.arc(0.5, -0.2, 1.3, 0, TAU); c.fill(); break;
+    }
     case 'plasma': case 'tesla': case 'repulsor': {
       const col = id === 'plasma' ? '#9df1ff' : id === 'tesla' ? '#b9a1ff' : '#f0e991';
-      R(-9,-4,24,8,'#304855'); R(-7,-4,19,1,'#829a9c'); R(-2,4,4,4,'#263437');
-      R(12,-5,5,10,'#789492'); R(17,-2,5,4,col);
-      c.fillStyle=col; for(let i=0;i<3;i++)c.fillRect(-5+i*5,-2,2,4); break;
+      _part(c, -9, -4.2, 22, 8.4, '#33505e', 2); _part(c, 12, -5.2, 6, 10.4, '#7f9a99', 1.5); _part(c, 17.5, -2.4, 5, 4.8, '#243238', 1);
+      _grip(c, -2, 3.8, 3.8, 5, '#26343a', 0.3); for (let i = 0; i < 3; i++) _glowDot(c, -4 + i * 5, 0, 1.3, col, 0.7 + 0.3 * Math.sin(t * 8 + i));
+      _glowDot(c, 22, 0, 1.8, col, 0.8 + 0.2 * Math.sin(t * 10)); break;
     }
-    case 'autocannon': R(-11,-5,20,10,'#666653'); R(9,-3,15,6,'#252e30'); R(15,-4,4,8,'#929280'); R(-3,5,5,6,'#343f42'); R(-8,-4,4,8,'#d3ac6b'); break;
+    case 'autocannon': _part(c, -12, -5, 21, 10, '#6c6c56', 2); _part(c, 8, -3, 17, 6, '#262f31', 1); _part(c, 15, -4.2, 4, 8.4, '#9a9a86', 0.8); _muzzle(c, 24.4, -3, 6); _grip(c, -3, 5, 5, 6, '#343f42', 0.2); _part(c, -9, -4, 4, 8, '#d7b06c', 0.8); break;
+    case 'rpg':
+      _tube(c, -10, -2.6, 26, 5.2, '#4f5b36'); _part(c, 14, -4.6, 9, 9.2, '#7a6a3a', 2.2); c.fillStyle = '#c24b2a'; c.beginPath(); c.moveTo(23, -4.2); c.quadraticCurveTo(29, 0, 23, 4.2); c.closePath(); c.fill();
+      _grip(c, -1, 2.4, 3.4, 6, '#2b2f24', 0.2); _grip(c, 6, 2.4, 3.2, 5, '#2b2f24', -0.1); _part(c, 2, -6.4, 5, 3.4, '#1e2224', 0.5); break;
     case 'bazooka': case 'homing': case 'drill': case 'mortar': {
-      const col = { bazooka: '#4f6b3a', homing: '#dfe6ee', drill: '#d9a21a', mortar: '#3a3f46' }[id];
-      const L = id === 'mortar' ? 18 : 22, th = id === 'mortar' ? 6 : 4.6;
-      R(-8, -th / 2, L, th, col); R(-8, -th / 2, L, 1.2, 'rgba(255,255,255,0.35)');
-      R(L - 9, -th / 2 - 0.8, 2.5, th + 1.6, '#222'); R(-9, -th / 2 - 0.6, 2.2, th + 1.2, '#222');
-      if (id === 'homing') { R(2, -th / 2 - 3, 5, 3, '#2a8cff'); }
-      if (id === 'drill') { c.fillStyle = '#222'; for (let i = 0; i < 4; i++) c.fillRect(-4 + i * 4, -th / 2, 2, th); }
-      R(0, th / 2, 2.5, 3, '#333');
-      break;
+      const col = { bazooka: '#51703b', homing: '#dfe6ee', drill: '#d9a21a', mortar: '#3a3f46' }[id];
+      const L = id === 'mortar' ? 19 : 24, th = id === 'mortar' ? 6.4 : 5.2;
+      _tube(c, -9, -th / 2, L, th, col); _part(c, L - 11, -th / 2 - 0.9, 3, th + 1.8, '#202326', 0.5); _part(c, -10, -th / 2 - 0.7, 2.6, th + 1.4, '#202326', 0.5);
+      if (id === 'homing') { _part(c, 1, -th / 2 - 3.4, 6, 3.2, '#2a8cff', 0.6); _glowDot(c, 6, -th / 2 - 1.8, 0.8, '#9fd4ff'); }
+      if (id === 'drill') { c.fillStyle = 'rgba(20,20,20,0.7)'; for (let i = 0; i < 4; i++) c.fillRect(-4 + i * 4, -th / 2, 1.6, th); }
+      _grip(c, -0.5, th / 2, 3, 4, '#2c2f33', 0.2); _part(c, 1.5, -th / 2 - 2.6, 4, 2.2, '#1d2124', 0.4); break;
     }
-    case 'salvo': R(-6, -4, 18, 8, '#5a5f3a'); c.fillStyle = '#222'; for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { c.beginPath(); c.arc(12, -2 + j * 4, 1.4, 0, TAU); c.fill(); } R(0, 4, 2.5, 3, '#333'); break;
-    case 'shotgun': R(-9, -1.6, 7, 3.6, '#6b4226'); R(-2, -1.8, 18, 2.2, '#2a2a2a'); R(-2, 0.4, 14, 1.8, '#3a3a3a'); R(4, 0.3, 6, 2.6, '#6b4226'); break;
-    case 'sniper': R(-10, -1.5, 8, 3.4, '#3a2a1a'); R(-2, -1.4, 26, 2, '#1e1e1e'); R(0, -4.6, 9, 2.8, '#2a2a2a'); c.fillStyle = '#ff3030'; c.fillRect(8.5, -4, 1, 1.6); R(0, 0.6, 2, 3.5, '#2a2a2a'); break;
-    case 'minigun': R(-6, -3.5, 10, 7, '#3a3f46'); c.fillStyle = '#1e1e1e'; for (let i = 0; i < 3; i++) c.fillRect(4, -2.6 + i * 2, 13, 1.4); R(-2, 3.5, 3, 3, '#222'); R(2, 2, 3, 3, '#caa23a'); break;
-    case 'flamer': R(-8, -2, 20, 3.6, '#5a5a5a'); R(-10, 1.6, 9, 6, '#c0392b'); R(12, -2.6, 3, 4.8, '#222'); c.fillStyle = `rgba(80,160,255,${0.6 + 0.4 * Math.sin(t * 30)})`; c.beginPath(); c.arc(16, -0.2, 1.4, 0, TAU); c.fill(); break;
-    case 'railgun': R(-8, -3, 24, 6, '#2c3440'); R(-8, -3, 24, 1.4, '#5a6a80'); c.fillStyle = `rgba(80,240,255,${0.7 + 0.3 * Math.sin(t * 12)})`; for (let i = 0; i < 4; i++) c.fillRect(-4 + i * 5, -1, 3, 2); R(16, -2, 3, 4, '#111'); break;
-    case 'bat': c.save(); c.rotate(-0.5); c.fillStyle = '#c8955a'; c.beginPath(); c.moveTo(-2, -1); c.lineTo(20, -2.6); c.quadraticCurveTo(23, 0, 20, 2.6); c.lineTo(-2, 1); c.closePath(); c.fill(); c.fillStyle = '#6b4226'; c.fillRect(-3, -1.2, 5, 2.4); c.restore(); break;
+    case 'salvo': _part(c, -6, -4.6, 19, 9.2, '#5c613b', 1.6); for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { c.fillStyle = '#0d0f10'; c.beginPath(); c.arc(12.5, -2.2 + j * 4.4, 1.5, 0, TAU); c.fill(); } _grip(c, 0, 4.6, 3, 4, '#2c2f33', 0.2); break;
+    case 'shotgun': _wood(c, -11, -2, 9, 4.4, '#7a4a28'); _part(c, -2, -2, 19, 2.4, '#2b2d2f', 0.4); _part(c, -2, 0.5, 15, 1.9, '#3a3c3e', 0.4); _wood(c, 4, 0.2, 7, 2.8, '#7a4a28'); _muzzle(c, 16.6, -2, 2.4); _grip(c, -3, 2, 3, 4.5, '#6a3e22', 0.4); break;
+    case 'sniper':
+      _wood(c, -12, -1.8, 10, 4, '#4a3320'); _part(c, -2, -1.5, 28, 2.1, '#1d1f21', 0.4); _muzzle(c, 25.6, -1.5, 2.1); _tube(c, 0, -5.4, 11, 3.1, '#26292c');
+      _part(c, 10.6, -5.8, 1.6, 3.9, '#111', 0.3); _glowDot(c, 11.4, -3.8, 0.6, '#7fe0ff', 0.8); _grip(c, 0, 0.6, 2.4, 4.4, '#2b2d2f', 0.35); _part(c, 14, 0.6, 1, 4.2, '#333', 0.2); break;
+    case 'minigun': _part(c, -7, -4, 11, 8, '#3c4148', 2); for (let i = 0; i < 3; i++) _tube(c, 4, -3 + i * 2.1, 14, 1.8, '#26292c'); _part(c, 16, -3.6, 2.2, 7.2, '#51565c', 0.5); _grip(c, -3, 4, 3.2, 3.4, '#222', 0.2); _part(c, 1, 2.4, 4, 3.6, '#c9a23b', 0.6); break;
+    case 'flamer': _tube(c, -8, -2.1, 21, 4, '#5e6164'); _part(c, -11, 1.6, 10, 6.4, '#c0392b', 3); _part(c, 12, -2.8, 3.4, 5.4, '#222', 0.5); _glowDot(c, 17, -0.2, 1.4, '#58a8ff', 0.6 + 0.4 * Math.sin(t * 30)); break;
+    case 'railgun': _part(c, -9, -3.4, 26, 6.8, '#2c3440', 1.4); for (let i = 0; i < 4; i++) _glowDot(c, -3 + i * 5, 0, 1.1, '#50f0ff', 0.7 + 0.3 * Math.sin(t * 12 + i)); _part(c, 16.5, -2.4, 3.4, 4.8, '#111', 0.5); _grip(c, -2, 3.4, 3.2, 4.4, '#1b2026', 0.3); break;
+    case 'bat': c.save(); c.rotate(-0.5); { const g = c.createLinearGradient(0, -3, 0, 3); g.addColorStop(0, '#e7b77a'); g.addColorStop(1, '#a8753e'); c.fillStyle = g; } c.beginPath(); c.moveTo(-2, -1); c.lineTo(20, -2.8); c.quadraticCurveTo(23.5, 0, 20, 2.8); c.lineTo(-2, 1); c.closePath(); c.fill(); c.strokeStyle = 'rgba(40,20,8,0.6)'; c.lineWidth = 0.5; c.stroke(); _part(c, -3.5, -1.3, 5, 2.6, '#5a3620', 0.6); c.restore(); break;
     case 'grenade': case 'cluster': case 'sticky': case 'blackhole': case 'mine': case 'dynamite': case 'molotov': case 'robot':
       c.save(); c.translate(3, 0); c.scale(0.8, 0.8); drawEntityBody(c, { k: { grenade: 'grenade', cluster: 'cluster', sticky: 'sticky', blackhole: 'bholeg', mine: 'mine', dynamite: 'dynamite', molotov: 'molotov', robot: 'robot' }[id], a: 0, f: 3, s: 0 }, t, true); c.restore(); break;
-    case 'medkit': R(-1, -5, 11, 8, '#f2f2f2'); R(3, -4, 3, 6, '#e53935'); R(1.5, -2.5, 6, 3, '#e53935'); break;
-    case 'skip': R(-1, -16, 1.4, 20, '#8a6a44'); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0.4, -16); c.quadraticCurveTo(7, -14 + Math.sin(t * 6) * 1.5, 12, -15); c.lineTo(12, -9); c.quadraticCurveTo(7, -8 + Math.sin(t * 6 + 1) * 1.5, 0.4, -10); c.closePath(); c.fill(); break;
-    case 'girder': R(0, -5, 10, 8, '#3a8fd8'); R(1, -4, 8, 6, '#bfe2ff'); c.strokeStyle = '#3a8fd8'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(2, -1); c.lineTo(8, -1); c.moveTo(2, 1); c.lineTo(6, 1); c.stroke(); break;
+    case 'medkit': _part(c, -1, -5, 11, 8.4, '#f2f2f2', 1.4); c.fillStyle = '#e53935'; c.fillRect(3.2, -3.8, 2.6, 6); c.fillRect(1.5, -2.1, 6, 2.6); break;
+    case 'skip': _part(c, -1, -16, 1.6, 20, '#8a6a44', 0.4); c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0.6, -16); c.quadraticCurveTo(7, -14 + Math.sin(t * 6) * 1.5, 12, -15); c.lineTo(12, -9); c.quadraticCurveTo(7, -8 + Math.sin(t * 6 + 1) * 1.5, 0.6, -10); c.closePath(); c.fill(); c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 0.4; c.stroke(); break;
+    case 'girder': _part(c, 0, -5, 10, 8, '#3a8fd8', 1); c.fillStyle = '#bfe2ff'; c.fillRect(1.2, -3.8, 7.6, 5.6); c.strokeStyle = '#3a8fd8'; c.lineWidth = 0.7; c.beginPath(); c.moveTo(2, -1); c.lineTo(8, -1); c.moveTo(2, 1); c.lineTo(6, 1); c.stroke(); break;
     case 'jetpack': break;
     default: // пульт для ударов с воздуха и телепорта
-      R(0, -4, 7, 9, '#2a2e36'); R(1, -3, 5, 3.5, id === 'teleport' ? '#b06cff' : '#4ff08a'); c.fillStyle = (t * 3 % 1) < 0.5 ? '#ff4040' : '#801010'; c.fillRect(2.5, 2, 2, 1.6); R(5, -9, 1, 5.5, '#555');
+      _part(c, 0, -4, 7.4, 9.4, '#2a2e36', 1.4); _part(c, 1, -3, 5.4, 3.6, id === 'teleport' ? '#b06cff' : '#4ff08a', 0.6); _glowDot(c, 3.5, 2.8, 0.9, (t * 3 % 1) < 0.5 ? '#ff4040' : '#801010'); _part(c, 5.2, -9.5, 1.2, 5.8, '#555', 0.3);
   }
 }
 

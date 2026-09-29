@@ -29,6 +29,19 @@ Object.assign(FIRE, {
     } } };
   },
   revolver(g,s,p) { rifleFlash(g,s,p.aim,'revolver'); bullet(g,s,p.aim,1500,18,65,5,0); },
+  // магнум: один тяжёлый выстрел, сильный толчок
+  magnum(g,s,p) { rifleFlash(g,s,p.aim,'sniper'); bullet(g,s,p.aim,1700,42,190,6,1); },
+  // узи: длинная очередь с разбросом, ствол можно вести
+  uzi(g, s, p) {
+    let t = 0, n = 0;
+    return { usage: { update(gg, dt) {
+      t += dt;
+      while (n < 10 && t >= n * .07) { const aim = s.aim + rand(-.06, .06); rifleFlash(gg,s,aim,'assault'); bullet(gg,s,aim,900,5,22,3,0); n++; }
+      return t > .78 || !s.alive;
+    } } };
+  },
+  // РПГ: ракета летит строго по прямой — без гравитации и без ветра
+  rpg(g,s,p) { shootProj(g,s,{aim:p.aim,pw:1},'rocket',1150,{grav:0,wind:0,r:3}); },
   plasma(g,s,p) { g.spawn(new PlasmaBall(g,s,p)); g.emit({t:'launch',x:s.x,y:s.y-17,w:'plasma'}); },
   autocannon(g,s,p) {
     let t=0,n=0;
