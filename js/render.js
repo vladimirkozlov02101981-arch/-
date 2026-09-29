@@ -199,12 +199,7 @@ class Renderer {
     }
     const mine = ctl && ctl.mine;
     const aim = mine ? ctl.aim : s.aim;
-    if (T.weapon === 'sniper') {
-      const mx = s.x + Math.cos(aim) * 16, my = s.y - GUN_Y + Math.sin(aim) * 16;
-      let d = sc.terrain.raycast(mx, my, Math.cos(aim), Math.sin(aim), 2400, 3); if (d < 0) d = 2400;
-      c.save(); c.strokeStyle = 'rgba(255,40,40,0.55)'; c.lineWidth = 1.2; c.setLineDash([6, 4]); c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + Math.cos(aim) * d, my + Math.sin(aim) * d); c.stroke(); c.setLineDash([]);
-      c.fillStyle = 'rgba(255,60,60,0.9)'; circ(c, mx + Math.cos(aim) * d, my + Math.sin(aim) * d, 2.2); c.restore();
-    }
+    // снайперка: без линии — целятся через оптический прицел (drawScope)
     // подкрутка броска: круговая стрелка у бойца (вперёд — по ходу броска)
     if (T.spin && SPIN_WEAPONS.has(T.weapon)) {
       const dir = Math.cos(aim) >= 0 ? 1 : -1, cw = T.spin * dir > 0, cx = s.x + dir * 20, cy = s.y - 50, a0 = cw ? -2.4 : -0.7, a1 = cw ? -0.2 : -2.9;
@@ -267,7 +262,7 @@ class Renderer {
     // прицел и сила у активного бойца
     const s = sc.soldiers.find(o => o.id === T.sid);
     const W = WEAPON[T.weapon];
-    if (s && s.alive && !s.gone && T.phase === 'aim' && W && (W.mode === 'charge' || W.mode === 'tcharge' || W.mode === 'instant')) {
+    if (s && s.alive && !s.gone && T.phase === 'aim' && W && T.weapon !== 'sniper' && (W.mode === 'charge' || W.mode === 'tcharge' || W.mode === 'instant')) {   // у снайперки — только оптика
       const mine = ctl && ctl.mine; const aim = mine ? ctl.aim : s.aim;
       const [sx, sy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh); const R = 62 * cam.z;
       const cx = sx + Math.cos(aim) * R, cy = sy + Math.sin(aim) * R;
@@ -293,6 +288,7 @@ class Renderer {
   /* ---------- HUD ---------- */
   drawHUD(sc, cam, ctl, t, extra) {
     const c = this.c, sw = this.sw, sh = this.sh; const T = sc.turn;
+    this.drawScope(c, sc, cam, ctl, sw, sh);
     this.drawBinoculars(c, cam, sw, sh, t, sc);
     c.save(); c.textBaseline = 'middle';
     const team = sc.teams[T.team]; const act = sc.soldiers.find(s => s.id === T.sid);
@@ -366,6 +362,32 @@ class Renderer {
     c.restore();
   }
   /** оверлей бинокля: две линзы, шкала и затемнение по краям */
+  /** оптический прицел снайперки: линза ×3 на линии ствола в точке курсора, сетка с дальномерными метками */
+  drawScope(c, sc, cam, ctl, sw, sh) {
+    const T = sc.turn; if (T.weapon !== 'sniper' || T.phase !== 'aim' || !ctl || !ctl.mine || cam.binocK > 0.5) return;
+    const s = sc.soldiers.find(o => o.id === T.sid); if (!s || !s.alive) return;
+    const [gx, gy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh), [mx, my] = cam.toScreen(ctl.mouseW.x, ctl.mouseW.y, sw, sh);
+    const dist = Math.max(90, Math.hypot(mx - gx, my - gy)), cx = gx + Math.cos(ctl.aim) * dist, cy = gy + Math.sin(ctl.aim) * dist;
+    const R = Math.round(Math.min(sw, sh) * 0.16), Z = 3, dpr = this.dpr, src = this.c.canvas;
+    if (!this.scopeCv || this.scopeCv.width !== Math.ceil(2 * R * dpr)) this.scopeCv = makeCanvas(Math.ceil(2 * R * dpr), Math.ceil(2 * R * dpr));
+    const tc = this.scopeCv.getContext('2d'); tc.setTransform(1, 0, 0, 1, 0, 0); tc.fillStyle = '#000'; tc.fillRect(0, 0, this.scopeCv.width, this.scopeCv.height);
+    const r0 = R / Z; tc.imageSmoothingQuality = 'high';
+    tc.drawImage(src, (cx - r0) * dpr, (cy - r0) * dpr, 2 * r0 * dpr, 2 * r0 * dpr, 0, 0, this.scopeCv.width, this.scopeCv.height);
+    c.save();
+    c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.save(); c.clip();
+    c.drawImage(this.scopeCv, cx - R, cy - R, 2 * R, 2 * R);
+    const v = c.createRadialGradient(cx, cy, R * 0.55, cx, cy, R); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.65)'); c.fillStyle = v; c.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+    c.strokeStyle = 'rgba(10,10,10,0.9)'; c.lineWidth = 1.4; c.beginPath();
+    c.moveTo(cx - R, cy); c.lineTo(cx - 7, cy); c.moveTo(cx + 7, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy - R); c.lineTo(cx, cy - 7); c.moveTo(cx, cy + 7); c.lineTo(cx, cy + R); c.stroke();
+    c.lineWidth = 3.2; c.beginPath(); c.moveTo(cx - R, cy); c.lineTo(cx - R * 0.55, cy); c.moveTo(cx + R * 0.55, cy); c.lineTo(cx + R, cy); c.moveTo(cx, cy + R * 0.55); c.lineTo(cx, cy + R); c.stroke();
+    c.fillStyle = 'rgba(10,10,10,0.9)'; for (let k = 1; k <= 4; k++) { const d = k * R * 0.11; for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) { c.beginPath(); c.arc(cx + dx, cy + dy, 1.3, 0, TAU); c.fill(); } }
+    c.fillStyle = 'rgba(255,40,40,0.9)'; c.beginPath(); c.arc(cx, cy, 1.4, 0, TAU); c.fill();
+    c.restore();
+    c.lineWidth = 7; c.strokeStyle = '#0c0e10'; c.beginPath(); c.arc(cx, cy, R + 3, 0, TAU); c.stroke();
+    c.lineWidth = 1.5; c.strokeStyle = 'rgba(180,200,220,0.35)'; c.beginPath(); c.arc(cx, cy, R + 6.5, -2.6, -0.9); c.stroke();
+    c.font = `11px ${FONT_TITLE}`; c.fillStyle = 'rgba(220,235,255,0.8)'; c.textAlign = 'left'; c.fillText(`×${Z}  ${Math.round(Math.hypot(ctl.mouseW.x - s.x, ctl.mouseW.y - s.y) / 10)} м`, cx + R * 0.45, cy + R * 0.82);
+    c.restore();
+  }
   drawBinoculars(c, cam, sw, sh, t, sc) {
     const k = cam.binocK; if (k < 0.02) return;
     const R = Math.min(sh * 0.47, sw * 0.29);

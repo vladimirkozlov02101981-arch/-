@@ -182,7 +182,7 @@ const THEMES = {
       outline: '#07080d', veins: null, ceiling: 'drips', capMats: [1],
     },
     scatter: ['trash', 'tuft'],
-    weather: 'rain', birds: false, ambient: '#8c8ab8', ambientSound: 'rain', glow: true,
+    weather: 'rain', birds: false, ambient: '#aaa8cf', ambientSound: 'rain', glow: true,
   },
 };
 

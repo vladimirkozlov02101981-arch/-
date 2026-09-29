@@ -384,7 +384,9 @@ const MAP_CASTLES = buildLevel({
 /* =========================================================
    8. Ночной мегаполис
    ========================================================= */
-const P_TOWER = (base, win, lit) => ({ base, win, dark: '#101626', lit });
+// фасады ночного города светлее исходного тона — здания читаются на фоне ночного неба
+const liftHex = (h, k) => '#' + [1, 3, 5].map(i => Math.min(255, Math.round(parseInt(h.slice(i, i + 2), 16) * k + 14)).toString(16).padStart(2, '0')).join('');
+const P_TOWER = (base, win, lit) => ({ base: liftHex(base, 1.55), win, dark: '#1a2238', lit });
 const MAP_CITY = buildLevel({
   id: 'city', name: 'Ночной мегаполис', theme: 'city', W: 6400, H: 1800, water: 1700, seed: 808,
   desc: 'Дома с этажами и крышами, парковка, эстакада над каналом, метро и небоскрёб-вышка',
