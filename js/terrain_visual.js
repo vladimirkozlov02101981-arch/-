@@ -128,7 +128,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
   const ty = (y & 255) << 8, ty2 = ((y >> 1) & 255) << 8, ty3 = ((y >> 2) & 255) << 8;
   const n1 = tl.t1[ty | (x & 255)], n2 = tl.t2[ty2 | ((x >> 1) & 255)], n3 = tl.t3[ty3 | ((x >> 2) & 255)];
-  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0;
+  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false;
   let r, g, bl;
   if (t < capT) {
     // шапка (трава/снег/песок): светлая кромка, сочная середина, тёмная «губа» снизу
@@ -235,7 +235,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       const pv = 0.88 + hh * 0.18 + (n3 - 0.5) * 0.08;
       r = rc[0] * pv; g = rc[1] * pv; bl = rc[2] * pv;
       // не каждый шов — трещина: соседние глыбы часто срастаются
-      const sL = hash3(bi, bj, 15) > 0.45, sR = hash3(bi, bj + 1, 15) > 0.45;
+      const sL = hash3(bi, bj, 15) > 0.8, sR = hash3(bi, bj + 1, 15) > 0.8;
       const ex = Math.min(sL ? fxb : 999, sR ? bw - fxb : 999), ey = Math.min(fyb, th - fyb);
       const e = Math.min(ex, ey);
       if (e < 1.3) { const k = (ex < ey ? 0.5 : 0.42) + n1 * 0.12; r *= k; g *= k; bl *= k; }                // трещина / шов
@@ -245,6 +245,11 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const f = 1 + qq * 0.55 * (nx * LX + ny * LY) / Math.hypot(LX, LY); r *= f; g *= f; bl *= f;
       }
       // объём глыбы: верх светлее, низ темнее; выветривание: пятна, поры, вертикальные потёки
+      // часть пластов расслоена на 2–3 тонких слоя разного тона — толщина слоёв от 8 до 40 px
+      const hs2 = hash3(bi, 17, 3);
+      if (hs2 > 0.45) { const ns = hs2 > 0.8 ? 3 : 2, sub = Math.min(ns - 1, Math.floor(fyb / th * ns)), sf = fyb - sub * th / ns;
+        const tk = 1 + (hash3(bi, sub, 18) - 0.5) * 0.18; r *= tk; g *= tk; bl *= tk * 0.98;
+        if (sub > 0 && sf < 1.2 && tileAt(tl.t3, x, y, 4, 91) > 0.35) { r *= 0.7; g *= 0.7; bl *= 0.7; } }
       const u = fyb / th; const vol = 1.08 - u * 0.18;
       const stain = tileAt(tl.t3, x * 3, y * 0.4, 3, 17);
       let f = vol * (0.9 + (n1 - 0.5) * 0.18 + (n2 - 0.5) * 0.1 + (tileAt(tl.t1, x, y, 1, 29) - 0.5) * 0.12);
@@ -256,6 +261,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       // вкрапления гальки в пласте
       if (e > 4 && sd2 > 6) { const V = S.vs, vi = ((y & 255) << 8) | ((x + 97) & 255), id = V.id[vi];
         if (V.rnd[id] > 0.86) { const q2 = V.rnd2[id]; stoneAt(S, o, -V.vx[vi] * 0.5, -V.vy[vi] * 0.6, V.cell * (0.08 + 0.16 * q2), id * 3.1, [rc[0] * 0.8, rc[1] * 0.78, rc[2] * 0.76], n1, n2, r, g, bl); r = o.r; g = o.g; bl = o.b; } }
+      // иней и снег на уступах пластов
+      if (S.snowy && fyb < 2 + n2 * 3 + tileAt(tl.t1, x, y, 2, 77) * 2) { const k = 0.7; r += (236 - r) * k; g += (244 - g) * k; bl += (255 - bl) * k; }
       // тонкие диагональные трещинки внутри глыбы
       if (hh > 0.6 && Math.abs(veinAt(tl.tv, x * 1.6 + bj * 37, y * 1.6) - 0.5) < 0.006 && e > 3) { r *= 0.62; g *= 0.62; bl *= 0.62; }
     }
@@ -382,7 +389,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
               const cs = hv > 0.5 ? fx < 3 + hv * 3 : fx > 11 - hv * 3;
               if (cs) { const k = 0.62 + Math.sin(fy * 1.3 + fx) * 0.05; r *= k; g *= k * 0.9; bl *= k * 0.8; }
               if (fy > 14 && Math.abs(fx - 4 - hv * 6) < 2.2) { r *= 0.35; g *= 0.3; bl *= 0.3; }
-              if (!isBack) { o.ga = 170; o.gr = hueW[0]; o.gg = hueW[1]; o.gb = hueW[2]; }
+              o.emit = true; o.ga = isBack ? 110 : 190; o.gr = hueW[0]; o.gg = hueW[1]; o.gb = hueW[2];
             } else {
               // тёмное стекло отражает небо: светлее вверху, диагональный блик
               const k = 1 - fy / 19 * 0.5; r = P.dark[0] * k + 26 * (1 - fy / 19); g = P.dark[1] * k + 30 * (1 - fy / 19); bl = P.dark[2] * k + 46 * (1 - fy / 19);
@@ -548,7 +555,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, neon: G.neonRim ? G.neonRim.map(hex2rgb) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -612,17 +619,21 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
           const k = (1 - (dd - 3) / 6) * Math.min(1, (LZ - 0.12 - lam) * 2.2) * S.rimK;
           r += (rim[0] - r) * k; g += (rim[1] - g) * k; bl += (rim[2] - bl) * k;
         }
+        // неоновая подсветка кромок зданий (ночной город): розовая и голубая по кварталам
+        if (S.neon && dd > 3 && dd <= 9 && !o.cap) { const nc = S.neon[(x >> 8) & 1], q = 1 - (dd - 3) / 6, k = q * q * 0.85; r += (nc[0] - r) * k; g += (nc[1] - g) * k; bl += (nc[2] - bl) * k; if (gimg && q > 0.5) { const j2 = i * 4; gimg[j2] = nc[0]; gimg[j2 + 1] = nc[1]; gimg[j2 + 2] = nc[2]; gimg[j2 + 3] = 150 * q; } }
         // отражённый свет неба: поверхность получает оттенок горизонта — передний план в тон картине
         if (dd < 60 && ny < 0 && !(o.cap && S.grassy)) { const kb = (1 - dd / 60) * Math.min(1, -ny * 2.5) * 0.16; r += (bounce[0] - r) * kb; g += (bounce[1] - g) * kb; bl += (bounce[2] - bl) * kb; }
         r += (r - 118) * 0.12; g += (g - 118) * 0.12; bl += (bl - 118) * 0.12;   // S-кривая: глубже тени, ярче свет
         // солнечный тёплый тон у освещённой поверхности
         if (dd < 50) { const kw = (1 - dd / 50) * (1 - shd) * 0.9; r *= 1 + kw * 0.08; g *= 1 + kw * 0.025; bl *= 1 - kw * 0.08; }
+        if (o.emit) { r = o.r * 1.05; g = o.g * 1.02; bl = o.b; }                    // светящиеся окна не темнеют от теней и глубины
         const j = i * 4; px[j] = r; px[j + 1] = g; px[j + 2] = bl; px[j + 3] = 255;
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
         shadeMaterial(S, back[i] === 1 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
-        const k = (0.3 + (1 - occ) * 0.5 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3); const j = i * 4;
+        const k = (back[i] === 1 ? 0.3 + (1 - occ) * 0.5 : 0.44 + (1 - occ) * 0.42) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
+        if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
     }
   }

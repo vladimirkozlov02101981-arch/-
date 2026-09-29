@@ -56,15 +56,6 @@ function foliage(c, blobs, pal) {
   c.save(); c.lineCap = 'round'; c.strokeStyle = 'rgba(236,244,150,0.55)';
   for (const q of rims) { c.lineWidth = Math.max(1, q.r * 0.14); c.beginPath(); c.arc(q.x, q.y, q.r * 0.86, -2.6, -1.5); c.stroke(); }
   c.restore();
-  // просветы неба сквозь большую крону: рваные дырочки с тёмной кромкой листвы
-  if (blobs.length >= 10) {
-    for (let i = 0, k = 3 + (rnd() * 3 | 0); i < k; i++) {
-      const hx = cxm + (rnd() - 0.5) * hw * 1.1, hy = cym + (rnd() - 0.7) * hh * 0.9, hr = 2 + rnd() * 2.6;
-      c.save(); c.globalCompositeOperation = 'destination-out'; c.beginPath();
-      for (let j = 0; j <= 10; j++) { const a = j / 10 * TAU, rr = hr * (0.7 + rnd() * 0.5); if (j) c.lineTo(hx + Math.cos(a) * rr * 1.3, hy + Math.sin(a) * rr); else c.moveTo(hx + Math.cos(a) * rr * 1.3, hy + Math.sin(a) * rr); }
-      c.closePath(); c.fill(); c.restore();
-    }
-  }
 }
 function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
@@ -411,13 +402,13 @@ const DECOR = {
     for (let i = 0; i < 3; i++) {
       const h = r.range(14, 26) * s, a = r.range(-0.4, 0.4); const ex = x + Math.sin(a) * h, ey = y - Math.cos(a) * h;
       c.strokeStyle = '#2fa08a'; c.lineWidth = 1.5 * s; c.beginPath(); c.moveTo(x, y + 2); c.quadraticCurveTo(x, y - h * 0.5, ex, ey); c.stroke();
-      c.fillStyle = '#9affea'; circ(c, ex, ey, 3 * s); if (g) { g.fillStyle = 'rgba(120,255,230,0.9)'; circ(g, ex, ey, 7 * s); }
+      c.fillStyle = '#5fd8c0'; circ(c, ex, ey, 2.6 * s); c.fillStyle = '#c8fff4'; circ(c, ex - 0.6 * s, ey - 0.6 * s, 1.1 * s); if (g) { g.fillStyle = 'rgba(120,255,230,0.45)'; circ(g, ex, ey, 4 * s); }
     }
   },
   pod(c, g, x, y, s) {
     c.fillStyle = vgrad(c, y - 22 * s, y, ['#ffb0f0', '#c040b0', '#5a1a50']); c.beginPath(); c.ellipse(x, y - 10 * s, 9 * s, 13 * s, 0, 0, TAU); c.fill();
     c.strokeStyle = 'rgba(255,220,250,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y - 10 * s, 5 * s, 11 * s, 0, 0, TAU); c.stroke();
-    if (g) { g.fillStyle = 'rgba(255,120,230,0.8)'; circ(g, x, y - 10 * s, 16 * s); }
+    if (g) { g.fillStyle = 'rgba(255,120,230,0.4)'; circ(g, x, y - 10 * s, 10 * s); }
   },
   crystal(c, g, x, y, s, r) {
     const cols = r() < 0.5 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];
@@ -426,7 +417,7 @@ const DECOR = {
       const ex = x + Math.cos(a) * l, ey = y + Math.sin(a) * l, nx = -Math.sin(a) * w, ny = Math.cos(a) * w;
       c.fillStyle = cols[1]; c.beginPath(); c.moveTo(x + nx, y + ny); c.lineTo(ex + nx, ey + ny); c.lineTo(ex + Math.cos(a) * 5 * s, ey + Math.sin(a) * 5 * s); c.lineTo(ex - nx, ey - ny); c.lineTo(x - nx, y - ny); c.closePath(); c.fill();
       c.fillStyle = cols[0]; c.beginPath(); c.moveTo(x + nx, y + ny); c.lineTo(ex + nx, ey + ny); c.lineTo(ex + Math.cos(a) * 5 * s, ey + Math.sin(a) * 5 * s); c.lineTo(x, y); c.closePath(); c.fill();
-      if (g) { g.fillStyle = cols[1]; g.globalAlpha = 0.7; circ(g, (x + ex) / 2, (y + ey) / 2, l * 0.7); g.globalAlpha = 1; }
+      if (g) { g.fillStyle = cols[1]; g.globalAlpha = 0.35; circ(g, (x + ex) / 2, (y + ey) / 2, l * 0.4); g.globalAlpha = 1; }
     }
   },
   crystalBig(c, g, x, y, s, r) { DECOR.crystal(c, g, x, y, s * 2.4, r); },
@@ -462,8 +453,22 @@ const DECOR = {
   },
   billboard(c, g, x, y, s) {
     c.fillStyle = '#2a2e36'; c.fillRect(x - 40 * s, y - 22 * s, 4 * s, 24 * s); c.fillRect(x + 36 * s, y - 22 * s, 4 * s, 24 * s);
-    c.fillStyle = '#12141c'; rrect(c, x - 58 * s, y - 66 * s, 116 * s, 46 * s, 4 * s); c.fill();
+    const bx = x - 58 * s, by = y - 66 * s, bw = 116 * s, bh = 46 * s;
+    c.fillStyle = vgrad(c, by, by + bh, ['#2a1040', '#160a26']); rrect(c, bx, by, bw, bh, 4 * s); c.fill();
     c.strokeStyle = '#3a3e4a'; c.lineWidth = 2 * s; c.stroke();
+    // неоновая реклама: кусок пиццы, лучи и рамка
+    c.save(); c.beginPath(); rrect(c, bx, by, bw, bh, 4 * s); c.clip();
+    c.strokeStyle = 'rgba(255,90,200,0.25)'; c.lineWidth = 3 * s;
+    for (let i = 0; i < 7; i++) { const a = -0.9 + i * 0.3; c.beginPath(); c.moveTo(x - 26 * s, by + bh * 0.55); c.lineTo(x - 26 * s + Math.cos(a) * 90 * s, by + bh * 0.55 + Math.sin(a) * 90 * s); c.stroke(); }
+    const px = x - 26 * s, py = by + 8 * s;
+    c.fillStyle = '#ffcf4a'; c.beginPath(); c.moveTo(px - 16 * s, py); c.lineTo(px + 16 * s, py); c.lineTo(px, py + 32 * s); c.closePath(); c.fill();
+    c.fillStyle = '#c8741e'; c.fillRect(px - 17 * s, py - 3 * s, 34 * s, 5 * s);
+    c.fillStyle = '#e03a2a'; for (const [ox, oy] of [[-6, 7], [5, 9], [0, 18], [-2, 27]]) circ(c, px + ox * s, py + oy * s, 3 * s);
+    c.fillStyle = '#ff7ae0'; c.font = `bold ${14 * s}px ${typeof FONT_TITLE !== 'undefined' ? FONT_TITLE : 'sans-serif'}`; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillText('24/7', x + 2 * s, by + bh * 0.38); c.fillStyle = '#6ae8ff'; c.font = `bold ${9 * s}px sans-serif`; c.fillText('ГОРЯЧАЯ', x + 2 * s, by + bh * 0.72);
+    c.restore();
+    c.strokeStyle = '#ff5ad8'; c.lineWidth = 1.6 * s; rrect(c, bx + 3 * s, by + 3 * s, bw - 6 * s, bh - 6 * s, 3 * s); c.stroke();
+    if (g) { g.strokeStyle = 'rgba(255,90,216,0.8)'; g.lineWidth = 6 * s; rrect(g, bx + 3 * s, by + 3 * s, bw - 6 * s, bh - 6 * s, 3 * s); g.stroke(); g.fillStyle = 'rgba(255,200,80,0.35)'; circ(g, x - 26 * s, by + 22 * s, 20 * s); }
   },
   bench(c, g, x, y, s) {
     c.fillStyle = '#7a4a2a'; c.fillRect(x - 16 * s, y - 10 * s, 32 * s, 3 * s); c.fillRect(x - 16 * s, y - 17 * s, 32 * s, 3 * s);
