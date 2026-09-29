@@ -47,7 +47,6 @@ class AISearch {
       if (!r) continue;
       const B = BLAST[w === 'bazooka' ? 'rocket' : w];
       let sc = this.blastScore(r.x, r.y, B.R, B.D);
-      if (w === 'mortar') sc += this.blastScore(r.x, r.y - 20, 30, 12) * 0.5;
       if (w === 'cluster') sc *= 1.1;
       this.consider({ w, aim: a, pw: p, score: sc - (WEAPON[w].ammo > 0 ? 6 : 0), ix: r.x });
       if (w === 'bazooka') for (const e of this.enemies) { const d = Math.hypot(e.x - r.x, e.y - 13 - r.y); if (d < this.fbDist) { this.fbDist = d; this.fallback = { w, aim: a, pw: p, score: 0, ix: r.x }; } }
@@ -63,14 +62,16 @@ class AISearch {
       const m = muzzle(s, a, 16); const h = hitscan(g, m.x, m.y, a, 2600, s);
       const clear = h.type === 'soldier' && h.s === e;
       const kb = (dmg) => dmg >= e.hp ? 40 : 0;
-      if (clear && avail('sniper')) this.consider({ w: 'sniper', aim: a, pw: 1, score: 50 + kb(50) - 8 });
+      if (clear && avail('sniper')) this.consider({ w: 'sniper', aim: a, pw: 1, score: 45 + kb(45) - 8 });
       // прямой огонь: небольшой случайный бонус, чтобы компьютер не повторял одно и то же оружие
       const vary = () => Math.random() * 10;
       if (clear && dist < 750 && avail('assault')) { const dmg = dist < 350 ? 26 : 18; this.consider({ w: 'assault', aim: a, pw: 1, score: dmg + kb(dmg) + vary() }); }
-      if (clear && dist < 900 && avail('magnum')) this.consider({ w: 'magnum', aim: a, pw: 1, score: 42 + kb(42) - 6 + vary() });
+      if (clear && dist < 900 && avail('magnum')) this.consider({ w: 'magnum', aim: a, pw: 1, score: 35 + kb(35) + vary() });
+      // кислота проходит сквозь землю: достаточно, чтобы цель была на прямой недалеко
+      if (dist < 650 && avail('acid')) { let sc = 0; const cx = Math.cos(a), cy = Math.sin(a); for (const o of g.soldiers) { if (!o.alive || o === s) continue; const rx = o.x - s.x, ry = o.y - 14 - (s.y - GUN_Y), along = rx * cx + ry * cy; if (along < 0 || along > 650 || Math.abs(rx * cy - ry * cx) > 14) continue; sc += o.team === this.team ? -25 : 15 + (o.hp <= 15 ? 40 : 0); } if (sc > 0) this.consider({ w: 'acid', aim: a, pw: 1, score: sc - 4 + vary() }); }
       if (clear && dist < 380 && avail('uzi')) this.consider({ w: 'uzi', aim: a, pw: 1, score: 30 + kb(30) - 6 + vary() });
-      // РПГ: прямой полёт — нужна чистая линия до цели (ракета взрывается и рядом с бойцом)
-      if (avail('rpg')) { const hh = hitscan(g, m.x, m.y, a, 2600, s); if (hh.type === 'soldier' && hh.s.team !== this.team || Math.hypot((hh.x ?? 1e9) - ex, (hh.y ?? 1e9) - ey) < 30) this.consider({ w: 'rpg', aim: a, pw: 1, score: this.blastScore(ex, ey, BLAST.rocket.R, BLAST.rocket.D) - 6 + vary(), ix: ex }); }
+      // РПГ: прямой полёт — нужна чистая линия до цели; дальше ~900 px ракета теряет управление
+      if (avail('rpg') && dist < 900) { const hh = hitscan(g, m.x, m.y, a, 2600, s); if (hh.type === 'soldier' && hh.s.team !== this.team || Math.hypot((hh.x ?? 1e9) - ex, (hh.y ?? 1e9) - ey) < 30) this.consider({ w: 'rpg', aim: a, pw: 1, score: this.blastScore(ex, ey, BLAST.rocket.R, BLAST.rocket.D) - 6 + vary(), ix: ex }); }
       if (clear && dist < 600 && avail('revolver')) this.consider({ w: 'revolver', aim: a, pw: 1, score: 40 + kb(45) - 6 + vary() });
       if (clear && dist < 550 && avail('minigun')) this.consider({ w: 'minigun', aim: a, pw: 1, score: 34 + kb(34) - 6 + vary() });
       if (clear && dist < 520 && avail('tesla')) { const chain = this.enemies.filter(o => o !== e && Math.hypot(o.x - e.x, o.y - e.y) < 160).length; this.consider({ w: 'tesla', aim: a, pw: 1, score: 32 + 14 * chain + kb(32) - 6 + vary() }); }
@@ -82,6 +83,8 @@ class AISearch {
         if (sc > 0) this.consider({ w: 'railgun', aim: a, pw: 1, score: sc - 10 + vary() });
       }
       if (clear && dist < 420 && avail('shotgun')) { const dmg = dist < 150 ? 40 : dist < 280 ? 30 : 18; this.consider({ w: 'shotgun', aim: a, pw: 1, score: dmg + kb(dmg) }); }
+      // ботинок: сбросить врага в воду или с обрыва — главная цель пинка
+      if (Math.abs(ex - s.x) < 24 && Math.abs(e.y - s.y) < 18 && avail('boot')) { const dir = ex >= s.x ? 1 : -1; let drop = 0; for (let k = 60; k <= 360; k += 60) { const top = g.terrain.findTop(Math.round(e.x + dir * k), Math.round(e.y - 40)); if (top >= g.waterY) drop = 50; } this.consider({ w: 'boot', aim: dir > 0 ? 0 : Math.PI, pw: 1, score: 15 + kb(15) + drop }); }
       if (Math.abs(ex - s.x) < 22 && Math.abs(e.y - s.y) < 18 && avail('bat')) { const dir = ex >= s.x ? 1 : -1; this.consider({ w: 'bat', aim: dir > 0 ? -0.6 : Math.PI + 0.6, pw: 1, score: 55 + kb(30) }); }
       if (avail('airstrike') && !own(ex, 110)) { const n = this.enemies.filter(o => Math.abs(o.x - ex) < 90).length; this.consider({ w: 'airstrike', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 24 * n + kb(26) - 14 }); }
       if (avail('lightning') && !own(ex, 80)) this.consider({ w: 'lightning', aim: s.aim, pw: 1, tx: ex - g.turn.wind * 1.0, ty: ey, score: 30 + kb(38) - 12 });

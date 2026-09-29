@@ -17,9 +17,9 @@ function sanitizeSettings(S) {
   const D = DEFAULT_PREFS.settings; S = S && typeof S === 'object' ? S : {};
   return {
     mapId: MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 6),
-    hp: [50, 75, 100, 150, 200].includes(+S.hp) ? +S.hp : D.hp, turnTime: [20, 30, 45, 60, 90].includes(+S.turnTime) ? +S.turnTime : D.turnTime,
+    hp: [50, 75, 100, 150, 200].includes(+S.hp) ? +S.hp : D.hp, turnTime: [15, 20, 30, 45, 60, 90].includes(+S.turnTime) ? +S.turnTime : D.turnTime,
     wind: S.wind !== false, crates: S.crates !== false, sd: [0, 6, 10, 15].includes(+S.sd) ? +S.sd : D.sd,
-    arsenal: S.arsenal === 'classic' ? 'classic' : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal',
+    arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal',
   };
 }
 

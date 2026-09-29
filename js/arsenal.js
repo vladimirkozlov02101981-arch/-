@@ -16,6 +16,49 @@ class PlasmaBall extends Ent {
     }
   }
 }
+// Кислотомёт: струя проходит сквозь землю и бойцов, прожигая узкий след; к концу опадает
+KIND_IDX.acid = KINDS.length; KINDS.push('acid');
+class AcidShot extends Ent {
+  constructor(g, s, aim) {
+    const m = muzzle(s, aim, 22);
+    super(g, 'acid', m.x, m.y, Math.cos(aim) * 950, Math.sin(aim) * 950);
+    this.owner = s; this.team = s.team; this.hit = new Set([s.id]); this.pushable = false; this.a = aim;
+  }
+  update(g, dt) {
+    this.age += dt;
+    const x0 = this.x, y0 = this.y, grav = this.age < 0.45 ? 0.06 : Math.min(1.3, (this.age - 0.45) * 3);
+    this.vy += g.gravity * grav * dt; this.x += this.vx * dt; this.y += this.vy * dt; this.a = Math.atan2(this.vy, this.vx);
+    if (g.terrain.segmentHit(x0, y0, this.x, this.y) || g.terrain.isSolid(this.x, this.y)) g.carveLine(x0, y0, this.x, this.y, 5);
+    const steps = Math.max(1, Math.ceil(Math.hypot(this.x - x0, this.y - y0) / 3));
+    for (let i = 1; i <= steps; i++) {
+      const o = g.soldierAt(x0 + (this.x - x0) * i / steps, y0 + (this.y - y0) * i / steps, 3, null);
+      if (o && !this.hit.has(o.id)) { this.hit.add(o.id); g.damage(o, 15, this.owner); o.vx += this.vx * 0.08; o.vy -= 40; }
+    }
+    if (this.y > g.waterY) { g.splash(this.x, 0); this.dead = true; return; }
+    if (this.age > 1.6 || this.x < -300 || this.x > g.W + 300 || this.y > g.H + 100) this.dead = true;
+  }
+}
+// Телепортер: бросается как граната; боец переносится туда, где устройство остановилось
+KIND_IDX.tpg = KINDS.length; KINDS.push('tpg');
+class TpGrenade extends Ent {
+  constructor(g, x, y, vx, vy, s) { super(g, 'tpg', x, y, vx, vy); this.owner = s; this.team = s.team; this.r = 3.5; this.still = 0; this.spin = 0; this.spinLeft = 1; this.dir = vx >= 0 ? 1 : -1; }
+  update(g, dt) {
+    this.age += dt;
+    const res = bounceStep(g, this, dt, { rest: 0.4, fric: 0.75, r: this.r, onImpact: (imp, nrm) => { if (imp > 70) g.emit({ t: 'bounce', x: R1(this.x), y: R1(this.y) }); applySpin(this, imp, nrm); } });
+    if (res === 'water' || res === 'out') { if (res === 'water') g.splash(this.x, 0); this.dead = true; g.emit({ t: 'msg', txt: 'Телепортер потерян', c: '#c080ff' }); return; }
+    if (!this.rest) this.a += this.vx * dt * 0.06;
+    this.still = this.rest || Math.hypot(this.vx, this.vy) < 25 ? this.still + dt : 0;
+    if (this.still > 0.35 || this.age > 5) this.warp(g);
+  }
+  warp(g) {
+    this.dead = true; const s = this.owner; if (!s || !s.alive) return;
+    // расчищаем место под бойца, чтобы он не застрял в земле
+    g.carve(this.x, this.y - 16, 21, false);
+    const x1 = s.x, y1 = s.y; s.x = Math.round(this.x); s.y = Math.round(this.y + this.r); s.vx = 0; s.vy = 0; s.rot = 0; s.st = 'air';
+    if (!bodyFree(g.terrain, s.x, s.y)) s.unstick(g.terrain);
+    g.emit({ t: 'tp', x1: R1(x1), y1: R1(y1), x2: R1(s.x), y2: R1(s.y) });
+  }
+}
 function rifleFlash(g, s, aim, weapon) {
   const m = muzzle(s, aim, 22); g.emit({ t: 'shot', x: R1(m.x), y: R1(m.y), a: aim, w: weapon });
 }
@@ -29,8 +72,8 @@ Object.assign(FIRE, {
     } } };
   },
   revolver(g,s,p) { rifleFlash(g,s,p.aim,'revolver'); bullet(g,s,p.aim,1500,18,65,5,0); },
-  // магнум: один тяжёлый выстрел, сильный толчок
-  magnum(g,s,p) { rifleFlash(g,s,p.aim,'sniper'); bullet(g,s,p.aim,1700,42,190,6,1); },
+  // магнум (как в TW3): бесконечный патрон, 35 урона, в голову — 50
+  magnum(g,s,p) { rifleFlash(g,s,p.aim,'sniper'); bullet(g,s,p.aim,1700,35,190,6,1,50); },
   // узи: длинная очередь с разбросом, ствол можно вести
   uzi(g, s, p) {
     let t = 0, n = 0;
@@ -40,8 +83,29 @@ Object.assign(FIRE, {
       return t > .78 || !s.alive;
     } } };
   },
-  // РПГ: ракета летит строго по прямой — без гравитации и без ветра
-  rpg(g,s,p) { shootProj(g,s,{aim:p.aim,pw:1},'rocket',1150,{grav:0,wind:0,r:3}); },
+  // РПГ: без гравитации и ветра, но со спиралью и потерей управления (как в TW3)
+  rpg(g,s,p) { shootProj(g,s,{aim:p.aim,pw:1},'rocket',1150,{grav:0,wind:0,r:3,spiral:true}); },
+  // ботинок: пинок почти горизонтально, в сторону взгляда
+  boot(g,s,p) {
+    const dir=Math.cos(p.aim)>=0?1:-1, cx=s.x+dir*11, cy=s.y-12; let hit=false;
+    for(const o of g.soldiers){
+      if(!o.alive||o===s)continue;
+      if(Math.abs(o.x-cx)<16&&Math.abs(o.y-12-cy)<18){o.vx+=dir*640;o.vy-=170;o.fly();g.damage(o,15,s);hit=true;}
+    }
+    g.emit({t:'bat',x:R1(cx),y:R1(cy),h:hit?1:0});
+  },
+  // кирка: проход в сторону прицела, высотой в рост бойца
+  pickaxe(g,s,p) {
+    const dx=Math.cos(p.aim), dy=Math.sin(p.aim), x0=s.x+dx*4, y0=s.y-15+dy*4;
+    g.carveLine(x0,y0,x0+dx*38,y0+dy*38,19); g.emit({t:'dig',x:R1(x0+dx*20),y:R1(y0+dy*20)});
+    const h=hitscan(g,s.x,s.y-15,p.aim,34,s); if(h.type==='soldier'){g.damage(h.s,10,s);h.s.vx+=dx*160;h.s.vy+=dy*160-60;h.s.fly();}
+  },
+  acid(g,s,p) { g.spawn(new AcidShot(g,s,p.aim)); g.emit({t:'flame',x:R1(s.x),y:R1(s.y)}); },
+  tpgrenade(g,s,p) {
+    const m=muzzle(s,p.aim,10), sp=780*p.pw, e=new TpGrenade(g,m.x,m.y,Math.cos(p.aim)*sp+s.vx*.3,Math.sin(p.aim)*sp,s);
+    e.spin=p.spin|0; g.spawn(e); g.emit({t:'launch',x:R1(m.x),y:R1(m.y),w:'throw'});
+    return {usage:{update(){return e.dead;}}};
+  },
   plasma(g,s,p) { g.spawn(new PlasmaBall(g,s,p)); g.emit({t:'launch',x:s.x,y:s.y-GUN_Y,w:'plasma'}); },
   autocannon(g,s,p) {
     let t=0,n=0;

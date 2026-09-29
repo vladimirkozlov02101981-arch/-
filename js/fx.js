@@ -203,6 +203,8 @@ class FX {
         P.fire(bx, by, -Math.cos(e.a) * 60, -Math.sin(e.a) * 60, rand(3, 5) * k, 0.16); break;
       }
       case 'mortar': case 'frag': case 'bomb': case 'bomblet': P.smoke(e.x, e.y, 0, 0, 2.5, 0.5, '#9a9a9a', 2, 0.35); break;
+      case 'acid': for (let i = 0; i < 2; i++) P.glow(e.x + rand(-3, 3), e.y + rand(-2, 2), rand(-25, 25), rand(10, 60), rand(2, 3.5), rand(0.25, 0.5), pick(['#b8ff3a', '#7ad62a', '#e8ffb0'])); break;
+      case 'tpg': if (Math.random() < 0.5) P.glow(e.x, e.y, rand(-20, 20), rand(-30, 0), 2, 0.4, pick(['#e0b0ff', '#b06cff'])); break;
       case 'dynamite': P.spark(e.x + 3.5, e.y - 9.5, rand(-60, 60), rand(-100, -20), 0.25, '#ffd35a'); break;
       case 'molotov': P.fire(e.x, e.y - 8, rand(-10, 10), rand(-30, -10), 3, 0.25); break;
       case 'fire': P.fire(e.x + rand(-3, 3), e.y - 2, rand(-10, 10), rand(-60, -25), rand(3, 6) * (e.v || 100) / 100, rand(0.3, 0.6)); if (Math.random() < 0.15) P.smoke(e.x, e.y - 8, rand(-5, 5), rand(-40, -20), 3, 1.2, '#4a4a4a', 3, 0.35); break;

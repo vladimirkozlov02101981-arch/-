@@ -9,7 +9,7 @@ const KINDS = ['rocket', 'homing', 'mortar', 'frag', 'drill', 'mini', 'grenade',
 function gaussRand() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
 const KIND_IDX = Object.fromEntries(KINDS.map((k, i) => [k, i]));
 const BLAST = {
-  rocket: { R: 42, D: 48, K: 330 }, homing: { R: 40, D: 45, K: 320 }, mortar: { R: 30, D: 28, K: 260 }, frag: { R: 17, D: 12, K: 150 },
+  rocket: { R: 42, D: 48, K: 330 }, homing: { R: 40, D: 45, K: 320 }, mortar: { R: 46, D: 55, K: 350 }, frag: { R: 17, D: 12, K: 150 },
   drill: { R: 38, D: 42, K: 320 }, mini: { R: 22, D: 18, K: 190 }, grenade: { R: 46, D: 50, K: 350 }, cluster: { R: 30, D: 24, K: 260 },
   bomblet: { R: 20, D: 16, K: 180 }, sticky: { R: 42, D: 46, K: 330 }, dynamite: { R: 76, D: 72, K: 520 }, mine: { R: 42, D: 45, K: 340 },
   robot: { R: 62, D: 56, K: 460 }, bomb: { R: 32, D: 26, K: 280 }, nukem: { R: 135, D: 82, K: 760 }, crate: { R: 36, D: 25, K: 300 },
@@ -31,6 +31,16 @@ function flyStep(g, e, dt, grav, windF, r, ignore) {
   }
   if (e.x < -900 || e.x > g.W + 900 || e.y > g.H + 300) return { type: 'out' };
   return null;
+}
+/** мина миномёта отскакивает от стен и потолка; от пола — нет (там она взрывается) */
+function mortarBounce(g, e) {
+  const T = g.terrain, sp = Math.hypot(e.vx, e.vy) || 1;
+  const n = T.normalAt(e.x - e.vx / sp * 2, e.y - e.vy / sp * 2, 4);
+  if (n.y < -0.55) return false;
+  const vn = e.vx * n.x + e.vy * n.y; if (vn >= 0) return false;
+  e.vx -= 1.7 * vn * n.x; e.vy -= 1.7 * vn * n.y;
+  for (let k = 0; k < 10 && T.isSolid(e.x, e.y); k++) { e.x += n.x; e.y += n.y; }
+  return true;
 }
 function supported(T, x, y, r) { return T.isSolid(x, y + r + 1) || T.isSolid(x - 2, y + r + 1) || T.isSolid(x + 2, y + r + 1); }
 function bounceStep(g, e, dt, o) {
@@ -114,16 +124,27 @@ class Proj extends Ent {
       } else if (this.age >= 4.4) { this.grav = 1; this.s = 0; }
     }
     if (this.k === 'drill' && this.s === 1) return this.drillUpdate(g, dt);
+    if (this.o.spiral) this.spiralStep(dt);
     const hit = flyStep(g, this, dt, this.grav, this.wind, this.r, this.age < 0.3 ? this.owner : null);
     this.a = Math.atan2(this.vy, this.vx);
     if (!hit) { if (this.age > 16) this.boom(g); return; }
     if (hit.type === 'water') { if (this.k === 'nukem') { this.y = g.waterY; this.boom(g); return; } g.splash(this.x, 1); this.dead = true; return; }
     if (hit.type === 'out') { this.dead = true; return; }
+    if (this.k === 'mortar' && hit.type === 'terrain' && (this.bn | 0) < 4 && mortarBounce(g, this)) { this.bn = (this.bn | 0) + 1; g.emit({ t: 'bounce', x: R1(this.x), y: R1(this.y) }); return; }
     if (this.k === 'drill' && hit.type === 'terrain') {
       const sp = Math.hypot(this.vx, this.vy) || 1; this.dx = this.vx / sp; this.dy = this.vy / sp; this.s = 1; this.drillT = 1.25; this.acc = 0;
       g.emit({ t: 'dig', x: R1(this.x), y: R1(this.y) }); return;
     }
     this.boom(g);
+  }
+  // РПГ: ракету закручивает по спирали, а примерно через секунду она теряет управление
+  spiralStep(dt) {
+    const sp = Math.hypot(this.vx, this.vy) || 1;
+    if (this.base === undefined) { this.base = Math.atan2(this.vy, this.vx); this.drift = 0; this.ph = rand(0, TAU); }
+    if (this.age > 0.85) { this.drift = clamp(this.drift + rand(-14, 14) * dt, -3.2, 3.2); this.base += this.drift * dt; this.grav = 0.45; }
+    const amp = 0.035 + Math.min(this.age, 1.4) * 0.09;
+    const a = this.base + amp * Math.sin(this.age * 19 + this.ph);
+    this.vx = Math.cos(a) * sp; this.vy = Math.sin(a) * sp;
   }
   drillUpdate(g, dt) {
     this.age += 0; const step = 250 * dt; this.x += this.dx * step; this.y += this.dy * step; this.drillT -= dt; this.acc += step;
@@ -136,9 +157,6 @@ class Proj extends Ent {
     if (this.k === 'nukem') { g.nuke(this.x, this.y, this.owner); return; }
     const B = BLAST[this.k];
     g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, k: (this.k === 'frag' || this.k === 'bomblet' || this.k === 'mini') ? 1 : 0 });
-    if (this.k === 'mortar') {
-      for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + (i - 2.5) * 0.36 + rand(-0.1, 0.1); const sp = rand(230, 380); g.spawn(new Proj(g, 'frag', this.x, this.y - 6, Math.cos(a) * sp, Math.sin(a) * sp, this.owner, { r: 2 })); }
-    }
   }
 }
 
@@ -146,6 +164,7 @@ class Proj extends Ent {
 class Thrown extends Ent {
   constructor(g, k, x, y, vx, vy, owner, fuse) {
     super(g, k, x, y, vx, vy); this.owner = owner; this.team = owner ? owner.team : -1; this.f = fuse; this.r = k === 'dynamite' ? 4 : 3.5;
+    this.spin = 0; this.spinLeft = 1; this.dir = vx >= 0 ? 1 : -1;
   }
   update(g, dt) {
     this.age += dt;
@@ -153,7 +172,7 @@ class Thrown extends Ent {
       const s = this.stuckTo;
       if (s.gone) this.stuckTo = null; else { this.x = s.x + this.sx; this.y = s.y + this.sy; }
     } else if (!this.stuck) {
-      const res = bounceStep(g, this, dt, { rest: this.k === 'dynamite' ? 0.22 : 0.46, fric: 0.78, r: this.r, onImpact: (imp) => this.onImpact(g, imp) });
+      const res = bounceStep(g, this, dt, { rest: this.k === 'dynamite' ? 0.22 : 0.46, fric: 0.78, r: this.r, onImpact: (imp, nrm) => this.onImpact(g, imp, nrm) });
       if (this.dead) return;
       if (res === 'water') { g.splash(this.x, 0); this.dead = true; return; }
       if (res === 'out') { this.dead = true; return; }
@@ -169,10 +188,11 @@ class Thrown extends Ent {
     if (this.k !== 'molotov') { this.f -= dt; if (this.f <= 0) this.boom(g); }
     else if (this.age > 8) this.dead = true;
   }
-  onImpact(g, imp) {
+  onImpact(g, imp, nrm) {
     if (this.k === 'molotov') { this.shatter(g); return 'stop'; }
     if (this.k === 'sticky' && !this.stuck) { this.stuck = true; this.vx = this.vy = 0; this.rest = true; g.emit({ t: 'bounce', x: R1(this.x), y: R1(this.y) }); return 'stop'; }
     if (imp > 70) g.emit({ t: 'bounce', x: R1(this.x), y: R1(this.y) });
+    applySpin(this, imp, nrm);
     return null;
   }
   push(vx, vy) { if (this.stuck) return; super.push(vx, vy); }
@@ -457,9 +477,18 @@ class Orbital extends Ent {
 }
 
 /* ---------- логика выстрелов (хост) ---------- */
+/** подкрутка: при ударе добавляет скорость вдоль поверхности — вперёд (по ходу броска, на стене — вверх) или назад */
+function applySpin(e, imp, nrm) {
+  if (!e.spin || !nrm || imp < 25 || e.spinLeft < 0.1) return;
+  let tx = -nrm.y, ty = nrm.x;
+  if (Math.abs(tx) > 0.3 ? tx * e.dir < 0 : ty > 0) { tx = -tx; ty = -ty; }
+  const k = e.spin * 165 * e.spinLeft; e.vx += tx * k; e.vy += ty * k; e.spinLeft *= 0.55;
+}
 function throwObj(g, s, p, k, fuse, speed) {
   const m = muzzle(s, p.aim, 10); const sp = speed * p.pw;
-  g.spawn(new Thrown(g, k, m.x, m.y, Math.cos(p.aim) * sp + s.vx * 0.3, Math.sin(p.aim) * sp, s, fuse));
+  const e = new Thrown(g, k, m.x, m.y, Math.cos(p.aim) * sp + s.vx * 0.3, Math.sin(p.aim) * sp, s, fuse);
+  if (SPIN_WEAPONS.has(k)) e.spin = p.spin | 0;
+  g.spawn(e);
   g.emit({ t: 'launch', x: R1(m.x), y: R1(m.y), w: 'throw' });
 }
 function shootProj(g, s, p, k, speed, o) {
@@ -470,10 +499,10 @@ function shootProj(g, s, p, k, speed, o) {
 }
 KIND_IDX.bullet = KINDS.length; KINDS.push('bullet');
 class BallisticBullet extends Ent {
-  constructor(g,s,aim,range,damage,knock,crater,kind) {
+  constructor(g,s,aim,range,damage,knock,crater,kind,head) {
     const m=muzzle(s,aim,10), speed=kind===1?18000:12500;
     super(g,'bullet',m.x,m.y,Math.cos(aim)*speed,Math.sin(aim)*speed);
-    this.owner=s;this.team=s.team;this.range=range;this.damage=damage;this.knock=knock;this.crater=crater;this.kind=kind;this.travel=0;this.a=aim;this.pushable=false;
+    this.owner=s;this.team=s.team;this.range=range;this.damage=damage;this.knock=knock;this.crater=crater;this.kind=kind;this.head=head;this.travel=0;this.a=aim;this.pushable=false;
   }
   update(g,dt) {
     this.age+=dt;const x0=this.x,y0=this.y;
@@ -496,7 +525,7 @@ class BallisticBullet extends Ent {
       if(target) {
         const head=this.kind===1 && this.y<target.y-21;
         const energy=Math.max(.62,1-this.travel/this.range*.25);
-        g.damage(target,(this.damage+(head?20:0))*energy,this.owner);
+        g.damage(target,(head?(this.head??this.damage+20):this.damage)*energy,this.owner);
         target.vx+=Math.cos(a)*this.knock*.45;target.vy+=Math.sin(a)*this.knock*.45-this.knock*.08;
         if(this.knock>100)target.fly();
         if(head)g.emit({t:'msg',txt:'ХЕДШОТ!',c:'#dfed79'});
@@ -515,8 +544,8 @@ class BallisticBullet extends Ent {
     this.a=a;
   }
 }
-function bullet(g,s,aim,range,damage,knock,crater,kind) {
-  const projectile=new BallisticBullet(g,s,aim,range,damage,knock,crater,kind);g.spawn(projectile);return projectile;
+function bullet(g,s,aim,range,damage,knock,crater,kind,head) {
+  const projectile=new BallisticBullet(g,s,aim,range,damage,knock,crater,kind,head);g.spawn(projectile);return projectile;
 }
 function boltPath(x1, y1, x2, y2, rough) {
   let pts = [[x1, y1], [x2, y2]];
@@ -555,7 +584,7 @@ const FIRE = {
   },
   sniper(g, s, p) {
     const m = muzzle(s, p.aim, 16); g.emit({ t: 'shot', x: R1(m.x), y: R1(m.y), a: Math.round(p.aim * 100) / 100, w: 'sniper' });
-    bullet(g, s, p.aim, 2600, 50, 170, 6, 1);
+    bullet(g, s, p.aim, 2600, 45, 170, 6, 1, 60);
   },
   minigun(g, s, p) {
     let n = 0, t = 0;
@@ -678,9 +707,10 @@ function simulateShot(g, kind, x, y, vx, vy, owner, fuse) {
     }
     return { x: e.x, y: e.y };
   }
-  const wind = kind === 'rocket' || kind === 'mortar' ? 1 : 0;
+  const wind = kind === 'rocket' || kind === 'mortar' ? 1 : 0; let bn = 0;
   for (let t = 0; t < 8; t += dt) {
     const hit = flyStep(g, e, dt, 1, wind, 3, t < 0.3 ? owner : null);
+    if (kind === 'mortar' && hit && hit.type === 'terrain' && bn < 4 && mortarBounce(g, e)) { bn++; continue; }
     if (hit) return (hit.type === 'terrain' || hit.type === 'soldier') ? { x: e.x, y: e.y } : null;
   }
   return null;

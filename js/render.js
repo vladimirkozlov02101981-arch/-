@@ -205,6 +205,15 @@ class Renderer {
       c.save(); c.strokeStyle = 'rgba(255,40,40,0.55)'; c.lineWidth = 1.2; c.setLineDash([6, 4]); c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + Math.cos(aim) * d, my + Math.sin(aim) * d); c.stroke(); c.setLineDash([]);
       c.fillStyle = 'rgba(255,60,60,0.9)'; circ(c, mx + Math.cos(aim) * d, my + Math.sin(aim) * d, 2.2); c.restore();
     }
+    // подкрутка броска: круговая стрелка у бойца (вперёд — по ходу броска)
+    if (T.spin && SPIN_WEAPONS.has(T.weapon)) {
+      const dir = Math.cos(aim) >= 0 ? 1 : -1, cw = T.spin * dir > 0, cx = s.x + dir * 20, cy = s.y - 50, a0 = cw ? -2.4 : -0.7, a1 = cw ? -0.2 : -2.9;
+      c.save(); c.strokeStyle = T.spin > 0 ? '#ffd23a' : '#7fd0ff'; c.fillStyle = c.strokeStyle; c.lineWidth = 2.2;
+      c.beginPath(); c.arc(cx, cy, 8, a0, a1, !cw); c.stroke();
+      const ex = cx + Math.cos(a1) * 8, ey = cy + Math.sin(a1) * 8, ta = a1 + (cw ? Math.PI / 2 : -Math.PI / 2);
+      c.beginPath(); c.moveTo(ex + Math.cos(ta) * 5, ey + Math.sin(ta) * 5); c.lineTo(ex + Math.cos(ta + 2.4) * 4, ey + Math.sin(ta + 2.4) * 4); c.lineTo(ex + Math.cos(ta - 2.4) * 4, ey + Math.sin(ta - 2.4) * 4); c.closePath(); c.fill();
+      c.restore();
+    }
     if (!mine) return;
     const mx = ctl.mouseW.x, my = ctl.mouseW.y;
     if (T.weapon === 'girder') {

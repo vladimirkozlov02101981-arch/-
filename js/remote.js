@@ -30,7 +30,7 @@ class RemoteGame {
   buildVisual() { buildTerrainVisual(this.terrain, this.theme, this.map, this.raster, this.waterY); this.raster = null; }
   active() { return this.sView.get(this.turn.sid) || null; }
   decodeTurn(T) {
-    return { team: T.tm, sid: T.sid, time: T.t / 10, phase: T.ph, wind: T.wd, weapon: T.w, walk: T.wk, ox: T.ox, retreat: T.rt / 10, shots: T.sh, charge: T.ch >= 0 ? T.ch / 100 : -1, rot: T.ro, round: T.rd, target: T.tg ? { x: T.tg[0], y: T.tg[1] } : null };
+    return { team: T.tm, sid: T.sid, time: T.t / 10, phase: T.ph, wind: T.wd, weapon: T.w, walk: T.wk, ox: T.ox, retreat: T.rt / 10, shots: T.sh, charge: T.ch >= 0 ? T.ch / 100 : -1, rot: T.ro, spin: T.sp | 0, round: T.rd, target: T.tg ? { x: T.tg[0], y: T.tg[1] } : null };
   }
   onSnap(m) {
     this.lastRecv = performance.now();

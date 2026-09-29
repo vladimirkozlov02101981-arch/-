@@ -151,6 +151,7 @@ class LocalController {
       for (let i = 1; i <= 6; i++) if (P['Digit' + i]) this.category(sc, T, i - 1);
     }
     if (P.KeyR && T.weapon === 'girder' && canAct) this.send({ c: 'rot', d: 1 });
+    if (P.KeyR && SPIN_WEAPONS.has(T.weapon) && canAct && !this.charging) { this.send({ c: 'spin' }); Sfx.play('select'); }
     if (P.KeyP && (phase === 'aim' || phase === 'retreat')) this.send({ c: 'skip' });
     if (P.Space && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
     // в бинокль клик не стреляет: мышь ведёт обзор (кроме оружия с выбором точки)

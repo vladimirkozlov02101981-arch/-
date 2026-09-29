@@ -157,7 +157,7 @@ function drawSoldier(c, s, team, t, an) {
   if (holding) {
     const a = s.aim; const dx = Math.cos(a), dy = Math.sin(a);
     const gx = shX + dx * 7.2, gy = shY + dy * 7.2;
-    const two = !['grenade', 'cluster', 'sticky', 'blackhole', 'mine', 'dynamite', 'molotov', 'robot', 'medkit', 'skip', 'airstrike', 'lightning', 'orbital', 'nuke', 'teleport', 'girder'].includes(s.wpn);
+    const two = !['grenade', 'cluster', 'sticky', 'blackhole', 'mine', 'dynamite', 'molotov', 'robot', 'medkit', 'skip', 'airstrike', 'lightning', 'orbital', 'nuke', 'teleport', 'girder', 'boot', 'tpgrenade'].includes(s.wpn);
     const bx = two ? gx + dx * 6.4 : gx + dx * 0.5, by = two ? gy + dy * 6.4 : gy + dy * 0.5 + 1;
     const ke = ik2(shX, shY, bx, by, 6.4, 6.4, face); capsule(c, [[shX, shY], ke, [bx, by]], 2.9, colD); hand(c, bx, by);
     c.save(); c.translate(gx, gy); c.rotate(a); if (face < 0) c.scale(1, -1); drawHeld(c, s.wpn, t); c.restore();
@@ -214,6 +214,17 @@ function drawEntityBody(c, e, t, held) {
     case 'plasma':
       c.save(); c.shadowColor='#73eaff'; c.shadowBlur=18; c.fillStyle='#80e6ff'; circ(c,0,0,6); c.fillStyle='#fff'; circ(c,-1,-1,3);
       c.strokeStyle='#ba9bff';c.lineWidth=1.5;c.beginPath();c.ellipse(0,0,10,4,t*6,0,TAU);c.stroke();c.restore();break;
+    case 'acid': {
+      c.save(); c.shadowColor = '#b8ff3a'; c.shadowBlur = 10; c.fillStyle = '#9ef03a';
+      c.beginPath(); c.ellipse(0, 0, 6.5, 3.2, 0, 0, TAU); c.fill(); c.fillStyle = '#e8ffb0'; circ(c, 1.8, -0.8, 1.3);
+      c.fillStyle = 'rgba(150,230,60,0.55)'; circ(c, -7, 0.6, 2.2); circ(c, -11, -0.4, 1.4); c.restore(); break;
+    }
+    case 'tpg': {
+      const g = c.createRadialGradient(-1.2, -1.4, 0.4, 0, 0, 4.8); g.addColorStop(0, '#f4e2ff'); g.addColorStop(0.55, '#a45cff'); g.addColorStop(1, '#3c1470');
+      c.fillStyle = '#3a3f4a'; rrect(c, -4.4, -5.6, 8.8, 2.4, 1); c.fill(); c.fillStyle = g; circ(c, 0, 0.4, 4.6);
+      c.strokeStyle = 'rgba(230,200,255,0.85)'; c.lineWidth = 0.8; c.beginPath(); c.arc(0, 0.4, 2.6, t * 7, t * 7 + 3.6); c.stroke();
+      break;
+    }
     case 'rocket': drawRocketShape(c, '#5f7a45', '#d33', 15, 5, t, '#ffae3a'); break;
     case 'homing': drawRocketShape(c, '#e6edf5', '#2a7cff', 15, 5, t, e.s ? '#7fd0ff' : '#ffae3a'); break;
     case 'mini': drawRocketShape(c, '#8a8f5a', '#e5a02a', 10, 3.5, t, '#ffae3a'); break;
@@ -332,7 +343,7 @@ const ADDITIVE_KINDS = new Set(['fire', 'flame', 'bhole', 'orbital']);
 function drawEntity(c, e, t, sc) {
   if (ADDITIVE_KINDS.has(e.k)) return;
   c.save(); c.translate(e.x, e.y);
-  const rot = ['rocket', 'homing', 'mini', 'nukem', 'drill', 'mortar', 'bomb'].includes(e.k);
+  const rot = ['rocket', 'homing', 'mini', 'nukem', 'drill', 'mortar', 'bomb', 'acid'].includes(e.k);
   if (rot) c.rotate(e.a || 0);
   if (e.k === 'tomb' && sc) e.teamColor = sc.teams[e.team] ? sc.teams[e.team].color : '#fff';
   drawEntityBody(c, e, t, false);

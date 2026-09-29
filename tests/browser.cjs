@@ -32,7 +32,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await guest.waitForFunction(()=>UI.settings.perTeam===2&&UI.settings.turnTime===90);
     await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game.turn.phase==='aim',{timeout:60000});await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});
     await host.waitForTimeout(800);assert.equal(await mapHash(host),await mapHash(guest));
-    await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),37);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
+    await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),41);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
     // A real input action and pause must neutralize movement on the authoritative host.
     await host.keyboard.down('KeyD');await host.waitForTimeout(160);await host.keyboard.press('Escape');await host.keyboard.up('KeyD');
     await host.waitForSelector('#s-pause.show');assert.equal(await host.evaluate(()=>!!App.game.ctrl?.r),false);await host.click('[data-act="resume"]');
@@ -54,7 +54,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await host.waitForSelector('#s-over.show',{timeout:10000});await guest.waitForSelector('#s-over.show',{timeout:10000});
     await host.click('[data-act="rematch"]');await guest.waitForFunction(()=>UI.cur==='s-setup');await host.click('#btn-start');
     await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});assert.equal(await mapHash(host),await mapHash(guest));
-    console.log('Two clients: lobby, name editing, 37 weapon buttons, input reset, shot, terrain sync, hidden-tab recovery, chat, victory, rematch PASS');
+    console.log('Two clients: lobby, name editing, 41 weapon buttons, input reset, shot, terrain sync, hidden-tab recovery, chat, victory, rematch PASS');
     await guestCtx.close();await ctx.close();
     const checks=await browser.newContext({viewport:{width:1440,height:900}}),page=await checks.newPage();await ready(page);
     const physics=await page.evaluate(()=>{
@@ -77,11 +77,19 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
         for(let i=0;i<120;i++)a.step(1/60);
         effects[id]={events:a.events.length,finite:a.soldiers.every(s=>Number.isFinite(s.x)&&Number.isFinite(s.y)),handler:typeof FIRE[id]==='function'};
       }
+      // механика Territory War 3
+      const tw=makeAmmo('tw3');const tw3Set=Object.keys(tw).length===11&&tw.magnum===-1&&tw.grenade===-1;
+      const ac=arena();for(let y=250;y<420;y++)for(let x=300;x<320;x++)ac.terrain.mask[y*ac.W+x]=1;ac.turn.weapon='acid';ac.fire(ac.active(),{aim:-.02,pw:1});for(let i=0;i<90;i++)ac.step(1/60);const acidThrough=ac.soldiers[1].hp<100&&ac.soldiers[1].hp>=80;
+      const tp=arena();tp.turn.weapon='tpgrenade';tp.fire(tp.active(),{aim:-.8,pw:.45});for(let i=0;i<480&&tp.turn.sid===1&&tp.turn.phase==='use';i++)tp.step(1/60);const tpMoved=Math.abs(tp.soldiers[0].x-200)>40&&bodyFree(tp.terrain,tp.soldiers[0].x,tp.soldiers[0].y);
+      const bt=arena();bt.soldiers[1].x=215;bt.turn.weapon='boot';bt.fire(bt.active(),{aim:0,pw:1});const bootKick=bt.soldiers[1].vx>400&&bt.soldiers[1].vy>-300&&bt.soldiers[1].hp===85;
+      const mo=arena();for(let y=200;y<420;y++)for(let x=320;x<340;x++)mo.terrain.mask[y*mo.W+x]=1;mo.turn.weapon='mortar';mo.fire(mo.active(),{aim:-.1,pw:.5});let mortarBounced=0;for(let i=0;i<240;i++){mo.step(1/60);for(const e of mo.entities)if(e.k==='mortar')mortarBounced=Math.max(mortarBounced,e.bn|0);}
+      const shotAt=(y)=>{const h=arena(),a=h.active(),ang=Math.atan2(y-(a.y-GUN_Y),450-a.x);bullet(h,a,ang,1700,35,190,6,1,50);for(let i=0;i<30;i++)h.step(1/60);return 100-h.soldiers[1].hp;};
+      const magnum={head:shotAt(420-31),body:shotAt(420-12)};
       const ladder=arena();ladder.map.ladders=[{x:200,y1:300,y2:420}];const ls=ladder.active();ls.update(ladder,.1,{u:true,d:false,l:false,r:false});const climbed=ls.st==='climb'&&ls.y<420&&ladder.turn.walk<420;
-      return {burst,noFreeJump,delayed,bulletHit,openDamage,coveredDamage,noTunneling,effects,climbed};
+      return {burst,noFreeJump,delayed,bulletHit,openDamage,coveredDamage,noTunneling,effects,climbed,tw3Set,acidThrough,tpMoved,bootKick,mortarBounced,magnum};
     });
-    assert.deepEqual(physics.burst,{shots:3,ammo:0,phase:'retreat'});for(const key of ['noFreeJump','delayed','bulletHit','noTunneling','climbed'])assert(physics[key],key);assert(physics.coveredDamage<physics.openDamage*.5);assert(Object.values(physics.effects).every(e=>e.handler&&e.finite));
-    console.log('Physics and 37 weapon simulations',physics);
+    assert.deepEqual(physics.burst,{shots:3,ammo:0,phase:'retreat'});for(const key of ['noFreeJump','delayed','bulletHit','noTunneling','climbed','tw3Set','acidThrough','tpMoved','bootKick','mortarBounced'])assert(physics[key],key);assert(physics.magnum.head>=45&&physics.magnum.body>=30&&physics.magnum.body<=36,'magnum '+JSON.stringify(physics.magnum));assert(physics.coveredDamage<physics.openDamage*.5);assert(Object.values(physics.effects).every(e=>e.handler&&e.finite));
+    console.log('Physics and 41 weapon simulations',physics);
     fs.writeFileSync('test-results/physics.json',JSON.stringify(physics,null,2));
     for(const id of dimensions.map(m=>m.id)) {
       await page.evaluate(id=>{const settings={...App.prefs.settings,mapId:id,perTeam:2,turnTime:90,sd:0,crates:false};App.startLocal({mapId:id,settings,teams:App.prefs.teams},'hotseat');},id);

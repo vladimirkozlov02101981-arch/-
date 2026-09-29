@@ -25,7 +25,7 @@
         <div class="local-modes"><button class="btn secondary" data-act="cpu">Против компьютера <span>↗</span></button><button class="btn secondary" data-act="hotseat">На одном экране <span>↗</span></button></div>
         <button class="btn ghost" data-act="help"><span>⌘</span> Управление и арсенал</button>
       </div>
-      <div class="menu-facts"><div><strong>37</strong><span>вида оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока.<br>один победитель.</span></div></div>
+      <div class="menu-facts"><div><strong>41</strong><span>вида оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока.<br>один победитель.</span></div></div>
     </div>
     <div class="featured-map"><span class="eyebrow">ВЫБЕРИ СВОЁ ПОЛЕ БОЯ</span><div class="featured-title"><span id="featured-number">01 / 08</span><h2 id="featured-name">Зелёная долина</h2><div><button class="arrow-btn" data-act="map-prev" aria-label="Предыдущая карта">←</button><button class="arrow-btn" data-act="map-next" aria-label="Следующая карта">→</button></div></div><p id="featured-desc">Мельница на холме, пруд с мостом и тоннель под большим холмом</p><div class="map-dots" id="map-dots"></div><div class="static-label">◇ Фиксированная карта · Разрушаемое окружение</div></div>
     <footer class="menu-footer"><span>FRONTLINES / 01</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
@@ -72,11 +72,11 @@
           <div class="opts" id="opts">
             <label>Бойцов в команде<select id="o-perTeam"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
             <label>Здоровье<select id="o-hp"><option>50</option><option>75</option><option selected>100</option><option>150</option><option>200</option></select></label>
-            <label>Время хода<select id="o-turnTime"><option value="20">20 с</option><option value="30">30 с</option><option value="45" selected>45 с</option><option value="60">60 с</option><option value="90">90 с</option></select></label>
+            <label>Время хода<select id="o-turnTime"><option value="15">15 с (блиц)</option><option value="20">20 с</option><option value="30">30 с</option><option value="45" selected>45 с</option><option value="60">60 с</option><option value="90">90 с</option></select></label>
             <label>Ветер<select id="o-wind"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
             <label>Ящики с припасами<select id="o-crates"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
             <label>Внезапная смерть<select id="o-sd"><option value="0">Выкл</option><option value="6">После 6 раундов</option><option value="10" selected>После 10 раундов</option><option value="15">После 15 раундов</option></select></label>
-            <label>Арсенал<select id="o-arsenal"><option value="all" selected>Все 37 видов</option><option value="classic">Классический</option></select></label>
+            <label>Арсенал<select id="o-arsenal"><option value="all" selected>Все 41 вид</option><option value="classic">Классический</option><option value="tw3">Как в Territory War 3</option></select></label>
             <label id="o-ai-wrap">Сложность компьютера<select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
           </div>
         </div>
@@ -107,7 +107,7 @@
             <tr><td><kbd>Q</kbd> <kbd>E</kbd>, <kbd>1</kbd>–<kbd>6</kbd></td><td>Сменить оружие / категорию</td></tr>
             <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: вид плавно едет туда, куда ведёте мышь</td></tr>
             <tr><td>Колесо / <kbd>C</kbd></td><td>Немного приблизить или отдалить / вернуть камеру к бойцу</td></tr>
-            <tr><td><kbd>R</kbd></td><td>Повернуть балку</td></tr>
+            <tr><td><kbd>R</kbd></td><td>Повернуть балку / подкрутка гранаты</td></tr>
             <tr><td><kbd>P</kbd></td><td>Пропустить ход</td></tr>
             <tr><td><kbd>T</kbd></td><td>Чат (в онлайне)</td></tr>
             <tr><td><kbd>M</kbd> / <kbd>Esc</kbd></td><td>Звук / меню</td></tr>
