@@ -34,7 +34,7 @@ const App = {
     window.addEventListener('blur', () => { if (this.ctl) this.ctl.suspend(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.ctl) this.ctl.suspend(); });
     Input.onClickRight = () => this.toggleTray();
-    Input.onBinoc = (on) => { if (this.sc && !this.demo) { this.cam.binoc = on; if (on) UI.setTray(false); } };
+    Input.onBinoc = (on) => { if (this.sc && !this.demo) { this.cam.binoc = on; if (on) UI.setTray(false); else this.cam.free = 0; } };
     Input.onWheel = (dy, x, y) => { if (this.sc && !this.demo) this.cam.zoomAt(dy > 0 ? 0.9 : 1.11, x, y, this.ren.sw, this.ren.sh); };
     this.fx.onOver = (ev) => this.onOver(ev);
     this.fx.onTurn = (ev) => this.onTurnEv(ev);
@@ -262,7 +262,7 @@ const App = {
     if (P.Tab) this.toggleTray();
     if (P.KeyM) { Sfx.toggle(); UI.updateSoundIcon(); }
     if (!this.sc || this.demo) return;
-    if (P.KeyB) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); }
+    if (P.KeyB) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }
     if (P.KeyC) { this.cam.binoc = false; this.cam.free = 0; this.cam.userZ = null; }
     if (P.KeyT && (this.mode === 'host' || this.mode === 'guest') && !UI.chatOpen) UI.openChat();
   },
@@ -310,6 +310,7 @@ const App = {
     if (this.remote) this.remote.update(dt, this.fx);
     const turn = this.remote ? this.remote.latestTurn : sc.turn;
     if (this.ctl) this.ctl.binoc = this.cam.binoc;
+    Input.binocOn = this.cam.binoc;
     if (this.ctl && !document.hidden && !this.paused && !UI.chatOpen && !UI.cur) this.ctl.update(dt, sc, this.cam, sw, sh, turn); else if (this.ctl) this.ctl.suspend();
     this.fx.update(this.paused ? 0 : dt, sc, this.cam, sw, sh);
     this.cam.update(dt, sc, this.fx, sw, sh, Input.mouse);

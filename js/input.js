@@ -14,11 +14,14 @@ const Input = {
       this.keys[e.code] = true;
     });
     window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
-    window.addEventListener('blur', () => { this.keys = {}; this.mouse.down = [false, false, false]; });
+    window.addEventListener('blur', () => { this.keys = {}; this.mouse.down = [false, false, false]; this.releaseRight(); });
+    window.addEventListener('contextmenu', (e) => { if (this.drag || this.binocOn) e.preventDefault(); });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('mousemove', (e) => {
       const dx = e.clientX - this.mouse.x, dy = e.clientY - this.mouse.y;
       this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.moved = true;
+      // кнопку отпустили там, где событие не дошло (за окном, над интерфейсом) — бинокль всё равно выключаем
+      if (this.drag && this.drag.btn === 2 && !(e.buttons & 2)) { this.releaseRight(); return; }
       if (this.drag) { this.drag.dist += Math.abs(dx) + Math.abs(dy); this.checkBinoc(); }
     });
     cv.addEventListener('mousedown', (e) => {
@@ -31,13 +34,16 @@ const Input = {
     });
     window.addEventListener('mouseup', (e) => {
       this.mouse.down[e.button] = false;
-      if (this.drag && this.drag.btn === e.button) {
-        if (this.drag.binoc) { if (this.onBinoc) this.onBinoc(false); }
-        else if (e.button === 2 && this.onClickRight) this.onClickRight();
-        this.drag = null;
-      }
+      if (e.button === 2) this.releaseRight(true);
+      else if (this.drag && this.drag.btn === e.button) this.drag = null;
     });
     cv.addEventListener('wheel', (e) => { e.preventDefault(); if (this.onWheel) this.onWheel(e.deltaY, e.clientX, e.clientY); }, { passive: false });
+  },
+  /** отпускание ПКМ: бинокль выключается всегда (даже включённый клавишей B); короткий клик без бинокля — арсенал */
+  releaseRight(click = false) {
+    const d = this.drag; this.drag = null;
+    if ((d && d.binoc) || this.binocOn) { if (this.onBinoc) this.onBinoc(false); }
+    else if (click && d && d.btn === 2 && this.onClickRight) this.onClickRight();
   },
   checkBinoc() {
     const d = this.drag; if (!d || d.binoc || d.btn !== 2) return;
