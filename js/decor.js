@@ -17,6 +17,13 @@ function foliage(c, blobs, pal) {
     for(let i=0;i<=24;i++){const a=i/24*TAU,rr=b.r*(.82+rnd()*.21),x=b.x+Math.cos(a)*rr,y=b.y+Math.sin(a)*rr; if(i===0)c.moveTo(x,y);else c.lineTo(x,y);}c.closePath();c.fill();
     for(let i=0;i<42;i++){const a=rnd()*TAU,d=Math.sqrt(rnd())*b.r*.95; c.globalAlpha=.15+rnd()*.3;c.fillStyle=pal[i%3];c.beginPath();c.ellipse(b.x+Math.cos(a)*d,b.y+Math.sin(a)*d,1+rnd()*2,.6+rnd()*1.3,-.6,0,TAU);c.fill();}c.globalAlpha=1;
   }
+  // объём кроны: солнечный ободок сверху-слева и тень снизу-справа поверх всех шаров
+  c.save(); c.lineCap = 'round';
+  for (const b of blobs) {
+    c.globalAlpha = 0.45; c.strokeStyle = pal[2]; c.lineWidth = Math.max(1, b.r * 0.14); c.beginPath(); c.arc(b.x, b.y, b.r * 0.86, -2.7, -1.2); c.stroke();
+    c.globalAlpha = 0.28; c.strokeStyle = '#0c140c'; c.lineWidth = Math.max(1, b.r * 0.22); c.beginPath(); c.arc(b.x, b.y, b.r * 0.8, 0.2, 1.9); c.stroke();
+  }
+  c.restore();
 }
 function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
@@ -26,6 +33,7 @@ const DECOR = {
   oak(c, g, x, y, s, r) {
     const h = r.range(58, 76) * s, tw = r.range(7, 9.5) * s, lean = r.range(-0.1, 0.1);
     const tx = x + lean * h, ty = y - h;
+    c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(x + 10 * s, y + 2, 34 * s, 5 * s, 0, 0, TAU); c.fill();   // тень кроны на земле
     c.fillStyle = hgrad(c, x - tw, x + tw, ['#6b4a2e', '#523620', '#2f1d10']);
     c.beginPath(); c.moveTo(x - tw * 1.2, y + 4); c.quadraticCurveTo(x - tw * 0.4, y - h * 0.35, tx - tw * 0.32, ty + h * 0.15);
     c.lineTo(tx + tw * 0.32, ty + h * 0.15); c.quadraticCurveTo(x + tw * 0.4, y - h * 0.35, x + tw * 1.2, y + 4); c.closePath(); c.fill();
@@ -57,6 +65,11 @@ const DECOR = {
       c.beginPath(); c.moveTo(x, by - th); c.lineTo(x + tw, by);
       const n = 6; for (let j = n; j >= 0; j--) c.lineTo(x - tw + 2 * tw * j / n, by + (j % 2 ? 3 * s : 0));
       c.closePath(); c.fill();
+      // иголки: короткие светлые штрихи от ствола, тёмная нижняя кромка яруса
+      c.save(); c.clip(); c.lineWidth = 0.9 * s; c.lineCap = 'round';
+      for (let q = 0; q < 14; q++) { const u = r() * 2 - 1, yy = by - th * (0.15 + r() * 0.7); c.strokeStyle = u < 0 ? 'rgba(170,220,140,0.35)' : 'rgba(10,30,15,0.3)'; c.beginPath(); c.moveTo(x + u * tw * 0.2, yy); c.lineTo(x + u * tw * 0.9, yy + th * 0.28); c.stroke(); }
+      c.fillStyle = 'rgba(5,20,10,0.3)'; c.fillRect(x - tw, by - 3 * s, tw * 2, 6 * s);
+      c.restore();
       if (snowy) {
         c.fillStyle = '#f4f8ff';
         c.beginPath(); c.moveTo(x, by - th); c.lineTo(x + tw * 0.8, by - 2 * s); c.lineTo(x + tw * 0.45, by - 4.5 * s); c.lineTo(x, by - th + 9 * s);
@@ -241,7 +254,7 @@ const DECOR = {
       c.beginPath(); c.moveTo(x - half * 0.95 * s, yy + 2 * s); c.lineTo(x + half * 0.95 * s, yy + 2 * s);
       c.quadraticCurveTo(x + half * 1.05 * s, yy + sh * 0.6, x + half * 0.85 * s, yy + sh);
       for (let i = 6; i >= 0; i--) c.lineTo(x - half * 0.85 * s + i / 6 * half * 1.7 * s, yy + sh + (i % 2 ? -8 : 2) * s);
-      c.quadraticCurveTo(x - half * 1.05 * s, yy + sh * 0.6, x - half * 0.95 * s, yy + 2 * s); c.closePath(); c.fill();
+      c.quadraticCurveTo(x - half * 1.05 * s, yy + sh * 0.6, x - half * 0.95 * s, yy + 2 * s); c.closePath(); c.fill();
       // объём паруса: наполнен ветром — светлая середина, тени к краям, швы полотнищ
       c.save(); c.clip();
       { const gx = c.createLinearGradient(x - half * s, 0, x + half * s, 0); gx.addColorStop(0, 'rgba(60,40,20,0.35)'); gx.addColorStop(0.35, 'rgba(255,250,235,0.12)'); gx.addColorStop(0.5, 'rgba(255,255,245,0.22)'); gx.addColorStop(0.75, 'rgba(90,60,30,0.08)'); gx.addColorStop(1, 'rgba(50,30,15,0.4)'); c.fillStyle = gx; c.fillRect(x - half * 1.1 * s, yy, half * 2.2 * s, sh + 10 * s); }

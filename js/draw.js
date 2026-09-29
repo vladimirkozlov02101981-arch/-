@@ -111,10 +111,12 @@ function drawSoldier(c, s, team, t, an) {
   if (s.st === 'fly') { c.translate(0, -18); c.rotate(s.rot); c.translate(0, 18); }
   else if (s.st === 'dead') { c.translate(0, -2); c.rotate(face * 1.45); c.translate(0, 2); }
   const climb = s.st === 'climb';
-  const bob = s.st === 'stand' && !dead ? Math.sin(t * 2.4 + s.id) * 0.45 : 0;
-  const lean = s.st === 'walk' ? face * 1.2 : 0;
+  // ходьба: корпус пружинит в такт шагам и наклонён вперёд; в покое — дыхание
+  const walking = s.st === 'walk' && !dead;
+  const bob = walking ? -Math.abs(Math.sin(an.walk)) * 1.5 + 0.6 : s.st === 'stand' && !dead ? Math.sin(t * 2.4 + s.id) * 0.45 : 0;
+  const lean = walking ? face * (1.9 + Math.sin(an.walk * 2) * 0.35) : 0;
   // реалистичные пропорции: рост ~36 px, голова ~1/7 роста, плечо на высоте GUN_Y
-  const hipX = lean * 0.3, hipY = -15.5;
+  const hipX = lean * 0.3, hipY = -15.5 + (walking ? bob * 0.8 : 0);
   const nX = lean, nY = -27 + bob;
   let f1, f2;
   if (s.st === 'walk') { const ph = an.walk; f1 = [Math.sin(ph) * 6, -Math.max(0, Math.cos(ph)) * 3.4]; f2 = [Math.sin(ph + Math.PI) * 6, -Math.max(0, Math.cos(ph + Math.PI)) * 3.4]; }
