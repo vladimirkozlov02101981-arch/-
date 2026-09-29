@@ -1,6 +1,7 @@
 'use strict';
 /* =========================================================
-   Процедурный звук на WebAudio (без внешних файлов)
+   Звук на WebAudio: настоящие записи (CC0) с пространственной
+   обработкой; процедурный синтез — для остального и как запасной
    ========================================================= */
 const Sfx = (() => {
   let ac = null, master = null, noiseBuf = null, comp = null, reverb = null, scene = null;
@@ -23,6 +24,7 @@ const Sfx = (() => {
       reverb=ac.createConvolver();reverb.connect(master);makeImpulse();
       const len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      loadSamples();
     } catch (e) { ac = null; }
   }
   function resume() { init(); if (ac && ac.state === 'suspended') ac.resume(); }
@@ -154,6 +156,57 @@ const Sfx = (() => {
     thunder(pos) { const t = ac.currentTime, d = out(pos, 0.8); noise(d, t, 2.4, { f0: 420, f1: 60, gain: 0.5, attack: 0.25 }); tone(d, t + 0.1, 1.8, { f0: 48, f1: 30, gain: 0.35, attack: 0.3 }); },
     bombdrop(pos) { const t = ac.currentTime, d = out(pos, 0.7); tone(d, t, 1.4, { f0: 1500, f1: 420, gain: 0.07, attack: 0.05 }); noise(d, t, 0.12, { type: 'highpass', f0: 2500, gain: 0.25 }); },
   };
+  /* ---------- настоящие записи (CC0, assets/sfx) поверх той же пространственной цепочки ---------- */
+  const R4 = (p) => [0, 1, 2, 3].map(i => p + i);
+  const REAL = {
+    shot: { f: ['shot1', 'shot2', 'shot3'], v: 0.8, r: [0.94, 1.08] },
+    revolver: { f: ['revolver1', 'revolver2'], v: 0.9, r: [0.96, 1.04] },
+    sniper: { f: ['sniper1', 'sniper2'], v: 1, r: [0.88, 0.96] },
+    shotgun: { f: ['shotgun1', 'shotgun2'], v: 1, r: [0.95, 1.03] },
+    autocannon: { f: ['cannon1', 'cannon2'], v: 0.9, r: [1.08, 1.2] },
+    launch: { f: ['launch1', 'launch2'], v: 0.75, r: [0.95, 1.05] },
+    small: { f: ['small1', 'boom1', 'boom2'], v: 0.5, r: [1.15, 1.3] },
+    bounce: { f: ['bounce1', 'bounce2'], v: 0.45, r: [0.9, 1.1], o: 0.1 },
+    laser: { f: ['rail'], v: 0.8, r: [0.95, 1.02] },
+    zap: { f: ['zap', 'rail'], v: 0.8, r: [0.9, 1.1] },
+    thunder: { f: ['thunder'], v: 1, r: [0.9, 1.05], o: 0.8 },
+    metalImpact: { f: ['ric1', 'ric2', ...R4('metal')], v: 0.45, r: [0.92, 1.1] },
+    woodImpact: { f: R4('wood'), v: 0.5, r: [0.9, 1.1] },
+    stoneImpact: { f: [...R4('stone'), 'ric1', 'ric2'], v: 0.4, r: [0.95, 1.15] },
+    land: { f: R4('land'), v: 0.55, r: [0.9, 1.05] },
+    bat: { f: R4('punch'), v: 0.9, r: [0.85, 0.95] },
+    hurt: { f: R4('punch'), v: 0.35, r: [1.1, 1.3] },
+    splash: { f: ['splash1', 'splash2'], v: 0.8, r: [0.85, 1] },
+    select: { f: ['switch'], v: 0.45, r: [0.95, 1.05], ui: true },
+  };
+  const STEPS = { 1: 'stepGrass', 2: 'stepStone', 3: 'stepStone', 4: 'stepWood', 5: 'stepStone', 6: 'stepStone', 7: 'stepSnow', 8: 'stepStone', 9: 'stepStone' };
+  const buffers = {};
+  function loadSamples() {
+    const names = new Set(Object.values(REAL).flatMap(e => e.f).concat(['boom1', 'boom2', 'boom3', 'boom4']));
+    for (const k of ['stepGrass', 'stepStone', 'stepSnow', 'stepWood']) for (const n of R4(k)) names.add(n);
+    for (const n of names) fetch(`assets/sfx/${n}.ogg`).then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => ac.decodeAudioData(b)).then(buf => { let pk = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i += 2) pk = Math.max(pk, Math.abs(d[i])); } buffers[n] = { buf, norm: clamp(0.9 / (pk || 1), 0.4, 6) }; }).catch(() => { /* останется синтез */ });
+  }
+  function sample(n, pos, vol, rate = 1, offset = 0) {
+    const e = buffers[n]; if (!e) return false; const b = e.buf;   // громкость выровнена по пику записи
+    const src = ac.createBufferSource(); src.buffer = b; src.playbackRate.value = rate;
+    src.connect(out(pos, vol * e.norm)); src.start(ac.currentTime, Math.min(offset, b.duration - 0.05)); return true;
+  }
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const rr = ([a, b]) => a + Math.random() * (b - a);
+  function real(name, pos, arg) {
+    if (name === 'explosion') {
+      // запись взрыва + синтезированный низкий удар для веса; крупные взрывы ниже и громче
+      const size = clamp(arg || 1, 0.6, 3), n = pick(size > 1.6 ? ['boom3', 'boom4', 'boom1'] : ['boom1', 'boom2', 'boom4']);
+      if (!sample(n, pos, Math.min(1.1, 0.62 + size * 0.2), rr([0.84, 0.98]) / Math.sqrt(Math.max(1, size * 0.8)), n === 'boom3' ? 0.45 : 0)) return false;
+      const t = ac.currentTime, d = out(pos, 0.55 + size * 0.15); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.8 }); return true;
+    }
+    if (name === 'footstep') {
+      const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1;
+      return sample(pick(R4(STEPS[mat] || 'stepStone')), pos, mat === 1 ? 0.6 : 0.45, rr([0.92, 1.08]));
+    }
+    const e = REAL[name]; if (!e) return false;
+    return sample(pick(e.f), e.ui ? null : pos, e.v, rr(e.r), e.o || 0);
+  }
   let silent = false;
   function setSilent(v) { silent = !!v; if (silent) chargeStop(); }
   function play(name, pos, arg) {
@@ -161,7 +214,7 @@ const Sfx = (() => {
     const now = ac.currentTime;
     if (last[name] !== undefined && now - last[name] < (minGap[name] || 0.015)) return;
     last[name] = now;
-    try { S[name] && S[name](pos, arg); } catch (e) { /* ignore */ }
+    try { if (!real(name, pos, arg)) S[name] && S[name](pos, arg); } catch (e) { /* ignore */ }
   }
   /* непрерывный звук зарядки выстрела */
   function chargeStart() {
