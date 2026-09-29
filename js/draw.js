@@ -193,10 +193,18 @@ function drawSoldier(c, s, team, t, an) {
   } else if (an.blink > 0 || s.hurt > 0) {
     c.strokeStyle = '#3a2418'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(eyeX - 0.9, eyeY + 0.2); c.lineTo(eyeX + 0.9, eyeY + 0.2); c.stroke();
   } else {
-    c.fillStyle = '#f4efe8'; c.beginPath(); c.ellipse(eyeX, eyeY, 1.05, 0.72, 0, 0, TAU); c.fill();
-    c.fillStyle = '#2a1c16'; circ(c, eyeX + ex * 0.35, eyeY + ey * 0.3, 0.52);
+    // глаз: белок с тенью от века, цветная радужка, зрачок, блик — живой взгляд
+    c.fillStyle = '#f7f2ea'; c.beginPath(); c.ellipse(eyeX, eyeY, 1.25, 0.95, 0, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(90,50,40,0.22)'; c.beginPath(); c.ellipse(eyeX, eyeY - 0.45, 1.25, 0.5, 0, Math.PI, TAU); c.fill();
+    const ix = eyeX + ex * 0.3, iy = eyeY + ey * 0.25 + 0.05;
+    c.fillStyle = s.id % 3 === 0 ? '#3f7fb8' : s.id % 3 === 1 ? '#6b4a2a' : '#4f7a3a'; circ(c, ix, iy, 0.68);
+    c.fillStyle = '#140c08'; circ(c, ix, iy, 0.36);
+    c.fillStyle = '#ffffff'; circ(c, ix - 0.22, iy - 0.25, 0.2);
+    c.strokeStyle = '#2a1810'; c.lineWidth = 0.45; c.beginPath(); c.ellipse(eyeX, eyeY, 1.3, 0.98, 0, Math.PI * 1.05, TAU * 0.98); c.stroke();   // верхнее веко
   }
-  c.strokeStyle = '#4a2c1c'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(eyeX - 1.1, eyeY - 1.5); c.lineTo(eyeX + 1.2, eyeY - 1.3); c.stroke();   // бровь
+  c.strokeStyle = '#3a2214'; c.lineWidth = 0.85; c.beginPath(); c.moveTo(eyeX - 1.3, eyeY - 1.5); c.quadraticCurveTo(eyeX, eyeY - 2.1, eyeX + 1.4, eyeY - 1.55); c.stroke();   // бровь
+  c.fillStyle = 'rgba(255,120,100,0.22)'; c.beginPath(); c.ellipse(hx + face * 2.8, hy + 1.9, 1.3, 0.8, 0, 0, TAU); c.fill();   // тёплая щека
+  c.strokeStyle = 'rgba(255,240,220,0.55)'; c.lineWidth = 0.6; c.beginPath(); c.ellipse(hx, hy, R - 0.2, R * 1.12 - 0.2, 0, Math.PI * 1.05, Math.PI * 1.5); c.stroke();   // контровой свет по краю головы
   c.strokeStyle = 'rgba(80,40,30,0.7)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(hx + face * 2.2, hy + 3); c.lineTo(hx + face * 3.8, hy + 2.9); c.stroke();   // рот
   const hat = team ? team.hat : 'helmet';
   c.save(); c.translate(hx, hy); c.scale(0.74, 0.74); drawHat(c, hat, col, 0, hat === 'helmet' || !hat ? -0.6 : -1.8, face); c.restore();
