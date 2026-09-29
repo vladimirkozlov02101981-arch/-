@@ -111,11 +111,21 @@ class FX {
     }
     const n = Math.min(60, 10 + r * 0.8);
     this.lights.push({ x, y, r: r * 4.5 + 40, life: 0.35, max: 0.35, col: k === 3 ? '#b36cff' : k === 5 ? '#9fd0ff' : '#ffb347' });
-    for (let i = 0; i < 6 + r / 5; i++) P.fire(x + rand(-r * 0.3, r * 0.3), y + rand(-r * 0.3, r * 0.3), rand(-70, 70), rand(-100, 20), rand(r * 0.35, r * 0.62) + 3, rand(0.22, 0.5));
+    // клубящийся огненный шар: крупные долгоживущие языки пламени, поднимаются вверх
+    for (let i = 0; i < 12 + r / 3; i++) P.fire(x + rand(-r * 0.4, r * 0.4), y + rand(-r * 0.4, r * 0.3), rand(-90, 90), rand(-160, 10), rand(r * 0.55, r * 0.95) + 4, rand(0.35, 0.8));
     if (k !== 5) for (let i = 0; i < 5 + r / 5; i++) P.smoke(x + rand(-r * 0.4, r * 0.4), y + rand(-r * 0.4, r * 0.2), rand(-40, 40), rand(-70, -10), rand(r * 0.25, r * 0.45) + 3, rand(1.1, 2.4), pick(['#3a3a3a', '#555555', '#6a6a6a']), 2.2, 0.75);
     for (let i = 0; i < n; i++) { const a = rand(-Math.PI, 0.3); const sp = rand(120, 420) * (0.6 + r / 70); P.debris(x + rand(-r * 0.3, r * 0.3), y + rand(-r * 0.3, r * 0.3), Math.cos(a) * sp, Math.sin(a) * sp, rand(1.6, 4.2), pick(deb), rand(1.2, 2.6)); }
     for (let i = 0; i < 10 + r / 4; i++) { const a = rand(0, TAU); const sp = rand(200, 520); P.spark(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 100, rand(0.2, 0.5), k === 3 ? '#e0b0ff' : k === 5 ? '#bfe6ff' : '#ffe9a0'); }
     if (r > 14) P.ring(x, y, r * 0.4, r * 1.9, 0.32, '#ffffff', 3);
+    // мощь: раскалённое ядро, вспышка экрана, пыль по земле, тёплая ударная волна, тлеющие угольки
+    if (k !== 5 && k !== 3) {
+      P.fire(x, y, 0, -25, r * 1.4 + 8, 0.28);
+      if (r > 30) { this.flash = Math.max(this.flash || 0, Math.min(0.3, r / 240)); this.flashCol = '#fff1d0'; }
+      const dust = [G.soil, G.strata[0], G.strata[1] || G.strata[0]];
+      for (let i = 0; i < 8 + r / 6; i++) { const sd = i % 2 ? 1 : -1; P.smoke(x + sd * rand(0, r * 0.6), y + r * 0.25, sd * rand(60, 190), rand(-18, 4), rand(r * 0.3, r * 0.55) + 4, rand(1.2, 2.3), pick(dust), 1.7, 0.55); }
+      if (r > 14) P.ring(x, y, r * 0.3, r * 2.7, 0.5, '#ffb060', 2);
+      for (let i = 0; i < 8 + r / 5; i++) P.spark(x + rand(-r / 2, r / 2), y, rand(-120, 120), rand(-280, -80), rand(0.9, 1.7), pick(['#ff9a3a', '#ffcf6a', '#ff6a2a']));
+    }
     this.shake = Math.max(this.shake, Math.min(22, r * 0.28));
     Sfx.play(r > 35 ? 'explosion' : 'small', { x, y }, r / 45);
     if (r > 25) this.focus = { x, y, t: 0.9 };
