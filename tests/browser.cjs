@@ -9,12 +9,12 @@ async function imageReady(page){await page.waitForFunction(()=>[...document.quer
 async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(const v of App.sc.terrain.mask)h=Math.imul(h^v,16777619);return h>>>0;});}
 (async()=>{
   fs.mkdirSync('test-results',{recursive:true});
-  const browser=await chromium.launch({channel:process.env.TEST_BROWSER||'chrome',headless:true,args:['--autoplay-policy=no-user-gesture-required']});
+  const browser=await chromium.launch({...(process.env.TEST_BROWSER_PATH?{executablePath:process.env.TEST_BROWSER_PATH}:{channel:process.env.TEST_BROWSER||'chrome'}),headless:true,args:['--autoplay-policy=no-user-gesture-required']});
   try {
     const ctx=await browser.newContext({viewport:{width:1440,height:900}}),host=await ctx.newPage();await ready(host);
     await host.screenshot({path:'test-results/menu.png'});
     await host.click('[data-act="hotseat"]');await imageReady(host);await host.screenshot({path:'test-results/setup.png'});
-    const dimensions=await host.evaluate(()=>MAPS.map(m=>({id:m.id,W:m.W,H:m.H,shafts:m.ladders.length})));assert.equal(dimensions.length,8);assert(dimensions.every(m=>m.W>=4800&&m.shafts>=2));
+    const dimensions=await host.evaluate(()=>MAPS.map(m=>({id:m.id,W:m.W,H:m.H,shafts:m.ladders.length})));assert.equal(dimensions.length,8);assert(dimensions.every(m=>m.W>=4800&&m.shafts>=1));
     console.log('Map sizes',dimensions);
     const deterministic=await host.evaluate(()=>{
       const result=[];

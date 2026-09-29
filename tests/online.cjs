@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const base=process.env.TEST_URL||'http://localhost:3000';
 const hash=()=>{let h=2166136261;for(const v of App.sc.terrain.mask)h=Math.imul(h^v,16777619);return h>>>0;};
 (async()=>{
-  const browser=await chromium.launch({channel:'chrome',headless:true});
+  const browser=await chromium.launch({...(process.env.TEST_BROWSER_PATH?{executablePath:process.env.TEST_BROWSER_PATH}:{channel:process.env.TEST_BROWSER||'chrome'}),headless:true});
   const errors=[];
   try {
     const hostCtx=await browser.newContext({viewport:{width:1440,height:900}}),guestCtx=await browser.newContext({viewport:{width:1440,height:900}});
