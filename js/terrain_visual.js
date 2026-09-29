@@ -388,7 +388,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (fy < 2.6) f *= 1.18; else if (fy > ph - 2) f *= 0.72;
           if (fx < 2.4) f *= 1.06; else if (fx > segL - 2) f *= 0.8;
           if (prm && prm.h > 60) f *= 1.06 - 0.3 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h));   // объём корпуса: низ темнее
-          else if (!prm && S.glass && !isBack) f *= 1.1 - Math.min(1, Math.max(0, (y - S.hullTop) / 420)) * 0.42;   // выпуклый корпус: светлее у борта, темнее к килю
+          else if (!prm && S.glass && !isBack) f *= 1.18 - Math.min(1, Math.max(0, (y - S.hullTop) / 380)) * 0.6;   // выпуклый корпус: светлее у борта, темнее к килю
           r = P.base[0] * f * (1 + hue); g = P.base[1] * f; bl = P.base[2] * f * (1 - hue);
           { const nx2 = Math.min(Math.abs(fx - 3.5), Math.abs(fx - (segL - 3.5))), ny2 = Math.abs(fy - ph * 0.5); if (nx2 * nx2 + ny2 * ny2 < 1.8) { r = 44; g = 36; bl = 30; o.spec = 0.8; } else if (nx2 < 2.2 && ny2 < 2.2 && fy > ph * 0.5) { r *= 0.8; g *= 0.8; bl *= 0.8; } }   // гвозди с тенью
         }
@@ -786,8 +786,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     // россыпь мелких полевых цветов по всей траве: цветные точки-головки на коротких стеблях
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
-      if (y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || rng() > 0.09 || !flatTop(x, y)) continue;
-      const h = 4 + rng() * 11, fx = x + (rng() - 0.5) * 3, col = rng.pick(G.cap.flowers), rr = 1.1 + rng() * 1.1;
+      if (y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || rng() > 0.16 || !flatTop(x, y)) continue;
+      const h = 8 + rng() * 14, fx = x + (rng() - 0.5) * 3, col = rng.pick(G.cap.flowers), rr = 1.6 + rng() * 1.4;
       c.strokeStyle = '#3e6e1e'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(fx, y + 1); c.lineTo(fx + (rng() - 0.5) * 2, y - h); c.stroke();
       c.fillStyle = css(shadec(col, 0.7)); c.beginPath(); c.arc(fx + 0.4, y - h + 0.4, rr, 0, TAU); c.fill();
       c.fillStyle = col; c.beginPath(); c.arc(fx, y - h, rr * 0.85, 0, TAU); c.fill();
@@ -899,8 +899,11 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     // снежные подушки с бликом
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; if (y > waterY - 2 || rng() > 0.3) continue;
-      const rx = 2.4 + rng() * 3, ry = 1.3 + rng() * 1.4;
-      c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(x, y + 0.6, rx, ry, 0, 0, TAU); c.fill();
+      // сугробы: комья разной высоты с голубой тенью снизу и искрами
+      const lump = Math.max(0, fbm1(x / 26, seed + 51, 2)) * 5, rx = 3 + rng() * 4, ry = 1.3 + rng() * 1.4 + lump;
+      c.fillStyle = '#8aa0c8'; c.beginPath(); c.ellipse(x + 0.8, y + 1.6, rx, ry, 0, 0, TAU); c.fill();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(x, y + 0.6 - lump * 0.3, rx, ry, 0, 0, TAU); c.fill();
+      if (rng() < 0.08) { c.fillStyle = '#e8f6ff'; c.fillRect(x - 0.5, y - ry * 0.6, 1, 1); }
     }
     c.fillStyle = 'rgba(210,240,255,0.95)';
     for (let k = 0; k < tops.length; k += 2) { if (rng() > 0.05) continue; c.fillRect(tops[k] + (rng() - 0.5) * 3, tops[k + 1] + 1 + rng() * 10, 1.2, 1.2); }

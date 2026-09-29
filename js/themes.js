@@ -16,9 +16,9 @@ const THEMES = {
     clouds: { n: 9, color: '#ffffff', shade: '#c5d8ec', alpha: 0.95 },
     liquid: { kind: 'water', top: '#5cbcef', mid: '#2a7fc0', deep: '#0b3560', foam: '#effbff', alpha: 0.82 },
     ground: {
-      cap: { cols: ['#a6bc44', '#5a8220', '#2a4410'], thick: 12, blades: ['#7ea02c', '#5e8420', '#a0bc44', '#406a16', '#8aac34'], flowers: ['#e8302a', '#f2c830', '#f4f0e0', '#4a7aff', '#ff5d8f', '#f2c830'] },
-      soil: '#5e3a20', soilDepth: 26,
-      strata: ['#aa7248', '#98663e', '#b27e52', '#8e5e3a', '#a47046'], band: 46, bandSharp: 0.6,
+      cap: { cols: ['#bcd048', '#5e8a20', '#2a4410'], thick: 12, blades: ['#88ac2c', '#5e8420', '#c8e04a', '#406a16', '#a0c03c'], flowers: ['#e8302a', '#f2c830', '#f4f0e0', '#4a7aff', '#ff5d8f', '#f2c830'] },
+      soil: '#553722', soilDepth: 26,
+      strata: ['#8e6446', '#7e583c', '#966c4c', '#765236', '#8a6242'], band: 46, bandSharp: 0.6,
       rock: ['#a39c92', '#8f887e', '#b3aba0', '#7e776e'],
       pebbles: ['#7a7672', '#86827e', '#6e6a66', '#8e8a86', '#7e7670', '#72706c'], smoothStones: true,
       outline: '#2c1a0d', rim: '#b89a78', sun: '#ffe0a0', veins: null, ceiling: 'roots', capMats: [1],
@@ -154,7 +154,7 @@ const THEMES = {
     ground: {
       cap: { cols: ['#c0d864', '#789e38', '#3c6a22'], thick: 11, blades: ['#8cb84a', '#6f9a36', '#aacc5c', '#557e2c'], flowers: ['#ffffff', '#ffd93d', '#ff7a9a'] },
       soil: '#4e3220', soilDepth: 40, sun: '#ffb060',
-      strata: ['#a0704a', '#b07e56', '#8e6440', '#b88a62'], band: 38, bandSharp: 0.4,
+      strata: ['#8e6a4c', '#9a7658', '#806046', '#a07c5e'], band: 38, bandSharp: 0.4,
       rock: ['#8e8478', '#7a7266', '#9c9286'],
       pebbles: ['#86796c', '#7a6e62', '#928476', '#7e7064'], smoothStones: true,
       outline: '#23170c', veins: null, ceiling: 'roots', capMats: [1],
