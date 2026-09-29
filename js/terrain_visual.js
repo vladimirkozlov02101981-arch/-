@@ -410,6 +410,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const outl = hex2rgb(G.outline); const capThick = G.cap.thick * 1.45;
   const rim = hex2rgb(G.rim || theme.sky[1]);
   const tint = hex2rgb(theme.backTint || '#0a0e1a');
+  const bounce = hex2rgb(theme.sky[2] || theme.sky[1]);
   const img = T.ctx.createImageData(W, H); const px = img.data;
   let hasBack = false; for (let i = 0; i < N; i++) if (back[i] && !m[i]) { hasBack = true; break; }
   const bimg = hasBack ? T.dctx.createImageData(W, H) : null; const bpx = bimg ? bimg.data : null;
@@ -440,7 +441,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         // затенение впадин и глубина массива
         const aoW = d < 36 ? 1 : d > 90 ? 0 : 1 - (d - 36) / 54;
         f *= 1 + aoW * (occ < 0.5 ? (0.5 - occ) * 0.34 : -(occ - 0.5) * 0.62);
-        if (d > 22) f *= 1 - Math.min(1, (d - 22) / 280) * 0.3;
+        if (d > 14) f *= 1 - Math.min(1, (d - 14) / 200) * 0.48;                 // глубина массива заметно темнее — объём как в CGI
         if (BD[i] < 10 && mt !== 8) f *= 0.7 + BD[i] * 0.03;                  // низ навесов темнее
         const shd = dd <= 30 ? shadowAt(x, y) : 0;                              // отброшенная тень
         if (shd > 0.02) f *= 1 - shd * 0.42;
@@ -459,6 +460,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
           const k = (1 - (dd - 3) / 6) * Math.min(1, (LZ - 0.12 - lam) * 2.2) * 0.42;
           r += (rim[0] - r) * k; g += (rim[1] - g) * k; bl += (rim[2] - bl) * k;
         }
+        // отражённый свет неба: поверхность получает оттенок горизонта — передний план в тон картине
+        if (dd < 60) { const kb = (1 - dd / 60) * 0.16; r += (bounce[0] - r) * kb; g += (bounce[1] - g) * kb; bl += (bounce[2] - bl) * kb; }
         const j = i * 4; px[j] = r; px[j + 1] = g; px[j + 2] = bl; px[j + 3] = 255;
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
@@ -504,10 +507,11 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       const x = tops[k], y = tops[k + 1];
       if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y)) continue;
       const clump = fbm1(x / 38, seed + 3, 2);
-      if (rng() > 0.42 + Math.max(0, clump) * 0.5) continue;
-      const nb = 1 + ((rng() * (clump > 0.1 ? 3 : 2)) | 0);
+      if (rng() > 0.72 + Math.max(0, clump) * 0.4) continue;
+      // пышная трава: высокие густые пучки
+      const nb = 2 + ((rng() * (clump > 0.1 ? 5 : 3)) | 0);
       for (let j = 0; j < nb; j++) {
-        const h = 4 + rng() * 6 + Math.max(0, clump) * 10, lean = (rng() - 0.5) * 6, w = 0.9 + rng() * 0.9;
+        const h = 9 + rng() * 10 + Math.max(0, clump) * 14, lean = (rng() - 0.5) * 9, w = 1.1 + rng() * 1.2;
         const bx = x + (rng() - 0.5) * 2, L = layers[(rng() * 3) | 0];
         L.moveTo(bx - w, y + 2.5); L.quadraticCurveTo(bx - w * 0.2 + lean * 0.35, y - h * 0.55, bx + lean, y - h);
         L.quadraticCurveTo(bx + w * 0.4 + lean * 0.35, y - h * 0.45, bx + w, y + 2.5); L.closePath();
@@ -521,11 +525,28 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     c.restore();
     if (G.cap.glowBlades && gc) { gc.save(); gc.globalAlpha = 0.55; gc.fillStyle = pick(2); gc.fill(layers[2]); gc.fill(layers[1]); gc.restore(); }
   }
+  // кусты: объёмные кроны из нескольких шаров с бликом и тенью у земли
+  if (G.cap.blades && !G.cap.snow) {
+    const leaf = G.cap.blades; let lastX = -999;
+    for (let k = 0; k < tops.length; k += 2) {
+      const x = tops[k], y = tops[k + 1];
+      if (x - lastX < 140 || y > waterY - 8 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || rng() > 0.02) continue;
+      lastX = x; const R = 9 + rng() * 9, n = 4 + ((rng() * 3) | 0);
+      c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(x, y + 1.5, R * 1.5, R * 0.3, 0, 0, TAU); c.fill();
+      for (let j = 0; j < n; j++) {
+        const bx = x + (j / (n - 1) - 0.5) * R * 1.8, by = y - R * (0.55 + Math.sin(j / (n - 1) * Math.PI) * 0.5), rr = R * (0.55 + rng() * 0.3);
+        const gr = c.createRadialGradient(bx - rr * 0.35, by - rr * 0.45, rr * 0.1, bx, by, rr);
+        gr.addColorStop(0, css(shadec(leaf[Math.min(leaf.length - 1, 2)], 1.25))); gr.addColorStop(0.55, leaf[0]); gr.addColorStop(1, css(shadec(leaf[Math.min(leaf.length - 1, 3)], 0.6)));
+        c.fillStyle = gr; c.beginPath(); c.arc(bx, by, rr, 0, TAU); c.fill();
+      }
+      if (G.cap.flowers && rng() < 0.6) { c.fillStyle = rng.pick(G.cap.flowers); for (let j = 0; j < 6; j++) { c.beginPath(); c.arc(x + (rng() - 0.5) * R * 1.8, y - R * (0.4 + rng() * 0.8), 1.4, 0, TAU); c.fill(); } }
+    }
+  }
   if (G.cap.flowers) {
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
-      if (y > waterY - 6 || y > beachY || rng() > 0.016 || matAt(x, y) !== 1 || !flatTop(x, y)) continue;
-      const h = 5 + rng() * 6; const col = rng.pick(G.cap.flowers);
+      if (y > waterY - 6 || y > beachY || rng() > 0.04 || matAt(x, y) !== 1 || !flatTop(x, y)) continue;
+      const h = 8 + rng() * 10; const col = rng.pick(G.cap.flowers);
       c.strokeStyle = '#3f8f2a'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, y + 1); c.quadraticCurveTo(x + (rng() - 0.5) * 3, y - h * 0.5, x + (rng() - 0.5) * 2, y - h); c.stroke();
       c.fillStyle = css(shadec(col, 0.75));
       for (let p = 0; p < 5; p++) { const a = p / 5 * TAU + 0.3; c.beginPath(); c.arc(x + Math.cos(a) * 2.1, y - h + Math.sin(a) * 2.1 + 0.4, 1.7, 0, TAU); c.fill(); }
