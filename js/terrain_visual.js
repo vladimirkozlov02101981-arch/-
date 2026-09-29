@@ -381,7 +381,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       }
       case 5: { // бетон, окна, дорога
         const base = P.base; let f = 0.9 + n2 * 0.12 + (n3 - 0.5) * 0.1;
-        f *= 0.93 + tileAt(tl.t1, x * 2, y * 4, 1, 19) * 0.14;                                      // фактура штукатурки/плитки
+        f *= 0.9 + tileAt(tl.t1, x * 2, y * 4, 1, 19) * 0.2;                                      // фактура штукатурки/плитки
         // бетон: заполнитель (крапинки), швы опалубки, потёки дождя, трещины
         if (n1 > 0.9) f *= 1.1; else if (n1 < 0.08) f *= 0.84;
         const rain = tileAt(tl.t3, x * 5, y * 0.3, 3); if (rain > 0.6) f *= 1 - (rain - 0.6) * 0.5;
@@ -465,14 +465,16 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       case 8: { // кристалл: неправильные грани (ячейки Вороного), плавный перелив цвета, светлые рёбра, свечение изнутри
         const V = S.vs, vi = ((y & 255) << 8) | (x & 255), id = V.id[vi];
         const A = P.a || [95, 244, 255], B = P.b || [184, 108, 255];
-        const h = V.rnd[id] * 0.6 + tileAt(tl.t3, x, y, 5, 7) * 0.4;
+        const h = V.rnd[id] * 0.15 + tileAt(tl.t3, x, y, 5, 7) * 0.85;
         r = A[0] + (B[0] - A[0]) * h; g = A[1] + (B[1] - A[1]) * h; bl = A[2] + (B[2] - A[2]) * h;
         // грань — плоскость со своим наклоном: освещённость зависит от случайной нормали ячейки и положения в ней
-        const tilt = (V.rnd2[id] - 0.5) * 0.7, ox = -V.vx[vi] * 0.5, oy = -V.vy[vi] * 0.5;
-        let f = 0.72 + tilt + (-(ox * LX + oy * LY)) * 0.012;
+        // стекло/кристалл: плавный объём по расстоянию до края (френель), слабые грани, одна дуга блика
+        const tilt = (V.rnd2[id] - 0.5) * 0.22, ox = -V.vx[vi] * 0.5, oy = -V.vy[vi] * 0.5;
+        const dn = Math.min(1, d / 30);
+        let f = 0.62 + dn * 0.28 + tilt;
         const ed = V.ed[vi];
-        if (ed < 5) f = 1.35 + (5 - ed) * 0.06;                                                    // светлое ребро
-        else if (ed < 12) f *= 0.86;                                                               // тень у ребра
+        if (ed < 3) f += 0.18;                                                                     // тонкое светлое ребро
+        if (t > 4 && t < 8 && d > 5 && n2 > 0.3) f += 0.5 * (1 - Math.abs(t - 6) / 2);             // дуга блика под верхней кромкой
         r *= f; g *= f; bl *= f;
         { const core = Math.max(0, 1 - Math.hypot(ox, oy) / 14); r += core * 30; g += core * 34; bl += core * 44; }   // свет изнутри
         if (d < 5) { const k = (1 - d / 5) * 0.5; r += (255 - r) * k; g += (255 - g) * k; bl += (255 - bl) * k; }       // френель по кромке
@@ -658,8 +660,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
-        let wd = 16; for (let q = 1; q < 16; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = (back[i] <= 2 ? 0.3 + (1 - occ) * 0.5 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (0.55 + 0.45 * Math.min(1, wd / 16)); const j = i * 4;
+        let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
+        const k = (back[i] <= 2 ? 0.3 + (1 - occ) * 0.5 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
@@ -721,7 +723,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     c.fillStyle = pick(0); c.fill(layers[1]);
     c.fillStyle = css(shadec(pick(2), 1.08)); c.fill(layers[2]);
     c.restore();
-    if (G.cap.glowBlades && gc) { gc.save(); gc.globalAlpha = 0.28; gc.fillStyle = pick(2); gc.fill(layers[2]); gc.restore(); }
+    if (G.cap.glowBlades && gc) { gc.save(); gc.globalAlpha = 0.9; gc.fillStyle = pick(2); for (let k = 0; k < tops.length; k += 2) { if (rng() > 0.05) continue; const x = tops[k], y = tops[k + 1]; if (matAt(x, y) !== 1) continue; gc.beginPath(); gc.arc(x + (rng() - 0.5) * 6, y - 8 - rng() * 12, 1.4 + rng() * 1.2, 0, TAU); gc.fill(); } gc.restore(); }
   }
   // кусты: объёмные кроны из нескольких шаров с бликом и тенью у земли
   if (G.cap.blades && !G.cap.snow) {
@@ -786,13 +788,12 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       let ok = true; for (const [dx, dy] of [[-12, 0], [12, 0], [0, -12], [0, 12]]) if (!T.isSolid(x + dx, py + dy) || matAt(x + dx, py + dy) !== 4) ok = false;
       if (!ok) continue; lastP = x;
       c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.arc(x + 1.5, py + 2, 9, 0, TAU); c.fill();
-      const br = c.createLinearGradient(x - 9, py - 9, x + 9, py + 9); br.addColorStop(0, '#ffe29a'); br.addColorStop(0.5, '#c08a3a'); br.addColorStop(1, '#6a4418');
+      const br = c.createLinearGradient(x - 9, py - 9, x + 9, py + 9); br.addColorStop(0, '#d8b068'); br.addColorStop(0.5, '#b08a40'); br.addColorStop(1, '#5a3c16');
       c.fillStyle = br; c.beginPath(); c.arc(x, py, 8.5, 0, TAU); c.fill();
-      const gl = c.createRadialGradient(x - 2, py - 2, 1, x, py, 6); gl.addColorStop(0, '#ffd27a'); gl.addColorStop(0.7, '#c86a20'); gl.addColorStop(1, '#5a2a10');
+      const gl = c.createRadialGradient(x - 2, py - 2, 1, x, py, 6); gl.addColorStop(0, '#4a6a70'); gl.addColorStop(0.6, '#1a2a30'); gl.addColorStop(1, '#0a1216');
       c.fillStyle = gl; c.beginPath(); c.arc(x, py, 5.8, 0, TAU); c.fill();
       c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(x - 2.2, py - 2.4, 2, 1, -0.6, 0, TAU); c.fill();
       c.fillStyle = '#3a2410'; for (let q = 0; q < 6; q++) { const a = q / 6 * TAU; c.beginPath(); c.arc(x + Math.cos(a) * 7.2, py + Math.sin(a) * 7.2, 0.8, 0, TAU); c.fill(); }
-      if (gc) { gc.fillStyle = 'rgba(255,170,70,0.6)'; gc.beginPath(); gc.arc(x, py, 8, 0, TAU); gc.fill(); }
     }
   }
   // фонари под деревянными потолками: висят на верёвке, заливают заднюю стену тёплым светом

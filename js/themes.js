@@ -107,7 +107,7 @@ const THEMES = {
     clouds: { n: 4, color: '#6a3fa0', shade: '#3a1f66', alpha: 0.45 },
     liquid: { kind: 'acid', top: '#b6ff5a', mid: '#4fcf2a', deep: '#0f4a16', foam: '#eaffc0', alpha: 0.9 },
     ground: {
-      cap: { cols: ['#62f5cf', '#33c9a6', '#1d8f7b'], thick: 6, blades: ['#5ff4d0', '#3fd8b4', '#8affe0', '#34c29d'], glowBlades: true, bushPal: ['#2a1450', '#5a2a9a', '#b058e0', '#ffb0ff'] },
+      cap: { cols: ['#62f5cf', '#33c9a6', '#1d8f7b'], thick: 6, blades: ['#1f8a86', '#16706e', '#3ad0c0', '#0c4a50'], glowBlades: true, bushPal: ['#2a1450', '#5a2a9a', '#b058e0', '#ffb0ff'] },
       soil: '#4a2f73', soilDepth: 14,
       strata: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98', '#50387a'], band: 28, bandSharp: 0.3,
       rock: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98'],
