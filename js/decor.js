@@ -508,8 +508,36 @@ function drawDecorItem(fn, c, g, x, y, s, r, flip, o) {
   c.restore(); if (g) g.restore();
 }
 
+/** общий свет для всех объектов карты: края силуэта, обращённые к солнцу, светлеют, противоположные уходят в тень */
+function lightDecorLayer(cv) {
+  const W = cv.width, H = cv.height, x = cv.getContext('2d', { willReadFrequently: true }), S = 192, P = 4;
+  const ll = Math.hypot(LIGHT.x, LIGHT.y), lx = LIGHT.x / ll, ly = LIGHT.y / ll;
+  for (let y0 = 0; y0 < H; y0 += S) {
+    const ya = Math.max(0, y0 - P), yb = Math.min(H, y0 + S + P), h = yb - ya;
+    const img = x.getImageData(0, ya, W, h), d = img.data;
+    let any = false; for (let i = 3; i < d.length; i += 64) if (d[i]) { any = true; break; }
+    if (!any) continue;
+    const A = new Float32Array(W * h); for (let i = 0; i < W * h; i++) A[i] = d[i * 4 + 3] / 255;
+    boxBlurF32(A, W, h, 2);
+    const r0 = Math.max(1, y0 - ya), r1 = Math.min(h - 1, y0 - ya + S);
+    for (let yy = r0; yy < r1; yy++) for (let xx = 1; xx < W - 1; xx++) {
+      const i = yy * W + xx, j = i * 4; if (!d[j + 3]) continue;
+      const lit = -((A[i + 1] - A[i - 1]) * lx + (A[i + W] - A[i - W]) * ly);
+      const f = 1 + Math.max(-0.42, Math.min(0.5, lit * 1.25));
+      if (f > 1) { const w = f - 1; d[j] = Math.min(255, d[j] * f + w * 40); d[j + 1] = Math.min(255, d[j + 1] * f + w * 26); d[j + 2] = Math.min(255, d[j + 2] * f + w * 6); }
+      else { d[j] *= f; d[j + 1] *= f; d[j + 2] = d[j + 2] * f + (1 - f) * 18; }
+    }
+    x.putImageData(img, 0, ya);
+  }
+}
 function placeDecor(T, theme, map, waterY, tops, mat) {
-  const c = T.dctx, g = T.gctx; const r = makeRng((map.seed || 1) * 7919 + 13);
+  // объекты рисуются на отдельный слой, освещаются одним солнцем и переносятся на слой декора
+  const layer = makeCanvas(T.W, T.H), c = layer.getContext('2d', { willReadFrequently: true });
+  placeDecorOn(T, theme, map, waterY, tops, mat, c);
+  lightDecorLayer(layer); T.dctx.drawImage(layer, 0, 0);
+}
+function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
+  const g = T.gctx; const r = makeRng((map.seed || 1) * 7919 + 13);
   DECOR_THEME = theme.id;
   for (const d of map.decor || []) {
     const [kind, x, y0, s = 1, flip = false, opts] = d;
