@@ -5,7 +5,7 @@
    ========================================================= */
 const CAM_PRI = { rocket: 3, homing: 3, mortar: 3, drill: 3, mini: 2, grenade: 3, cluster: 3, sticky: 3, molotov: 3, bholeg: 3, bhole: 3, dynamite: 2, robot: 3, bomb: 2, nukem: 4, orbital: 3, jet: 1, frag: 1, bomblet: 1 };
 
-CAM_PRI.plasma = 3;
+CAM_PRI.plasma = 3; CAM_PRI.bullet = 2;   // камера следит и за пулями
 
 /* Камера. Отдалиться до всей карты нельзя: масштаб ограничен рядом с базовым,
    а дальние участки осматриваются биноклем — вид плавно едет туда, куда ведут мышь. */
@@ -48,7 +48,11 @@ class Camera {
         else { const a = sc.soldiers.find(s => s.id === sc.turn.sid); if (a && !a.gone) target = { x: a.x, y: a.y - 50 }; }
       }
     }
-    if (target) { const k = 1 - Math.exp(-dt * 3.4); this.x += (target.x - this.x) * k; this.y += (target.y - this.y) * k; }
+    if (target) {
+      // снаряд у края или за экраном — камера догоняет его быстро, иначе плавно
+      const far = Math.abs(target.x - this.x) * this.z > sw * 0.3 || Math.abs(target.y - this.y) * this.z > sh * 0.3;
+      const k = 1 - Math.exp(-dt * (far ? 10 : 3.4)); this.x += (target.x - this.x) * k; this.y += (target.y - this.y) * k;
+    }
     this.z += (this.tz - this.z) * (1 - Math.exp(-dt * 7));
     this.clampTo(sc, sw, sh);
     const s = fx.shake; this.sx = s ? (Math.random() * 2 - 1) * s : 0; this.sy = s ? (Math.random() * 2 - 1) * s : 0;
@@ -183,6 +187,16 @@ class Renderer {
   drawWorldAids(c, sc, ctl, t) {
     const T = sc.turn; if (T.phase !== 'aim') return;
     const s = sc.soldiers.find(o => o.id === T.sid); if (!s || !s.alive) return;
+    // границы запаса хода: радиус по горизонтали от точки начала хода
+    if (T.ox !== undefined) {
+      c.save(); c.setLineDash([6, 6]); c.lineWidth = 2;
+      for (const bx of [T.ox - WALK_BUDGET, T.ox + WALK_BUDGET]) {
+        const near = Math.abs(s.x - bx) < 160;
+        c.strokeStyle = near ? 'rgba(255,190,90,0.85)' : 'rgba(255,255,255,0.28)';
+        c.beginPath(); c.moveTo(bx, s.y - 90); c.lineTo(bx, s.y + 30); c.stroke();
+      }
+      c.restore();
+    }
     const mine = ctl && ctl.mine;
     const aim = mine ? ctl.aim : s.aim;
     if (T.weapon === 'sniper') {

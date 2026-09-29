@@ -20,6 +20,8 @@ function onGround(T, x, y) { return T.isSolid(x - 3, y) || T.isSolid(x, y) || T.
 /** уступ до MANTLE px с ровным верхом боец преодолевает шагом (ступени, края мостов, плиты);
     крутой склон так не взять — впереди должна быть площадка */
 const MANTLE = 14;
+/** запас хода — радиус по горизонтали от точки начала хода: назад и по лестницам можно сколько угодно */
+function walkOk(g, s, nx) { const o = g.turn.ox, d = Math.abs(nx - o); return d <= WALK_BUDGET || d < Math.abs(s.x - o); }
 function mantleFrom(T, x, y, dir) {
   for (let up = MAX_CLIMB + 1; up <= MANTLE; up++) {
     if (!bodyFree(T, x, y - up)) return null;
@@ -71,10 +73,11 @@ class Soldier {
   fly() { if (this.st === 'dead' && !this.alive) { this.st = 'fly'; } else if (this.st !== 'fly') { this.st = 'fly'; this.vrot = rand(-7, 7); } this.y -= 1; }
   setAim(a) { this.aim = angNorm(a); const c = Math.cos(this.aim); if (Math.abs(c) > 0.02) this.face = c > 0 ? 1 : -1; }
   jump(g, dir) {
-    if (!['stand','walk','climb'].includes(this.st) || !this.alive || g.turn.walk < 36) return;
-    const d = dir || this.face; this.face = d;
+    const d = dir || this.face;
+    if (!['stand','walk','climb'].includes(this.st) || !this.alive || (g.turn.ox === undefined ? g.turn.walk < 36 : !walkOk(g, this, this.x + d * 40))) return;
+    this.face = d;
     this.st = 'air'; this.vx = d * JUMP_VX; this.vy = -JUMP_VY; this.y -= 1;
-    g.turn.walk = Math.max(0, g.turn.walk - 36);
+    if (g.turn.ox === undefined) g.turn.walk = Math.max(0, g.turn.walk - 36);
     g.emit({ t: 'jump', x: R1(this.x), y: R1(this.y) });
   }
   tryStep(T, dir) {
@@ -108,7 +111,7 @@ class Soldier {
     if (this.y - 8 > g.waterY || this.y > g.H + 40) { this.drown(g); return; }
     this.thrust = false;
     const ladder = (g.map.ladders || []).find(l => Math.abs(l.x-this.x)<19 && this.y>=l.y1-8 && this.y<=l.y2+8);
-    if (this.alive && ladder && ctrl && ctrl.u !== ctrl.d && this.st !== 'jet' && this.st !== 'fly' && this.st !== 'climb' && g.turn.walk > 0) {
+    if (this.alive && ladder && ctrl && ctrl.u !== ctrl.d && this.st !== 'jet' && this.st !== 'fly' && this.st !== 'climb' && (g.turn.ox !== undefined || g.turn.walk > 0)) {
       // наверху «вверх» ничего не делает, внизу «вниз» — тоже
       const atTop = this.y <= ladder.y1 + 4 && this.st !== 'air', atBottom = this.y >= ladder.y2 - 2 && onGround(T, this.x, this.y);
       if ((ctrl.u && !atTop) || (ctrl.d && !atBottom)) { if (bodyFree(T, ladder.x, this.y)) { this.x = ladder.x; this.st = 'climb'; } }
@@ -121,15 +124,17 @@ class Soldier {
         if (bodyFree(T, ladder.x + d * 12, this.y)) this.x = ladder.x + d * 12;
         this.st='air'; this.vx = d * 75; return;
       }
-      if(ctrl && ctrl.u!==ctrl.d && g.turn.walk>0){
-        const dist=Math.min(65*dt,g.turn.walk); let ny=this.y+(ctrl.u?-dist:dist);
+      // по лестнице запас хода не тратится: он считается только по горизонтали от точки начала хода
+      const legacy = g.turn.ox === undefined;
+      if(ctrl && ctrl.u!==ctrl.d && (!legacy || g.turn.walk>0)){
+        const dist=legacy?Math.min(65*dt,g.turn.walk):65*dt; let ny=this.y+(ctrl.u?-dist:dist);
         if (ctrl.u && ny <= ladder.y1 - 4) {
           // выбрались наверх: шагаем на площадку рядом с шахтой
           const p = ladderTopExit(T, ladder, this.face);
-          if (p) { this.face = p.x > ladder.x ? 1 : -1; this.x = p.x; this.y = p.y; this.st = 'stand'; g.turn.walk -= dist; return; }
+          if (p) { this.face = p.x > ladder.x ? 1 : -1; this.x = p.x; this.y = p.y; this.st = 'stand'; if (legacy) g.turn.walk -= dist; return; }
           ny = Math.max(ny, ladder.y1 - 8);
         }
-        if(bodyFree(T,ladder.x,ny)){this.x=ladder.x;this.y=ny;g.turn.walk-=dist;}
+        if(bodyFree(T,ladder.x,ny)){this.x=ladder.x;this.y=ny;if(legacy)g.turn.walk-=dist;}
         else if (ctrl.d && onGround(T, this.x, this.y)) this.st = 'stand';
       }
       return;
@@ -139,14 +144,15 @@ class Soldier {
         if (!onGround(T, this.x, this.y) && bodyFree(T, this.x, this.y + 1)) { this.st = 'air'; this.vx = 0; this.vy = 0; this.maxVy = 0; break; }
         if (!bodyFree(T, this.x, this.y)) this.unstick(T);
         let moving = false;
-        if (ctrl && ctrl.l !== ctrl.r && this.alive && g.turn.walk > 0) {
+        const legacy = g.turn.ox === undefined;
+        if (ctrl && ctrl.l !== ctrl.r && this.alive && (!legacy || g.turn.walk > 0)) {
           const dir = ctrl.l ? -1 : 1;
           this.walkAcc += WALK_SPEED * dt;
           while (this.walkAcc >= 1) {
             this.walkAcc -= 1;
-            if (g.turn.walk <= 0) { this.walkAcc = 0; break; }
+            if (legacy ? g.turn.walk <= 0 : !walkOk(g, this, this.x + dir)) { this.walkAcc = 0; break; }
             if (this.tryStep(T, dir)) {
-              moving = true; g.turn.walk -= 1;
+              moving = true; if (legacy) g.turn.walk -= 1;
               this.footDistance=(this.footDistance||0)+1;
               if(this.footDistance>=22){this.footDistance=0;g.emit({t:'footstep',x:R1(this.x),y:R1(this.y)});}
               if (!onGround(T, this.x, this.y)) { this.st = 'air'; this.vx = dir * 45; this.vy = 0; this.maxVy = 0; break; }

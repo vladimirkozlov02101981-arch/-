@@ -175,7 +175,7 @@ class Game {
     if (W.shots && T.shots < W.shots) { T.phase = 'aim'; return; }
     if (W.free) { T.phase = 'aim'; T.shots = 0; if (!this.canUse(this.teams[T.team], W.id)) T.weapon = 'bazooka'; return; }
     if (W.ends) { this.endTurn(); return; }
-    T.phase = 'retreat'; T.retreat = RETREAT_TIME;
+    T.phase = 'retreat'; T.retreat = RETREAT_TIME; T.idle = 0;
   }
   /* ---------- цикл ---------- */
   step(dt) {
@@ -194,6 +194,8 @@ class Game {
       let done = false; try { done = this.usage.update(this, dt); } catch (e) { console.error(e); done = true; }
       if (done && T.phase === 'use') this.afterUse(); else if (done) this.usage = null;
     }
+    // запас хода — оставшийся радиус по горизонтали от точки начала хода
+    if (T.ox !== undefined && act && act.alive && (T.phase === 'aim' || T.phase === 'retreat')) T.walk = Math.max(0, WALK_BUDGET - Math.abs(act.x - T.ox));
     switch (T.phase) {
       case 'wait': T.delay -= dt; if (T.delay <= 0) this.beginTurn(); break;
       case 'crate': T.delay -= dt; if ((T.delay <= 0 && !this.anyBusy()) || T.delay < -6) this.nextTurn(); break;
@@ -202,20 +204,25 @@ class Game {
         if (T.weapon === 'jetpack') { T.time -= dt; if (T.time <= 0) { T.time = 0; if (act && act.st === 'jet') act.st = 'air'; } }
         if (!act || !act.alive) { this.usage = null; this.endTurn(); }
         break;
-      case 'retreat': T.retreat -= dt; if (T.retreat <= 0 || !act || !act.alive) this.endTurn(); break;
-      case 'settle': T.delay -= dt; if ((T.delay <= 0 && !this.anyBusy()) || T.delay < -14) { T.phase = 'wait'; T.delay = 0.35; } break;
+      case 'retreat': {
+        // отступление заканчивается сразу, как всё успокоилось и игрок не двигается
+        T.retreat -= dt; const c = this.ctrl, moving = c && (c.l || c.r || c.u || c.d);
+        T.idle = !moving && act && act.st === 'stand' && !this.anyBusy() ? (T.idle || 0) + dt : 0;
+        if (T.retreat <= 0 || !act || !act.alive || T.idle > 0.6) this.endTurn(); break;
+      }
+      case 'settle': T.delay -= dt; if ((T.delay <= 0 && !this.anyBusy()) || T.delay < -14) { T.phase = 'wait'; T.delay = 0; } break;
     }
   }
   endTurn() {
     const T = this.turn; if (T.phase === 'settle' || T.phase === 'over' || T.phase === 'wait' || T.phase === 'crate') return;
-    T.phase = 'settle'; T.delay = 0.7; T.charge = -1; this.usage = null; this.ctrl = null;
+    T.phase = 'settle'; T.delay = 0.1; T.charge = -1; this.usage = null; this.ctrl = null;
     const a = this.active(); if (a && a.st === 'jet') a.st = 'air';
   }
   aliveTeams() { return this.teams.filter(t => this.soldiers.some(s => s.team === t.idx && s.alive)); }
   beginTurn() {
     const alive = this.aliveTeams();
     if (alive.length <= 1) { this.finish(alive[0] || null); return; }
-    if (this.cfg.settings.crates && this.round > 0 && Math.random() < 0.35 && this.dropCrate()) { this.turn.phase = 'crate'; this.turn.delay = 1.2; return; }
+    if (this.cfg.settings.crates && this.round > 0 && Math.random() < 0.35 && this.dropCrate()) { this.turn.phase = 'crate'; this.turn.delay = 0.6; return; }
     this.nextTurn();
   }
   dropCrate() {
@@ -249,7 +256,7 @@ class Game {
       if (!this.sdStarted) { this.sdStarted = true; this.emit({ t: 'msg', txt: 'ВНЕЗАПНАЯ СМЕРТЬ: вода поднимается!', c: '#4fc3ff', big: 1 }); }
     }
     const wind = this.cfg.settings.wind ? Math.round(rand(-1, 1) * MAX_WIND) : 0;
-    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, round: this.round });
+    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : 'bazooka', walk: WALK_BUDGET, ox: s.x, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, round: this.round });
     this.ctrl = null; this.usage = null;
     this.emit({ t: 'turn', team: ti, sid: s.id });
   }
@@ -268,7 +275,7 @@ class Game {
   }
   turnSnap() {
     const T = this.turn;
-    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.round, ro: T.rot, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0 };
+    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.round, ro: T.rot, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0 };
   }
   teamsSnap() { return this.teams.map(t => ({ a: t.ammo, d: t.dmg, k: t.kills })); }
   snapshot() {
