@@ -104,13 +104,13 @@ function stoneAt(S, o, ox, oy, rad, ph, pc, n1, n2, r, g, bl) {
     const k = e < 0.3 ? e * 0.9 : Math.min(0.92, 0.27 + (e - 0.3) * 1.1);
     const nx = Math.cos(ca) * k * 0.6 + (ox / R) * 0.4, ny = Math.sin(ca) * k * 0.6 + (oy / R) * 0.4, nz = Math.sqrt(Math.max(0.02, 1 - nx * nx - ny * ny));
     const lam = nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z;
-    let f = 0.22 + 1.2 * Math.max(0, lam) + (n1 - 0.5) * 0.18 + (n2 - 0.5) * 0.1;
-    { const hx = ox / R + 0.32, hy = oy / R + 0.42, hs = hx * hx + hy * hy; if (hs < 0.06) f += (1 - hs / 0.06) * 0.55; }   // мягкий блик
+    let f = 0.32 + 1.15 * Math.max(0, lam) + (n1 - 0.5) * 0.18 + (n2 - 0.5) * 0.1;
+    { const hx = ox / R + 0.32, hy = oy / R + 0.42, hs = hx * hx + hy * hy; if (hs < 0.08) f += (1 - hs / 0.08) * 0.7; }   // мягкий блик
     if (e > 0.88) f *= 0.72 + (1 - e) * 2.2;
     const so = S.soil, lo = ny > 0.15 ? (ny - 0.15) * 0.35 : 0;                     // отсвет тёплой земли на нижних гранях
     let rr = (pc[0] * (1 - lo) + so[0] * 1.5 * lo) * f, gg = (pc[1] * (1 - lo) + so[1] * 1.25 * lo) * f, bb = (pc[2] * (1 - lo) + so[2] * lo) * f;
     if (lam > 0.86) { const h = (lam - 0.86) * 3.2; rr += h * 60; gg += h * 52; bb += h * 38; }   // тусклый тёплый блик
-    if (e > 0.8 && -(ox * LIGHT.x + oy * LIGHT.y) < -0.4 * Math.hypot(ox, oy)) { const q = (e - 0.8) / 0.2 * 0.7, sc = S.sun || [200, 184, 154]; rr += (sc[0] - rr) * q; gg += (sc[1] - gg) * q; bb += (sc[2] - bb) * q; }   // светлая кромка к солнцу
+    if (e > 0.7 && -(ox * LIGHT.x + oy * LIGHT.y) < -0.3 * Math.hypot(ox, oy)) { const q = Math.min(1, (e - 0.7) / 0.2) * 0.75, sc = S.sun || [200, 184, 154]; rr += (sc[0] - rr) * q; gg += (sc[1] - gg) * q; bb += (sc[2] - bb) * q; }   // светлая кромка к солнцу
     if (oy > R * 0.35 && n1 > 0.78) { const so2 = S.soil; rr = so2[0] * 1.1; gg = so2[1] * 1.05; bb = so2[2]; }   // налипшая земля снизу
     o.r = rr; o.g = gg; o.b = bb; return;
   }
@@ -629,7 +629,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         // затенение впадин и глубина массива
         const aoW = d < 36 ? 1 : d > 90 ? 0 : 1 - (d - 36) / 54;
         f *= 1 + aoW * (occ < 0.5 ? (0.5 - occ) * 0.34 : -(occ - 0.5) * 0.62);
-        if (d > 14) f *= 1 - Math.min(1, (d - 14) / 260) * (mt === 1 ? 0.26 : 0.4);                 // глубина массива заметно темнее — объём как в CGI
+        if (d > 14) f *= 1 - Math.min(1, (d - 14) / 260) * (mt === 1 ? 0.26 : mt >= 3 && mt <= 6 ? 0.12 : 0.4);                 // глубина массива заметно темнее — объём как в CGI
         if (BD[i] < 10 && mt !== 8) f *= 0.7 + BD[i] * 0.03;                  // низ навесов темнее
         const shd = dd <= 30 ? shadowAt(x, y) : 0;                              // отброшенная тень
         if (shd > 0.02) f *= 1 - shd * 0.42;
@@ -661,7 +661,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = (back[i] <= 2 ? 0.3 + (1 - occ) * 0.5 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
+        const k = (back[i] <= 2 ? 0.3 + (1 - occ) * 0.5 : back[i] === 3 ? 0.74 + (1 - occ) * 0.22 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
@@ -794,6 +794,31 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       c.fillStyle = gl; c.beginPath(); c.arc(x, py, 5.8, 0, TAU); c.fill();
       c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(x - 2.2, py - 2.4, 2, 1, -0.6, 0, TAU); c.fill();
       c.fillStyle = '#3a2410'; for (let q = 0; q < 6; q++) { const a = q / 6 * TAU; c.beginPath(); c.arc(x + Math.cos(a) * 7.2, py + Math.sin(a) * 7.2, 0.8, 0, TAU); c.fill(); }
+    }
+  }
+  // крыши и карнизы ночного города: кондиционеры, трубы, антенны
+  if (theme.id === 'city') {
+    let nextX = -1;
+    for (let k = 0; k < tops.length; k += 2) {
+      const x = tops[k], y = tops[k + 1];
+      if (x < nextX || y > waterY - 20 || matAt(x, y + 2) !== 5 || !flatTop(x, y) || T.isSolid(x, y - 30) || T.isSolid(x + 14, y - 16)) continue;
+      nextX = x + 70 + rng() * 120; const kind = rng();
+      if (kind < 0.45) {                                                                     // кондиционер: корпус, решётка, вентилятор
+        const w = 16 + rng() * 6, h = 11;
+        c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(x - 1, y - 1, w + 3, 2);
+        const bg = c.createLinearGradient(0, y - h, 0, y); bg.addColorStop(0, '#8a90a0'); bg.addColorStop(1, '#4a4e5c'); c.fillStyle = bg; c.fillRect(x, y - h, w, h);
+        c.fillStyle = '#2a2d36'; c.beginPath(); c.arc(x + w * 0.62, y - h / 2, 3.6, 0, TAU); c.fill();
+        c.strokeStyle = '#6a7080'; c.lineWidth = 0.8; for (let q = 0; q < 4; q++) { c.beginPath(); c.moveTo(x + 2, y - h + 2.5 + q * 2); c.lineTo(x + w * 0.4, y - h + 2.5 + q * 2); c.stroke(); }
+        c.fillStyle = 'rgba(160,190,255,0.5)'; c.fillRect(x, y - h, w, 1);
+      } else if (kind < 0.75) {                                                              // антенна с мигающим огоньком
+        const h = 18 + rng() * 16; c.strokeStyle = '#3a3e4a'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
+        c.lineWidth = 1; for (let q = 1; q < 3; q++) { c.beginPath(); c.moveTo(x - 5 + q, y - h * (0.4 + q * 0.2)); c.lineTo(x + 5 - q, y - h * (0.4 + q * 0.2)); c.stroke(); }
+        c.fillStyle = '#ff4060'; c.beginPath(); c.arc(x, y - h, 1.5, 0, TAU); c.fill();
+        if (gc) { gc.fillStyle = 'rgba(255,60,90,0.9)'; gc.beginPath(); gc.arc(x, y - h, 5, 0, TAU); gc.fill(); }
+      } else {                                                                               // вытяжная труба с колпаком
+        const h = 12 + rng() * 8; const pg = c.createLinearGradient(x - 3, 0, x + 3, 0); pg.addColorStop(0, '#7a808e'); pg.addColorStop(1, '#3a3e48');
+        c.fillStyle = pg; c.fillRect(x - 3, y - h, 6, h); c.fillStyle = '#2e323c'; c.fillRect(x - 5, y - h - 2, 10, 2.5);
+      }
     }
   }
   // фонари под деревянными потолками: висят на верёвке, заливают заднюю стену тёплым светом
