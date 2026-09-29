@@ -76,7 +76,7 @@ function buildLevel(def, fn) {
   return Object.assign(def, { shapes: L.shapes.concat(L.late), ladders: L.ladders, decor: L.decor, props: L.props, fixtures: L.fixtures });
 }
 
-const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.16 };
+const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1 };
 const P_BARN = { base: '#8f4a2e', gap: '#3a1a0e', plank: 9, var: 0.16 };
 
 /* =========================================================

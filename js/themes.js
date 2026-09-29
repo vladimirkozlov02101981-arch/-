@@ -87,7 +87,7 @@ const THEMES = {
       cap: { cols: ['#908783', '#716864', '#574f4d'], thick: 6, blades: null, ash: true },
       soil: '#4d413e', soilDepth: 12,
       strata: ['#4b3c39', '#5b4944', '#3e3130', '#655149', '#4e3e3a'], band: 26, bandSharp: 0.3,
-      rock: ['#4a3a32', '#5e4a3e', '#3a2c26', '#6a5244', '#52403a'], rockDirt: true, rockBand: 48,
+      rock: ['#6a5244', '#7e6250', '#5a4438', '#8a6c56', '#725a4a'], rockDirt: true, rockBand: 48, backK: 1.5,
       pebbles: ['#60534f', '#786862', '#2e2624'],
       outline: '#0d0606', veins: { color: '#ff7a20', w: 0.026, glow: true, hot: true }, ceiling: 'stalactites', capMats: [1, 9],
     },

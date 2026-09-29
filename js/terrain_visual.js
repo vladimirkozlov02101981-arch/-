@@ -381,7 +381,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       }
       case 5: { // бетон, окна, дорога
         const base = P.base; let f = 0.9 + n2 * 0.12 + (n3 - 0.5) * 0.1;
-        f *= 0.9 + tileAt(tl.t1, x * 2, y * 4, 1, 19) * 0.2;                                      // фактура штукатурки/плитки
+        f *= 0.88 + tileAt(tl.t1, x * 2, y * 4, 1, 19) * 0.24 + (tileAt(tl.t2, x, y, 3, 29) - 0.5) * 0.12;                                      // фактура штукатурки/плитки
         // бетон: заполнитель (крапинки), швы опалубки, потёки дождя, трещины
         if (n1 > 0.9) f *= 1.1; else if (n1 < 0.08) f *= 0.84;
         const rain = tileAt(tl.t3, x * 5, y * 0.3, 3); if (rain > 0.6) f *= 1 - (rain - 0.6) * 0.5;
@@ -584,7 +584,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -677,7 +677,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = (back[i] <= 2 ? 0.3 + (1 - occ) * 0.5 : back[i] === 3 ? 0.74 + (1 - occ) * 0.22 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
+        const k = (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
