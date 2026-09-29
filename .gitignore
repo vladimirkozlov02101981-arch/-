@@ -10,3 +10,4 @@ dev/tunnel.pid
 dev/tunnel-session.json
 dev/tunnel-knownhosts
 TerritoryWar-Frontlines.zip
+dist/
