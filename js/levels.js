@@ -80,10 +80,55 @@ const P_STONE = { base: '#a3a19a', alt: '#8f8c85', mortar: '#4f4c48', w: 26, h: 
 const P_BARN = { base: '#8f4a2e', gap: '#3a1a0e', plank: 9, var: 0.16 };
 
 /* =========================================================
+   Восточный район (x 4800–6400) — большой интерьер для тактики.
+   Мост от старого края, крепость на несколько этажей с перегородками,
+   дверями и баррикадами, подвал, подземный ход к бункеру и вышка.
+   ========================================================= */
+function district(B, o) {
+  const gy = o.gy, mat = o.mat, pal = o.pal, X = 5000, Wd = o.w || 760;
+  const st = o.stories || [120, 110, 110, 110];
+  // фундамент: ровная площадка, на востоке уходит к воде
+  // отвесные края: на склонах к воде негде застрять
+  B.ground([[4880, 1810], [4884, gy + 26, 1], [4900, gy], [5500, gy], [6262, gy, 1], [6266, gy + 6, 1], [6270, gy + 200], [6280, 1810]], o.ground || {});
+  if (o.cut) B.add(...o.cut());
+  // мост от старой части карты
+  const [bx, by] = o.from, bm = o.bridge || {};
+  B.bridge(bx, by, 4906, gy, { mat: bm.mat || 'wood', pal: bm.pal, thick: 14, rails: true, railCol: bm.railCol, posts: bm.posts || [Math.round(bx + (4906 - bx) * 0.5)], postTo: o.water + 40 });
+  // крепость: этажи, лестницы попеременно у западной и восточной стены
+  const lad = st.map((_, i) => i % 2 ? Wd - 60 : 60);
+  B.tower(X, gy, Wd, { mat, pal, stories: st, ladders: lad, crown: o.crown !== false, found: 40 });
+  let f = gy;
+  st.forEach((h, i) => {
+    const ceil = f - h + 14;
+    // перегородки с дверными проёмами (укрытие от прямого огня)
+    for (const px of [Wd * 0.34, Wd * 0.66]) B.add(Sh.rect(X + Math.round(px), ceil, 14, f - 44 - ceil, { mat, pal }));
+    // низкие баррикады, через которые можно перешагнуть
+    const bxs = i % 2 ? [Wd * 0.2, Wd * 0.5] : [Wd * 0.48, Wd * 0.82];
+    for (const px of bxs) B.add(Sh.rect(X + Math.round(px), f - 12, 36, 12, { mat: o.cover || 'wood', pal: o.coverPal }));
+    f -= h;
+  });
+  // подвал на всю ширину, лестница из центра первого этажа
+  B.room(X + 20, gy + 22, Wd - 40, 80);
+  B.ladder(X + Math.round(Wd / 2), gy, gy + 102);
+  // подземный ход к бункеру и выход на поверхность
+  B.tunnel([[X + Wd - 40, gy + 102], [X + Wd + 120, gy + 108], [X + Wd + 240, gy + 110], [X + Wd + 330, gy + 104]], 74, { arch: 6 });
+  const bk = X + Wd + 300;
+  B.room(bk, gy + 26, 200, 78);
+  B.ladder(bk + 150, gy, gy + 104);
+  // вышка между крепостью и бункером
+  B.tower(X + Wd + 130, gy, 140, { mat: o.tmat || mat, pal: o.tpal || pal, stories: [100, 100, 100], ladders: [30, 110, 30], crown: true, windows: true, found: 20 });
+  // окопы и мешки на открытом месте
+  B.add(Sh.rect(4950, gy - 14, 44, 14, { mat: o.cover || 'wood', pal: o.coverPal }), Sh.rect(X + Wd + 330, gy - 14, 44, 14, { mat: o.cover || 'wood', pal: o.coverPal }), Sh.rect(X + Wd + 50, gy - 18, 50, 18, { mat, pal }));
+  if (o.decor) B.decor(...o.decor);
+  if (o.props) B.prop(...o.props);
+}
+
+
+/* =========================================================
    1. Зелёная долина
    ========================================================= */
 const MAP_VALLEY = buildLevel({
-  id: 'valley', name: 'Зелёная долина', theme: 'valley', W: 4800, H: 1800, water: 1700, seed: 101,
+  id: 'valley', name: 'Зелёная долина', theme: 'valley', W: 6400, H: 1800, water: 1700, seed: 101,
   desc: 'Мельница с тайным погребом, акведук над ущельем, башня и склеп, шахта в Орлиной горе',
 }, (B) => {
   // западная бухта, холм с мельницей, фермерская терраса
@@ -121,6 +166,7 @@ const MAP_VALLEY = buildLevel({
   B.decor(['oak', 680, null, 2.1], ['pine', 250, null, 0.9], ['oak', 430, null, 1.1], ['windmill', 1110], ['birch', 930, null, 1], ['well', 1470], ['fence', 1600, null, 1], ['haystack', 2040], ['haystack', 1760, null, 0.8],
     ['oak', 2800, null, 1.2], ['pine', 2890, null, 1], ['birch', 3130, null, 1.05], ['column', 3250, null, 0.7], ['oak', 3480, null, 1.5], ['pine', 3700, null, 1.1], ['pine', 3900, null, 1.05], ['pine', 4480, null, 1.15], ['pine', 4600, null, 1]);
   B.prop(['windmill', 1110]);
+  district(B, { from: [4700, 1178], gy: 1190, water: 1700, mat: 'brick', pal: P_STONE, bridge: { mat: 'wood', pal: PAL.lightWood }, coverPal: P_BARN, decor: [['pine', 4960, null, 1.1], ['oak', 5880, null, 1.3], ['pine', 6230, null, 1], ['haystack', 6040]], props: [['flag', 5380, 700, { team: 1, h: 46 }], ['torch', 4990, 1190], ['torch', 5770, 1190]] });
 });
 
 /* =========================================================
@@ -128,7 +174,7 @@ const MAP_VALLEY = buildLevel({
    ========================================================= */
 const P_SAND = { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 24, h: 12, var: 0.08 };
 const MAP_CANYON = buildLevel({
-  id: 'canyon', name: 'Каньон Сухой Кости', theme: 'desert', W: 4800, H: 1800, water: 1700, seed: 202,
+  id: 'canyon', name: 'Каньон Сухой Кости', theme: 'desert', W: 6400, H: 1800, water: 1700, seed: 202,
   desc: 'Храм в скале, Великая арка над каньоном, расщелина с верёвочным мостом и старая шахта',
 }, (B) => {
   // западная столовая гора с храмом и террасами
@@ -160,6 +206,7 @@ const MAP_CANYON = buildLevel({
   B.tower(3700, 946, 150, { mat: 'wood', pal: PAL.lightWood, wall: 12, slab: 12, stories: [80], windows: false, found: 30 });
   B.decor(['cactus', 240, null, 1.1], ['watertower', 760], ['cactus', 980, null, 0.9], ['deadtree', 1180, null, 1], ['column', 1310, 1150, 1], ['column', 1270, 1150, 1], ['pot', 1100, 1150], ['pot', 1140, 1150, 0.8], ['skull', 1680, 1400],
     ['cactus', 2100, null, 1], ['skull', 2600, null], ['cactus', 2960, null, 0.9], ['tumbleweed', 2700, null, 1], ['cactus', 3600, null, 1.2], ['deadtree', 4050, null, 0.9], ['watertower', 4450], ['cactus', 4560, null, 0.8]);
+  district(B, { from: [4650, 956], gy: 960, water: 1700, mat: 'brick', pal: P_SAND, cut: () => [Sh.cut(Sh.rect(4490, 902, 180, 52))], bridge: { mat: 'wood', pal: PAL.lightWood }, decor: [['cactus', 4970], ['cactus', 6190, null, 1.2], ['skull', 5900]], props: [['torch', 4990, 960], ['torch', 5770, 960]] });
 });
 
 /* =========================================================
@@ -167,7 +214,7 @@ const MAP_CANYON = buildLevel({
    ========================================================= */
 const P_STATION = { base: '#d8563a', rust: '#7a2a1a', plate: [40, 20] };
 const MAP_ARCTIC = buildLevel({
-  id: 'arctic', name: 'Ледяной перевал', theme: 'arctic', W: 4800, H: 1800, water: 1700, seed: 303,
+  id: 'arctic', name: 'Ледяной перевал', theme: 'arctic', W: 6400, H: 1800, water: 1700, seed: 303,
   desc: 'Деревня иглу, ледяная пещера сквозь гору, метеостанция на пике, ледник с трещиной и полярная станция',
 }, (B) => {
   // деревня иглу и гора с перевалом
@@ -190,13 +237,14 @@ const MAP_ARCTIC = buildLevel({
   B.decor(['igloo', 360], ['igloo', 600, null, 0.85], ['snowman', 820], ['pineSnow', 200, null, 1], ['pineSnow', 1000, null, 1.1], ['sled', 480], ['pineSnow', 1350, null, 0.9], ['pineSnow', 1540, null, 1.05], ['iceCrystal', 1900, 1424], ['iceCrystal', 2500, 1402],
     ['pineSnow', 2700, null, 1.1], ['pineSnow', 2860, null, 0.95], ['pineSnow', 3700, null, 1.1], ['antenna', 4480, 1058], ['snowman', 4640, null, 0.9]);
   B.prop(['smoke', 360, null, { dy: -34 }], ['beacon', 4480, 990]);
+  district(B, { from: [4660, 1210], gy: 1210, water: 1700, mat: 'metal', pal: P_STATION, cover: 'ice', bridge: { mat: 'metal', pal: PAL.steel, railCol: 'rgba(200,210,220,0.8)' }, decor: [['pine', 4970, null, 1], ['pine', 6220, null, 1.1]], props: [['beacon', 5380, 720]] });
 });
 
 /* =========================================================
    4. Жерло вулкана
    ========================================================= */
 const MAP_VOLCANO = buildLevel({
-  id: 'volcano', name: 'Жерло вулкана', theme: 'volcano', W: 4800, H: 1800, water: 1690, seed: 404,
+  id: 'volcano', name: 'Жерло вулкана', theme: 'volcano', W: 6400, H: 1800, water: 1690, seed: 404,
   desc: 'Обсидиановый храм, мост над лавой, лавовый тоннель и природный мост прямо внутри жерла',
 }, (B) => {
   // базальтовое плато с храмом
@@ -222,13 +270,14 @@ const MAP_VOLCANO = buildLevel({
   B.ladder(4150, 1150, 1322);
   B.decor(['deadtree', 260, null, 1.1], ['spike', 400, null, 1], ['obsidian', 900], ['deadtree', 1060, null, 0.9], ['bones', 1780], ['deadtree', 2000, null, 0.8], ['spike', 2800, null, 1.2], ['deadtree', 2950, null, 0.9], ['obsidian', 3600], ['deadtree', 3760, null, 1], ['bones', 4250], ['spike', 4560, null, 1.1]);
   B.prop(['smoke', 2425, 790, { big: true }], ['torch', 500, 1052], ['torch', 780, 1052], ['torch', 3940, 1150]);
+  district(B, { from: [4660, 1160], gy: 1160, water: 1690, mat: 'basalt', cut: () => [Sh.cut(Sh.rect(4535, 1104, 140, 54))], tmat: 'brick', tpal: PAL.darkStone, cover: 'basalt', bridge: { mat: 'metal', pal: PAL.steel, railCol: 'rgba(120,110,110,0.9)' }, props: [['torch', 4990, 1160], ['torch', 5770, 1160], ['fire', 6150, 1160]] });
 });
 
 /* =========================================================
    5. Кристальная планета (низкая гравитация)
    ========================================================= */
 const MAP_ALIEN = buildLevel({
-  id: 'alien', name: 'Кристальная планета', theme: 'alien', W: 4800, H: 1800, water: 1700, seed: 505,
+  id: 'alien', name: 'Кристальная планета', theme: 'alien', W: 6400, H: 1800, water: 1700, seed: 505,
   desc: 'Парящие острова, кристальные мосты, лоза к небесному острову и разбитая летающая тарелка. Низкая гравитация',
 }, (B) => {
   B.add(floatIsland(520, 1250, 380, 300), floatIsland(1320, 1130, 250, 250), floatIsland(2250, 1150, 560, 340), floatIsland(2300, 850, 170, 150), floatIsland(3200, 1000, 230, 240), floatIsland(4180, 1150, 420, 320));
@@ -244,6 +293,7 @@ const MAP_ALIEN = buildLevel({
   B.add(spire(4592, 1166, 170, 44, 12));
   B.decor(['alientree', 560, null, 1.6], ['tentacle', 700], ['alienplant', 1320], ['crystalBig', 190, null, 1.1], ['pod', 1850], ['alientree', 2050, null, 2.2], ['pod', 2860], ['crystalBig', 3200, null, 0.9], ['alientree', 4050, null, 1.3], ['tentacle', 4300], ['alienplant', 380]);
   B.prop(['beacon', 2440, 1050], ['beacon', 2600, 1034]);
+  district(B, { from: [4560, 1150], gy: 1150, water: 1700, mat: 'metal', pal: PAL.ufoMetal, cover: 'crystal', bridge: { mat: 'crystal' }, cut: () => [Sh.cut(Sh.rect(4540, 960, 130, 186))], decor: [['crystalBig', 4960, null, 0.9], ['alientree', 6200, null, 1.4], ['alienplant', 5900]], props: [['beacon', 5380, 690], ['beacon', 6100, 1150]] });
 });
 
 /* =========================================================
@@ -252,7 +302,7 @@ const MAP_ALIEN = buildLevel({
 const P_LIGHT = { base: '#e9e4d8', alt: '#d6cfbf', mortar: '#9a9282', w: 22, h: 11, var: 0.06 };
 const P_RED = { base: '#c0392b', alt: '#a93226', mortar: '#6e1d16', w: 22, h: 11, var: 0.06 };
 const MAP_PIRATE = buildLevel({
-  id: 'pirate', name: 'Пиратская бухта', theme: 'tropical', W: 4800, H: 1800, water: 1690, seed: 606,
+  id: 'pirate', name: 'Пиратская бухта', theme: 'tropical', W: 6400, H: 1800, water: 1690, seed: 606,
   desc: 'Форт на утёсе, пристань, галеон с трюмом и вороньим гнездом, скала-череп с пещерой сокровищ и маяк',
 }, (B) => {
   // западный остров: форт, джунгли, пляж
@@ -289,6 +339,7 @@ const MAP_PIRATE = buildLevel({
   for (const sy of [930, 740]) B.add({ kind: 'poly', pts: [[4130, sy], [4270, sy], [4270, sy + 40], [4130, sy + 40]], op: 'paint', mat: 'brick', pal: P_RED, rough: 0, params: { x0: 4130, y0: sy, w: 140, h: 40 } });
   B.decor(['palm', 220, null, 1.1], ['palm', 480, null, 1.3], ['palm', 760, null, 0.9], ['chest', 700], ['palm', 930, null, 1.2], ['barrel', 1600, 1392], ['barrel', 1624, 1392, 0.9], ['mast', 1850, 1392, 1.15], ['mast', 2150, 1392, 1.3], ['mast', 2470, 1392, 1.1], ['barrel', 2000, 1596], ['chest', 3600, 1334], ['chest', 3520, 1334, 0.8], ['palm', 3980, null, 1.1], ['palm', 4400, null, 1], ['palm', 4560, null, 0.9]);
   B.prop(['flag', 2150, 1116, { h: 150, color: '#111', skull: true }], ['torch', 1250, 1566], ['torch', 3200, 1330], ['torch', 3820, 1320], ['beacon', 4200, 596]);
+  district(B, { from: [4660, 1135], gy: 1140, water: 1690, mat: 'wood', pal: PAL.shipWood, tmat: 'brick', tpal: P_LIGHT, cover: 'wood', bridge: { mat: 'wood', pal: PAL.lightWood }, decor: [['palm', 4980, null, 1.1], ['palm', 6220, null, 1.2], ['barrel', 5900]], props: [['torch', 4990, 1140], ['torch', 5770, 1140], ['flag', 5380, 650, { team: 1, h: 46 }]] });
 });
 
 /* =========================================================
@@ -307,7 +358,7 @@ function castle(B, x0, flip, pal) {
   B.tunnel(flip ? pts.reverse() : pts, 72, { arch: 8 });
 }
 const MAP_CASTLES = buildLevel({
-  id: 'castles', name: 'Два замка', theme: 'castle', W: 4800, H: 1800, water: 1700, seed: 707,
+  id: 'castles', name: 'Два замка', theme: 'castle', W: 6400, H: 1800, water: 1700, seed: 707,
   desc: 'Замки с донжонами и подземельями, галереи на стенах, подкопы к реке и каменный мост',
 }, (B) => {
   B.ground([[-40, 1810], [40, 1700], [70, 1500], [90, 1300], [110, 1180, 1], [180, 1158], [300, 1150], [500, 1148], [700, 1148], [900, 1148], [1100, 1150], [1300, 1156], [1420, 1170], [1540, 1200], [1660, 1250], [1760, 1310], [1860, 1380], [1960, 1440], [2060, 1480], [2140, 1500], [2182, 1508, 1], [2196, 1600], [2200, 1810]]);
@@ -325,6 +376,7 @@ const MAP_CASTLES = buildLevel({
   B.decor(['oak', 150, null, 1], ['pine', 1400, null, 1.1], ['oak', 1560, null, 1.2], ['cottage', 1720], ['haystack', 1850], ['oak', 1990, null, 1], ['oak', 2820, null, 1.1], ['cottage', 3000], ['pine', 3300, null, 1.1], ['oak', 4660, null, 1],
     ['banner', 400, 900, 1, false, { col: '#b0413a' }], ['banner', 4400, 900, 1, false, { col: '#3a5ab0' }]);
   B.prop(['flag', 400, 724, { team: 0, h: 50 }], ['flag', 980, 920, { team: 0 }], ['flag', 4400, 724, { team: 1, h: 50 }], ['flag', 3820, 920, { team: 1 }], ['torch', 1080, 1148], ['torch', 3720, 1148], ['smoke', 1250, 960, { dy: 0 }], ['smoke', 3550, 962, { dy: 0 }]);
+  district(B, { from: [4696, 1182], gy: 1182, water: 1700, mat: 'brick', pal: PAL.castleStone, bridge: { mat: 'wood', pal: PAL.lightWood }, decor: [['oak', 4970, null, 1], ['pine', 6220, null, 1.1], ['haystack', 5900]], props: [['flag', 5380, 690, { team: 1, h: 50 }], ['torch', 4990, 1182], ['torch', 5770, 1182]] });
 });
 
 /* =========================================================
@@ -332,7 +384,7 @@ const MAP_CASTLES = buildLevel({
    ========================================================= */
 const P_TOWER = (base, win, lit) => ({ base, win, dark: '#101626', lit });
 const MAP_CITY = buildLevel({
-  id: 'city', name: 'Ночной мегаполис', theme: 'city', W: 4800, H: 1800, water: 1700, seed: 808,
+  id: 'city', name: 'Ночной мегаполис', theme: 'city', W: 6400, H: 1800, water: 1700, seed: 808,
   desc: 'Дома с этажами и крышами, парковка, эстакада над каналом, метро и небоскрёб-вышка',
 }, (B) => {
   B.ground([[-40, 1810], [30, 1700], [40, 1522, 1], [60, 1500, 1], [2200, 1500, 1], [2220, 1522, 1], [2226, 1810]], { rough: 0 });
@@ -363,6 +415,7 @@ const MAP_CITY = buildLevel({
   B.decor(['lamp', 340], ['car', 650, 1500], ['lamp', 900], ['planter', 1260], ['car', 1720, 1500, 1, true], ['lamp', 2160], ['lamp', 2620], ['car', 2920, 1500], ['planter', 3570], ['lamp', 3880], ['car', 4180, 1500, 0.9, true], ['lamp', 4520], ['bench', 4620],
     ['antenna', 3370, 714], ['billboard', 1080, 994], ['billboard', 4030, 1002], ['antenna', 500, 906]);
   B.prop(['lamp', 340], ['lamp', 900], ['lamp', 2160], ['lamp', 2620], ['lamp', 3880], ['lamp', 4520], ['beacon', 3370, 640], ['beacon', 500, 840], ['neon', 1080, 960, { text: 'ПИЦЦА', color: '#ff4fa8' }], ['neon', 4030, 968, { text: 'КИНО', color: '#4ff0ff' }], ['fire', 2100, 1500]);
+  district(B, { from: [4750, 1500], gy: 1500, water: 1700, mat: 'concrete', pal: P_TOWER('#2e3446', '#ffd27a', 0.4), crown: false, cover: 'metal', coverPal: PAL.steel, bridge: { mat: 'concrete', pal: { base: '#5a5e66', road: true }, railCol: 'rgba(150,160,180,0.8)' }, ground: { rough: 0 }, decor: [['lamp', 4960], ['car', 5900, 1500], ['lamp', 6200], ['bench', 6120]], props: [['lamp', 4960], ['lamp', 6200], ['beacon', 5380, 1010]] });
 });
 
 const MAPS = [MAP_VALLEY, MAP_CANYON, MAP_ARCTIC, MAP_VOLCANO, MAP_ALIEN, MAP_PIRATE, MAP_CASTLES, MAP_CITY];
