@@ -23,7 +23,7 @@ const THEMES = {
       pebbles: ['#7a7672', '#86827e', '#6e6a66', '#8e8a86', '#7e7670', '#72706c'], smoothStones: true,
       outline: '#2c1a0d', rim: '#b89a78', sun: '#ffe0a0', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_valley', cave: 'cave_wall', grass: 'grass_valley' },
     },
-    scatter: ['bush', 'rock', 'flowers', 'mushroom', 'bush', 'tuft'],
+    scatter: ['bush', 'rock', 'flowers', 'flowers', 'bush', 'tuft'],
     weather: 'leaves', birds: true, ambient: null, ambientSound: 'wind',
   },
   desert: {

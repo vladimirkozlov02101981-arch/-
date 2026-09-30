@@ -246,7 +246,8 @@ const DECOR = {
     c.fillStyle = '#8a3b26'; c.beginPath(); c.moveTo(x - 20 * s, y - 38 * s); c.lineTo(x, y - 52 * s); c.lineTo(x + 20 * s, y - 38 * s); c.closePath(); c.fill();
     c.strokeStyle = '#3a2a1a'; c.beginPath(); c.moveTo(x, y - 40 * s); c.lineTo(x, y - 26 * s); c.stroke(); c.fillStyle = '#6b4a2e'; c.fillRect(x - 3 * s, y - 27 * s, 6 * s, 6 * s);
   },
-  haystack(c, g, x, y, s) {
+  haystack(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['haystack1'], x, y, s, r, 54)) return;   // стог из Blender
     c.fillStyle = vgrad(c, y - 30 * s, y, ['#f2d06a', '#d9a93a', '#a8791e']);
     c.beginPath(); c.moveTo(x - 22 * s, y + 4); c.quadraticCurveTo(x - 24 * s, y - 30 * s, x, y - 32 * s); c.quadraticCurveTo(x + 24 * s, y - 30 * s, x + 22 * s, y + 4); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(120,80,20,0.45)'; c.lineWidth = 1;
@@ -529,10 +530,11 @@ const DECOR = {
   },
   rockSnow(c, g, x, y, s, r) { DECOR.rock(c, g, x, y, s, r, ['#9fb0c6', '#6f8098', '#3f4c60']); c.fillStyle = '#f4f8ff'; c.beginPath(); c.ellipse(x - 2 * s, y - 8 * s, 9 * s, 3.5 * s, 0, 0, TAU); c.fill(); },
   flowers(c, g, x, y, s, r) {
-    for (let i = 0; i < 5; i++) {
-      const fx = x + r.range(-10, 10) * s, h = r.range(6, 12) * s; c.strokeStyle = '#3f8f2a'; c.lineWidth = 1; c.beginPath(); c.moveTo(fx, y + 1); c.lineTo(fx, y - h); c.stroke();
-      c.fillStyle = r.pick(['#ff5d8f', '#ffd93d', '#ffffff', '#b28dff', '#ff9a3d']); for (let p = 0; p < 5; p++) { const a = p / 5 * TAU; circ(c, fx + Math.cos(a) * 1.8 * s, y - h + Math.sin(a) * 1.8 * s, 1.4 * s); }
-      c.fillStyle = '#ffe36b'; circ(c, fx, y - h, 1 * s);
+    // полевые цветы: мелкие (2–3 px) головки на тонких стеблях, приглушённые природные цвета, прячутся в траве
+    for (let i = 0; i < 7; i++) {
+      const fx = x + r.range(-12, 12) * s, h = r.range(4, 9) * s; c.strokeStyle = 'rgba(52,84,30,0.9)'; c.lineWidth = 0.6; c.beginPath(); c.moveTo(fx, y + 1); c.quadraticCurveTo(fx + r.range(-1.5, 1.5), y - h * 0.5, fx + r.range(-1, 1), y - h); c.stroke();
+      c.fillStyle = r.pick(['#e8e4d6', '#e3c23c', '#b8547a', '#8f7ad0', '#e8e4d6', '#d8a93a']); circ(c, fx, y - h, r.range(0.9, 1.4) * s);
+      c.fillStyle = 'rgba(255,255,255,0.35)'; circ(c, fx - 0.3, y - h - 0.3, 0.45 * s);
     }
   },
   mushroom(c, g, x, y, s, r) {

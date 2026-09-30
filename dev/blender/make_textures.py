@@ -922,6 +922,48 @@ def tree_sprite(name, seed, kind, px=320):
     render(sc, name)
 
 
+def haystack_sprite(name, seed, px=200):
+    """стог сена сбоку: купол, покрытый тысячами соломинок разного оттенка, осевший низ, тень от солнца"""
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.9
+    H = 2.2; cam = sc.camera; cam.data.ortho_scale = H
+    cam.location = (0, -10, H / 2 - 0.08); cam.rotation_euler = (math.radians(90), 0, 0)
+    # основа: сплюснутый купол
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=48, v_segments=24, radius=1.0)
+    off = Vector((seed, seed * 2, seed * 3))
+    for v in bm.verts:
+        p = v.co.copy(); z = max(p.z, -0.05)
+        d = 1 + 0.06 * noise.noise(p * 3 + off)
+        v.co = Vector((p.x * 0.95 * d, p.y * 0.8 * d, z * 0.78 * d + 0.0))
+    core = bpy.data.meshes.new('core'); bm.to_mesh(core); bm.free()
+    mcore = mat_stone('hay', (0.46, 0.34, 0.13), (0.72, 0.58, 0.28), rough=0.9, spec=0.1, scale=14, bumpk=1.0)
+    core.materials.append(mcore); ob = bpy.data.objects.new('core', core); ob['tone'] = 0.0; sc.collection.objects.link(ob)
+    # соломинки: тонкие ленты по поверхности, в основном вниз по склону
+    bm = bmesh.new(); cl = bm.loops.layers.float_color.new('Col')
+    shades = [lin(c) for c in ((0.82, 0.68, 0.34), (0.70, 0.55, 0.24), (0.90, 0.78, 0.46), (0.58, 0.44, 0.18), (0.76, 0.64, 0.36))]
+    for i in range(9000):
+        u = rng.uniform(0, math.tau); w = rng.uniform(-0.05, 1.0)
+        th = math.acos(max(-0.05, min(1, w)))
+        n_ = Vector((math.sin(th) * math.cos(u) * 0.95, math.sin(th) * math.sin(u) * 0.8, math.cos(th) * 0.78))
+        p = n_ * rng.uniform(0.99, 1.04)
+        down = Vector((-n_.x * n_.z, -n_.y * n_.z, 1 - n_.z * n_.z)); down = -down.normalized() if down.length > 1e-4 else Vector((0, 0, -1))
+        dirv = (down + Vector((rng.uniform(-0.6, 0.6), rng.uniform(-0.6, 0.6), rng.uniform(-0.3, 0.3)))).normalized()
+        L = rng.uniform(0.08, 0.22); wd = rng.uniform(0.004, 0.008)
+        side = dirv.cross(n_).normalized() * wd
+        vs = [bm.verts.new(p - side), bm.verts.new(p + side), bm.verts.new(p + dirv * L + side * 0.5 + n_ * 0.01), bm.verts.new(p + dirv * L - side * 0.5 + n_ * 0.01)]
+        f = bm.faces.new(vs); col = rng.choice(shades); k = rng.uniform(0.8, 1.15)
+        for lp in f.loops: lp[cl] = (col[0] * k, col[1] * k, col[2] * k, 1)
+    sm = bpy.data.meshes.new('straw'); bm.to_mesh(sm); bm.free()
+    m, nt, b = principled('straw', 0.6, 0.35)
+    at = nt.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'Col'; nt.links.new(at.outputs['Color'], b.inputs['Base Color'])
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.15; break
+    sm.materials.append(m); so = bpy.data.objects.new('straw', sm); sc.collection.objects.link(so)
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
@@ -964,6 +1006,7 @@ LIB = {
     'dirt_tropical': lambda: dirt_stones('dirt_tropical', 143, (0.56, 0.40, 0.26), (0.40, 0.27, 0.16), (0.40, 0.36, 0.30), (0.74, 0.70, 0.62), density=1.4),
     'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
                                           [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
+    'haystack1': lambda: haystack_sprite('haystack1', 91),
     # ---- сыпучие шапки поверхности: снег, песок, пепел
     'cap_snow': lambda: granular('cap_snow', 201, [(0.80, 0.86, 0.94), (0.90, 0.94, 0.99), (0.97, 0.98, 1.0)], amp=0.014, sparkle=1.0),
     'cap_sand': lambda: granular('cap_sand', 202, [(0.78, 0.60, 0.38), (0.88, 0.72, 0.48), (0.95, 0.82, 0.58)], amp=0.01, ripples=0.6, pebbles=0.5),
