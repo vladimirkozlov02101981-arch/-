@@ -438,14 +438,43 @@ function drawTacticalRoutes(c, map) {
       c.beginPath(); c.moveTo(f.x1, f.y1 - 16); c.quadraticCurveTo(cx, cy - 16, f.x2, f.y2 - 16); c.stroke();
     }
   }
-  for (const { x, y1, y2 } of map.ladders || []) {
-    c.lineCap = 'round';
-    c.strokeStyle = 'rgba(20,14,8,0.55)'; c.lineWidth = 6; c.beginPath(); c.moveTo(x - 9, y1 - 10); c.lineTo(x - 9, y2 + 2); c.moveTo(x + 9, y1 - 10); c.lineTo(x + 9, y2 + 2); c.stroke();
-    c.strokeStyle = '#9a6a3c'; c.lineWidth = 3.4; c.beginPath(); c.moveTo(x - 9, y1 - 10); c.lineTo(x - 9, y2 + 2); c.moveTo(x + 9, y1 - 10); c.lineTo(x + 9, y2 + 2); c.stroke();
-    c.strokeStyle = '#c99a62'; c.lineWidth = 2.6; c.beginPath();
-    for (let y = y1 - 4; y < y2; y += 12) { c.moveTo(x - 8, y); c.lineTo(x + 8, y); }
-    c.stroke();
-    c.strokeStyle = 'rgba(255,230,180,0.35)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 10, y1 - 10); c.lineTo(x - 10, y2); c.stroke();
-  }
+  const kind = map.theme === 'city' ? 'steelY' : map.theme === 'alien' ? 'steel' : 'wood';
+  for (const { x, y1, y2 } of map.ladders || []) { const L = ladderSprite(Math.round(y2 - y1 + 12), kind); c.drawImage(L, x - 14, y1 - 12); }
   c.restore();
+}
+
+/** реалистичная лестница (кэш по высоте и виду): две тетивы с объёмом и волокнами, круглые перекладины с тенью,
+    металлические скобы крепления, тень на стене. wood — дерево, steel — сталь, steelY — сталь с жёлтой краской (город) */
+const _ladderCache = new Map();
+function ladderSprite(h, kind) {
+  const key = kind + h; let cv = _ladderCache.get(key); if (cv) return cv;
+  cv = makeCanvas(28, h + 4); const c = cv.getContext('2d');
+  const P = kind === 'wood' ? { hi: '#d8a86a', mid: '#9a6a3c', lo: '#5a3a1e', rung: ['#e2b87c', '#a8763f', '#6a4424'] }
+    : kind === 'steelY' ? { hi: '#ffe27a', mid: '#e0b020', lo: '#8a6408', rung: ['#ffe68c', '#d4a41c', '#7a5806'] }
+    : { hi: '#e2e6ee', mid: '#8a929e', lo: '#3e444e', rung: ['#eef0f4', '#9aa2ae', '#4a505a'] };
+  // тень на стене за лестницей
+  c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(7, 3, 3, h); c.fillRect(22, 3, 3, h);
+  for (let y = 10; y < h - 2; y += 12) c.fillRect(8, y + 3, 16, 2.5);
+  // перекладины: цилиндр — светлый верх, тёмный низ, торцы уходят в тетиву
+  for (let y = 8; y < h - 2; y += 12) {
+    const g = c.createLinearGradient(0, y - 1.6, 0, y + 1.6); g.addColorStop(0, P.rung[0]); g.addColorStop(0.45, P.rung[1]); g.addColorStop(1, P.rung[2]);
+    c.fillStyle = g; c.fillRect(6, y - 1.6, 16, 3.2);
+    c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(6, y + 1.2, 16, 0.6);
+    if (kind === 'wood') { c.fillStyle = 'rgba(60,36,16,0.6)'; c.fillRect(9 + ((y * 7) % 9), y - 0.5, 2, 1); }   // потёртость от ботинок
+  }
+  // тетивы: объёмные бруски
+  for (const x0 of [3, 21]) {
+    const g = c.createLinearGradient(x0, 0, x0 + 4, 0); g.addColorStop(0, P.lo); g.addColorStop(0.3, P.hi); g.addColorStop(0.7, P.mid); g.addColorStop(1, P.lo);
+    c.fillStyle = g; c.fillRect(x0, 0, 4, h);
+    if (kind === 'wood') {   // волокна и сучки
+      c.strokeStyle = 'rgba(70,40,18,0.35)'; c.lineWidth = 0.5;
+      for (let k = 0; k < 3; k++) { c.beginPath(); c.moveTo(x0 + 1 + k, 0); for (let y = 0; y < h; y += 8) c.lineTo(x0 + 1 + k + Math.sin(y * 0.07 + k * 2 + x0) * 0.4, y); c.stroke(); }
+      for (let y = 30 + x0 * 3; y < h; y += 97) { c.fillStyle = 'rgba(60,34,14,0.7)'; c.beginPath(); c.ellipse(x0 + 2, y, 1.2, 2.2, 0, 0, TAU); c.fill(); }
+    } else {   // краска облупилась: пятна голого металла
+      for (let y = 14 + x0; y < h; y += 41) { c.fillStyle = 'rgba(90,90,96,0.7)'; c.fillRect(x0 + 1, y, 2, 3); }
+    }
+  }
+  // стальные скобы крепления к стене
+  for (let y = 20; y < h - 10; y += 60) for (const x0 of [3, 21]) { c.fillStyle = '#4a4e56'; c.fillRect(x0 - 1, y, 6, 3); c.fillStyle = '#9aa0aa'; c.fillRect(x0 - 1, y, 6, 1); c.fillStyle = '#2a2c30'; c.fillRect(x0 + 1.5, y + 0.8, 1, 1.2); }
+  _ladderCache.set(key, cv); return cv;
 }

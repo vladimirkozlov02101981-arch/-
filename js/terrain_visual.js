@@ -723,6 +723,17 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         const mt0 = mat[i] || 1, mt = mt0 === 1 && S.rockDirt ? 2 : mt0; const dd = D[i], d = dd / 3, t = TD[i];
         const capT = capMat[mt] ? capThick * (S.grassy ? 0.78 + 0.44 * capN[x] : 0.5 + capN[x] * capN[x] * 1.3) + capS[x] * 2.6 + (t2[ty2 | ((x >> 1) & 255)] - 0.5) * 4 + fringe[x] : 0;
         shadeMaterial(S, mt, x, y, t, capT, d, infos[sid[i]] || infos[0], o, false);
+        // пол внутри здания: над поверхностью — задняя стена помещения. Верх перекрытия выстлан досками (или плиткой в бетоне),
+        // со светлой кромкой и тёмным швом снизу — чтобы пол не сливался со стенами
+        if (mt >= 3 && mt <= 6 && t < 8 && back && y - t - 2 >= 0 && back[i - (t + 2) * W] && !m[i - (t + 2) * W] && !o.emit) {
+          const WT = TexLib.data.wood_light;
+          if (mt === 5 || mt === 6) { const tl2 = ((x >> 4) + (y >> 3)) & 1; const v = 118 + tl2 * 16 + o.n1 * 14; o.r = v; o.g = v * 0.97; o.b = v * 0.92; if ((x & 15) === 0) { o.r *= 0.6; o.g *= 0.6; o.b *= 0.6; } }
+          else if (WT) { texAt(WT, x * 1.0, y * 2 + 37, o); o.r *= 1.05; o.g *= 0.98; o.b *= 0.9; }
+          else { o.r = 150; o.g = 104; o.b = 62; }
+          if (t < 1.2) { o.r = o.r * 0.6 + 255 * 0.4; o.g = o.g * 0.6 + 236 * 0.4; o.b = o.b * 0.6 + 200 * 0.4; }   // освещённая кромка пола
+          else if (t >= 6.5) { o.r *= 0.35; o.g *= 0.35; o.b *= 0.35; }   // тёмный шов между полом и перекрытием
+          o.tex = true;
+        }
         let r = o.r, g = o.g, bl = o.b;
         // объём: нормаль из размытой высоты
         const hl = x > 0 ? HF[i - 1] : 0, hr = x < W - 1 ? HF[i + 1] : 0, hu = y > 0 ? HF[i - W] : 0, hd = y < H - 1 ? HF[i + W] : 255;
