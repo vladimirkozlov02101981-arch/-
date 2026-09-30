@@ -126,6 +126,7 @@ function rasterizeMap(def) {
   });
   cleanupMask(mask, W, H, 150, 0);
   for (let i = 0; i < N; i++) { if (!mask[i]) mat[i] = 0; else if (!mat[i]) mat[i] = 1; }
+  treeClimbs(def, mask, mat, sid, W, H);
   return { mask, mat, sid, back, bsid };
 }
 
@@ -185,4 +186,29 @@ function drawMapPreview(cv, map) {
   const wy = oy + map.water * s; const L = th.liquid;
   const wg = c.createLinearGradient(0, wy, 0, h); wg.addColorStop(0, L.top); wg.addColorStop(1, L.deep);
   c.globalAlpha = 0.9; c.fillStyle = wg; c.fillRect(0, wy, w, h - wy); c.globalAlpha = 1;
+}
+
+/** большие деревья, на которые можно залезть: к стволу прибита лестница, в кроне — дощатый помост (настоящая опора:
+    на нём можно стоять и стрелять, его можно разрушить). Помост ставится только там, где над ним свободно */
+function treeClimbs(def, mask, mat, sid, W, H) {
+  const woodSid = Math.max(0, def.shapes.findIndex(sh => sh.mat === 'wood'));
+  const add = !def._treeClimbs; def._treeClimbs = true;
+  for (const d of def.decor || []) {
+    if (d[0] !== 'oak') continue;
+    const x = Math.round(d[1]), s = d[3] || 1;
+    let gy = -1; for (let y = d[2] != null ? Math.max(0, d[2] - 40) : 0; y < H - 1; y++) if (mask[y * W + x]) { gy = y; break; }
+    if (gy < 0 || gy > def.water - 20) continue;
+    const py = Math.round(gy - 165 * s * 0.36), x0 = x - 30, x1 = x + 30;
+    if (py < 40) continue;
+    let free = true;
+    for (let y = py - 44; y < py + 8 && free; y++) for (let xx = x0 - 4; xx <= x1 + 4; xx++) if (mask[y * W + xx]) { free = false; break; }
+    for (let y = py + 8; y < gy - 2 && free; y++) if (mask[y * W + x]) free = false;
+    if (!free) continue;
+    for (let y = py; y < py + 7; y++) for (let xx = x0; xx <= x1; xx++) { if (Math.abs(xx - x) < 12) continue; /* люк для лестницы */ const i = y * W + xx; mask[i] = 1; mat[i] = 4; sid[i] = woodSid; }
+    // низ лестницы — там, где боец целиком помещается у ствола (на склоне — чуть выше корней)
+    const bf = (yy) => { for (let dy = 2; dy <= 26; dy += 4) for (const ox of [-4, 0, 4]) if (mask[(yy - dy) * W + x + ox]) return false; return true; };
+    let y2 = gy; while (y2 > py + 20 && !bf(y2)) y2--;
+    if (y2 <= py + 20) { for (let y = py; y < py + 7; y++) for (let xx = x0; xx <= x1; xx++) mask[y * W + xx] = 0; continue; }
+    if (add) def.ladders.push({ x, y1: py, y2, tree: true });
+  }
 }
