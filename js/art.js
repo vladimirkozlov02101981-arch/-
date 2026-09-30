@@ -81,8 +81,12 @@ const SoldierArt = {
     for (let j = 0; j < d.length; j += 4) {
       if (s[j + 3] < 8) continue;
       const r = s[j], g = s[j + 1], b = s[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = ((j >> 2) / W | 0) % C, helm = cy < 40, vest = cy >= 46 && cy < 64;
+      if (helm && L > 25) {                                                   // шлем целиком — насыщенный цвет команды (с фактурой и светом модели)
+        const f = Math.min(1.5, L / tl * 1.25); d[j] = tr * f; d[j + 1] = tg * f; d[j + 2] = tb * f; continue;
+      }
       if (mx < 40 || r < g || g < b || (mx - mn) / mx < 0.14) continue;
-      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = ((j >> 2) / W | 0) % C, helm = cy < 40;
+      if (vest) { const f = L / tl * 1.05, k = 0.85; d[j] = r + (tr * f - r) * k; d[j + 1] = g + (tg * f - g) * k; d[j + 2] = b + (tb * f - b) * k; continue; }   // нагрудные пластины — тоже цвет команды
       const k = Math.min(1, ((mx - mn) / mx - 0.14) * 5) * (helm ? 0.9 : 0.8);
       const T3 = helm ? [tr, tg, tb] : OL, f = L / (helm ? tl : ol) * (helm ? 1.0 : 0.95);
       d[j] = r + (T3[0] * f - r) * k; d[j + 1] = g + (T3[1] * f - g) * k; d[j + 2] = b + (T3[2] * f - b) * k;
