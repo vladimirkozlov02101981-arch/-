@@ -113,7 +113,7 @@ class Game {
       // точка удара волны — ближайшая к взрыву часть тела: взрыв под ногами ранит ноги, рядом с головой — голову
       if (D > 0 && s.alive && fd > 0) this.damage(s, Math.round(D * fd * shielding), o.owner, clamp(x, s.x - 5, s.x + 5), by, fd > 0.55);
     }
-    if (o.frag && FRAGS[o.frag]) this.fragments(x, y - 3, FRAGS[o.frag], o.owner);
+    if (o.frag && FRAGS[o.frag]) this.fragments(x, y - 3, FRAGS[o.frag], o.owner, o.vx, o.vy);
     for (const e of this.entities) {
       if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > (R + 20) * 1.6) continue;
       if (e.k === 'mine') { e.trigger(this, true); }
@@ -127,13 +127,23 @@ class Game {
   /** осколки: у каждого своя энергия. В воздухе она падает с дистанцией; в преграде тормозит по плотности материала
       (земля и дерево пробиваются, металл и бетон почти сразу останавливают); от твёрдых поверхностей под острым углом —
       рикошет; в мягком материале осколок сбивается с курса. Урон — по оставшейся энергии и по той части тела, куда попал */
-  fragments(x, y, F, owner) {
+  fragments(x, y, F, owner, ivx = 0, ivy = 0) {
     const hits = new Map(), ends = [], T = this.terrain;
+    // направление разлёта зависит от удара: нормаль поверхности (осколки уходят от земли, а не в неё) и скорость снаряда (сноп вперёд)
+    let snx = 0, sny = 0;
+    for (let a = 0; a < 16; a++) { const ca = Math.cos(a / 16 * TAU), sa = Math.sin(a / 16 * TAU); if (T.isSolid(x + ca * 9, y + sa * 9)) { snx -= ca; sny -= sa; } }
+    const sl = Math.hypot(snx, sny), sp = Math.hypot(ivx, ivy);
+    const fwd = sp > 60 ? Math.min(0.45, sp / 2400) : 0, fx0 = sp > 0 ? ivx / sp : 0, fy0 = sp > 0 ? ivy / sp : 0;
     // потеря энергии на 3 px пути в материале и шанс рикошета: 1 земля, 2 скала, 3 кирпич, 4 дерево, 5 бетон, 6 металл, 7 лёд, 8 кристалл, 9 базальт
     const ABS = [0, 0.08, 0.2, 0.18, 0.04, 0.28, 0.6, 0.1, 0.15, 0.22], RIC = [0, 0.05, 0.35, 0.25, 0.04, 0.4, 0.7, 0.3, 0.45, 0.35];
     for (let i = 0; i < F.n; i++) {
       const a = (i + Math.random()) / F.n * TAU; let cx = Math.cos(a), cy = Math.sin(a);
-      const L = F.L * (0.75 + Math.random() * 0.5);
+      // уводим луч от поверхности и вперёд по ходу снаряда
+      if (sl > 0.5) { const d = cx * snx / sl + cy * sny / sl; if (d < 0) { cx -= 1.6 * d * snx / sl; cy -= 1.6 * d * sny / sl; } }
+      cx += fx0 * fwd * 2; cy += fy0 * fwd * 2; { const l = Math.hypot(cx, cy) || 1; cx /= l; cy /= l; }
+      // у каждого осколка своя масса: тяжёлые летят дальше и бьют сильнее, мелкие быстро теряют скорость
+      const mass = Math.pow(Math.random(), 1.8) * 2.2 + 0.35;
+      const L = F.L * (0.55 + 0.45 * Math.sqrt(mass)) * (0.85 + Math.random() * 0.3);
       let px = x, py = y, e = 1, t = 0, inside = false, bounces = 0; const path = [[Math.round(x), Math.round(y)]]; const hitSet = new Set();
       while (e > 0.04 && t < L * 1.6) {
         px += cx * 3; py += cy * 3; t += 3;
@@ -156,14 +166,14 @@ class Game {
             }
             inside = true; path.push([Math.round(px), Math.round(py)]);
           }
-          e -= ABS[m];
+          e -= ABS[m] / Math.sqrt(mass);   // тяжёлый осколок пробивает глубже
           if (ABS[m] < 0.25) { const d = (Math.random() - 0.5) * 0.25; const c0 = cx; cx = cx * Math.cos(d) - cy * Math.sin(d); cy = c0 * Math.sin(d) + cy * Math.cos(d); }   // в мягком материале уводит в сторону
           continue;
         }
         if (inside) { inside = false; path.push([Math.round(px), Math.round(py)]); }   // пробил насквозь — летит дальше ослабленным
         for (const s of this.soldiers) {
           if (!s.alive || s.gone || hitSet.has(s) || px < s.x - 7 || px > s.x + 7 || py < s.y - 36 || py > s.y + 1) continue;
-          const dmg = F.d * e * 1.15;
+          const dmg = F.d * e * 1.15 * Math.min(2.2, 0.6 + mass * 0.55);
           const h = hits.get(s) || { d: 0, vx: 0, vy: 0, parts: [0, 0, 0, 0, 0, 0] }; h.d += dmg; h.vx += cx * 16 * e; h.vy += cy * 16 * e; h.parts[s.partAt(px, py)] += dmg; hits.set(s, h);
           hitSet.add(s); e *= 0.25;                                        // застрял в теле или прошёл навылет сильно ослабленным
           break;

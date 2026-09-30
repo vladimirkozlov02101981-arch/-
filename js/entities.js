@@ -166,7 +166,7 @@ class Proj extends Ent {
     if (this.dead) return; this.dead = true;
     if (this.k === 'nukem') { g.nuke(this.x, this.y, this.owner); return; }
     const B = BLAST[this.k];
-    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: this.k, k: (this.k === 'frag' || this.k === 'bomblet' || this.k === 'mini') ? 1 : 0 });
+    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: this.k, vx: this.vx, vy: this.vy, k: (this.k === 'frag' || this.k === 'bomblet' || this.k === 'mini') ? 1 : 0 });
   }
 }
 
@@ -215,7 +215,7 @@ class Thrown extends Ent {
     if (this.dead) return; this.dead = true;
     if (this.k === 'bholeg') { g.spawn(new BlackHole(g, this.x, this.y - 14, this.owner)); return; }
     const B = BLAST[this.k];
-    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: this.k, k: this.k === 'dynamite' ? 6 : 0 });
+    g.explode(this.x, this.y, B.R, B.D, { owner: this.owner, knock: B.K, frag: this.k, vx: this.vx, vy: this.vy, k: this.k === 'dynamite' ? 6 : 0 });
     if (this.k === 'cluster') for (let i = 0; i < 5; i++) g.spawn(new Proj(g, 'bomblet', this.x, this.y - 5, rand(-210, 210), rand(-460, -280), this.owner, { r: 2 }));
   }
 }
