@@ -353,6 +353,29 @@ const DECOR = {
     c.strokeStyle = 'rgba(140,100,50,0.85)'; c.lineWidth = 1;
     const R = 11 * s; for (let i = 0; i < 18; i++) { const a = r() * TAU, b = a + r.range(1, 3); c.beginPath(); c.arc(x + r.range(-3, 3) * s, y - R, R * r.range(0.5, 1), a, b); c.stroke(); }
   },
+  /** стеклянный купол на металлическом диске: рисуется поверх кристалла, из которого он сделан (разрушается вместе с ним).
+      o: [rx, ry, rot] — полуоси эллипса купола */
+  glassdome(c, g, x, y, s, r, o) {
+    const [rx, ry, rot] = o || [92, 46, -0.04];
+    if (g) { g.save(); g.translate(x, y); g.rotate(rot); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.ellipse(0, 0, rx + 3, ry + 3, 0, Math.PI, TAU); g.fill(); g.restore(); }   // стекло не светится, как кристалл
+    c.save(); c.translate(x, y); c.rotate(rot);
+    c.beginPath(); c.ellipse(0, 0, rx, ry, 0, Math.PI, TAU); c.closePath(); c.clip();
+    c.globalCompositeOperation = 'source-atop';
+    // стекло: отражает небо — светлое сверху, темнее и голубее к основанию, внутри видна тёмная кабина
+    const gg = c.createLinearGradient(0, -ry, 0, 0); gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(0.4, 'rgba(214,232,252,1)'); gg.addColorStop(1, 'rgba(120,150,196,1)');
+    c.fillStyle = gg; c.fillRect(-rx, -ry, rx * 2, ry);
+    c.fillStyle = 'rgba(40,50,80,0.25)'; c.beginPath(); c.ellipse(0, 0, rx * 0.62, ry * 0.55, 0, Math.PI, TAU); c.fill();
+    // каркас: меридианы и параллели из стальных рёбер
+    c.strokeStyle = 'rgba(120,128,142,0.95)'; c.lineWidth = 2.2;
+    for (let k = -3; k <= 3; k++) { const px = k / 3.6; c.beginPath(); c.ellipse(0, 0, Math.abs(px) * rx + 0.01, ry, 0, Math.PI, TAU); c.stroke(); }
+    for (const h of [0.35, 0.68]) { c.beginPath(); c.ellipse(0, 0, rx * Math.sqrt(1 - h * h), 1, 0, 0, TAU); c.save(); c.translate(0, -h * ry); c.restore(); c.moveTo(-rx * Math.sqrt(1 - h * h), -h * ry); c.lineTo(rx * Math.sqrt(1 - h * h), -h * ry); c.stroke(); }
+    c.strokeStyle = 'rgba(210,218,230,0.8)'; c.lineWidth = 0.8;
+    for (let k = -3; k <= 3; k++) { const px = k / 3.6; c.beginPath(); c.ellipse(-0.8, -0.8, Math.abs(px) * rx + 0.01, ry, 0, Math.PI * 1.1, Math.PI * 1.5); c.stroke(); }
+    // блики: широкая полоса неба и яркая искра
+    c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(-rx * 0.35, -ry * 0.62, rx * 0.28, ry * 0.12, -0.35, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.arc(-rx * 0.46, -ry * 0.7, 2.5, 0, TAU); c.fill();
+    c.restore();
+  },
   drygrass(c, g, x, y, s, r) {
     // пучок сухой травы: много тонких изогнутых стеблей разного тона, у корня — щебень
     const n = r.int(14, 24);
@@ -597,8 +620,8 @@ const DECOR = {
     c.strokeStyle = 'rgba(0,0,0,0.25)'; c.lineWidth = 1; c.strokeRect(x - w / 2 + 2, y + 2, w - 4, h - 12);
   },
 };
-const DECOR_EXACT = new Set(['roof', 'litwin', 'banner']);
-const DECOR_FRONT = new Set(['banner']);
+const DECOR_EXACT = new Set(['roof', 'litwin', 'banner', 'glassdome']);
+const DECOR_FRONT = new Set(['banner', 'glassdome']);
 
 function drawDecorItem(fn, c, g, x, y, s, r, flip, o) {
   c.save(); if (g) g.save();

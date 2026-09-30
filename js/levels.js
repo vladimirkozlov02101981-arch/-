@@ -297,6 +297,7 @@ const MAP_ALIEN = buildLevel({
   B.add(spire(4592, 1166, 170, 44, 12));
   B.decor(['alientree', 560, null, 1.6], ['tentacle', 700], ['alienplant', 1320], ['crystalBig', 190, null, 1.1], ['pod', 1850], ['alientree', 2050, null, 2.2], ['pod', 2860], ['crystalBig', 3200, null, 0.9], ['alientree', 4050, null, 1.3], ['tentacle', 4300], ['alienplant', 380]);
   B.prop(['beacon', 2440, 1050], ['beacon', 2600, 1034]);
+  B.decor(['glassdome', 2512, 1070, 1, false, [92, 46, -0.04]]);
   district(B, { from: [4560, 1150], gy: 1150, water: 1700, mat: 'metal', pal: PAL.ufoMetal, cover: 'crystal', bridge: { mat: 'crystal' }, cut: () => [Sh.cut(Sh.rect(4540, 960, 130, 186))], decor: [['crystalBig', 4960, null, 0.9], ['alientree', 6200, null, 1.4], ['alienplant', 5900]], props: [['beacon', 5380, 690], ['beacon', 6100, 1150]] });
 });
 
