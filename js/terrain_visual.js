@@ -699,7 +699,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       const occ = (OCC[oyR + ox0] * (1 - fx) + OCC[oyR + ox1] * fx) * (1 - fy) + (OCC[oyR1 + ox0] * (1 - fx) + OCC[oyR1 + ox1] * fx) * fy;
       if (isSolid) {
         const mt0 = mat[i] || 1, mt = mt0 === 1 && S.rockDirt ? 2 : mt0; const dd = D[i], d = dd / 3, t = TD[i];
-        const capT = capMat[mt] ? capThick * (0.78 + 0.44 * capN[x]) + capS[x] * 2.6 + (t2[ty2 | ((x >> 1) & 255)] - 0.5) * 4 + fringe[x] : 0;
+        const capT = capMat[mt] ? capThick * (S.grassy ? 0.78 + 0.44 * capN[x] : 0.5 + capN[x] * capN[x] * 1.3) + capS[x] * 2.6 + (t2[ty2 | ((x >> 1) & 255)] - 0.5) * 4 + fringe[x] : 0;
         shadeMaterial(S, mt, x, y, t, capT, d, infos[sid[i]] || infos[0], o, false);
         let r = o.r, g = o.g, bl = o.b;
         // объём: нормаль из размытой высоты

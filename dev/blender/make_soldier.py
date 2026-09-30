@@ -51,7 +51,7 @@ def sun(energy, col, elev, az):
     v = Vector((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), -math.sin(e)))
     o.rotation_euler = v.to_track_quat('-Z', 'Y').to_euler()
 sun(4.2, (1.0, 0.86, 0.68), 32, -30)      # тёплое солнце слева-спереди сверху
-sun(1.6, (0.7, 0.8, 1.0), 20, 150)        # холодный контровой свет справа-сзади: отделяет силуэт от фона
+sun(5.0, (1.0, 0.88, 0.69), 18, 150)       # сильный тёплый контровой свет сзади: светлый контур по силуэту — боец читается на любом фоне
 
 ARM_BONES = [b.name for b in arm.data.bones if any(k in b.name for k in ('Shoulder', 'Arm', 'Hand'))]
 pb = arm.pose.bones
