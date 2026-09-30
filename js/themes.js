@@ -46,7 +46,7 @@ const THEMES = {
       pebbles: ['#b98a5e', '#9c6f48', '#d0a57a'],
       outline: '#4d240f', veins: null, ceiling: 'drips', capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand' },
     },
-    scatter: ['rock', 'skull', 'cactusSmall', 'tumbleweed', 'rock', 'drygrass'],
+    scatter: ['rock', 'drygrass', 'cactusSmall', 'drygrass', 'rock', 'drygrass', 'skull', 'tumbleweed'], scatterRock: true,
     weather: 'dust', birds: false, ambient: null, ambientSound: 'wind',
   },
   arctic: {

@@ -354,8 +354,15 @@ const DECOR = {
     const R = 11 * s; for (let i = 0; i < 18; i++) { const a = r() * TAU, b = a + r.range(1, 3); c.beginPath(); c.arc(x + r.range(-3, 3) * s, y - R, R * r.range(0.5, 1), a, b); c.stroke(); }
   },
   drygrass(c, g, x, y, s, r) {
-    c.strokeStyle = '#b8945a'; c.lineWidth = 1;
-    for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + r.range(-0.6, 0.6); const l = r.range(6, 12) * s; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke(); }
+    // пучок сухой травы: много тонких изогнутых стеблей разного тона, у корня — щебень
+    const n = r.int(14, 24);
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + r.range(-0.75, 0.75), l = r.range(5, 15) * s, bx = x + r.range(-4, 4) * s;
+      const ex = bx + Math.cos(a) * l, ey = y + Math.sin(a) * l, bend = r.range(-3, 3) * s;
+      c.strokeStyle = r.pick(['#c9a868', '#b08a4e', '#d8bf82', '#8e7042', '#a89060']); c.lineWidth = r.range(0.5, 1);
+      c.beginPath(); c.moveTo(bx, y + 1); c.quadraticCurveTo(bx + bend, y + Math.sin(a) * l * 0.5, ex, ey); c.stroke();
+    }
+    for (let i = 0; i < 6; i++) { const px = x + r.range(-9, 9) * s, rr = r.range(0.8, 2) * s; c.fillStyle = r.pick(['#8a6a4a', '#a88660', '#6e5238']); c.beginPath(); c.ellipse(px, y + 0.5, rr * 1.3, rr, 0, 0, TAU); c.fill(); }
   },
   spike(c, g, x, y, s, r) {
     const h = r.range(50, 70) * s, w = 14 * s;
@@ -640,12 +647,21 @@ function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
   }
   const kinds = theme.scatter || [];
   if (!kinds.length) return;
+  if (theme.scatterRock) {   // сухая трава и щебень густо по всем ровным уступам, включая полы пещер
+    for (let k = 0; k < tops.length; k += 2) {
+      const x = tops[k], y = tops[k + 1];
+      if (y > waterY - 12 || r() > 0.09) continue;
+      const mm = mat[y * T.W + x]; if (mm !== 1 && mm !== 2) continue;
+      if (!T.isSolid(x - 5, y + 3) || !T.isSolid(x + 5, y + 3) || T.isSolid(x, y - 10)) continue;
+      drawDecorItem(DECOR.drygrass, c, g, x, y + 2, r.range(0.4, 0.8), r, r() < 0.5);
+    }
+  }
   const occupied = (map.decor || []).map(d => d[1]);
   let lastX = -999;
   for (let k = 0; k < tops.length; k += 2) {
     const x = tops[k], y = tops[k + 1];
     if (x - lastX < 30 || y > waterY - 12 || x < 40 || x > T.W - 40) continue;
-    if (mat[y * T.W + x] !== 1) continue;
+    const mm = mat[y * T.W + x]; if (mm !== 1 && !(mm === 2 && theme.scatterRock)) continue;   // на скалах — только там, где тема это разрешает (сухая трава, щебень в каньоне)
     if (!T.isSolid(x - 6, y + 4) || !T.isSolid(x + 6, y + 4) || T.isSolid(x - 6, y - 8) || T.isSolid(x + 6, y - 8) || T.isSolid(x, y - 20)) continue;
     if (r() > 0.3) continue;
     if (occupied.some(ox => Math.abs(ox - x) < 45)) continue;
