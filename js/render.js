@@ -114,13 +114,13 @@ class Renderer {
   drawReflection(c, wy, t) {
     const m = c.getTransform(), cv = c.canvas, sy = Math.round(wy * m.d + m.f);
     if (sy <= 0 || sy >= cv.height - 2) return;
-    const depth = Math.min(sy, cv.height - sy, Math.round(260 * m.d)), band = Math.max(3, Math.round(4 * this.dpr));
+    const depth = Math.min(sy, cv.height - sy, Math.round(260 * m.d)), band = Math.max(1, Math.round(2 * this.dpr));
     if (!this.reflCv || this.reflCv.width !== cv.width || this.reflCv.height < depth) this.reflCv = makeCanvas(cv.width, Math.max(depth, 8));
     const r = this.reflCv.getContext('2d'); r.setTransform(1, 0, 0, 1, 0, 0); r.clearRect(0, 0, cv.width, depth);
-    r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, cv.width, depth);       // снимок полосы над водой
+    r.filter = 'blur(' + (1.2 * this.dpr).toFixed(1) + 'px)'; r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, cv.width, depth); r.filter = 'none';   // снимок полосы над водой, чуть размыт — вода не зеркало
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     for (let k = 0; k < depth; k += band) {
-      const a = 0.46 * (1 - k / depth), dx = Math.sin(t * 2.2 + k * 0.09) * (1 + k * 0.035) * this.dpr;
+      const q = 1 - k / depth, a = 0.42 * q * Math.sqrt(q), dx = (Math.sin(t * 1.6 + k * 0.05) * 0.8 + Math.sin(t * 2.7 + k * 0.17) * 0.45) * (1 + k * 0.03) * this.dpr;   // плавная рябь, отражение гаснет с глубиной
       c.globalAlpha = a; c.drawImage(this.reflCv, 0, depth - k - band, cv.width, band, dx, sy + k, cv.width, band);
     }
     c.restore();
