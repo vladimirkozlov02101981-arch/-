@@ -146,6 +146,18 @@ function veinDist(tl, x, y, n2) {
   const gl = Math.abs(gx) + Math.abs(gy); if (gl < 0.01) return 1;
   return Math.abs(v0 - 0.5) * 1.5 * Math.min(3, 0.03 / gl + 0.6);
 }
+/** глубокая тень под потолком пещеры: до 70 px вниз от свода стена заметно темнее */
+function caveAO(m, i, W, y, bk) {
+  if (bk > 2) return 1;
+  for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; return 0.52 + 0.48 * t * (2 - t); }
+  return 1;
+}
+/** средняя сумма r+g+b текстуры (для модуляции яркостью) */
+function texMean(T) {
+  if (!T) return 1; if (T.mean) return T.mean;
+  let s = 0; const d = T.d; for (let j = 0; j < d.length; j += 4) s += d[j] + d[j + 1] + d[j + 2];
+  return (T.mean = s / (d.length / 4));
+}
 /** пиксель бесшовной текстуры (отрендерена в Blender), координаты мира 1:1 */
 function texAt(T, x, y, o) {
   const tx = ((x | 0) % T.w + T.w) % T.w, ty = ((y | 0) % T.h + T.h) % T.h, j = (ty * T.w + tx) * 4, d = T.d;
@@ -183,12 +195,13 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (k > 0.8) f *= 1 - (k - 0.8) * 1.4;
     }
     r *= f; g *= f; bl *= f;
+    if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = (o.r + o.g + o.b) / S.capMean; r *= q; g *= q; bl *= q; }   // зерно снега/песка/пепла из Blender
   } else if (mt === 1 && S.tx.dirt) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
     const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
     if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
-    { const dk = Math.min(1, sd / 700); r *= 1 - 0.26 * dk; g *= 1 - 0.28 * dk; bl *= 1 - 0.27 * dk; }
+    { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.26 * dk; g *= 1 - 0.28 * dk; bl *= 1 - 0.27 * dk; }
   } else if (mt === 1) {
     const sd = t - capT;
     // крупный масштаб: пятна тона, изгиб пластов и скопления камней (не равномерная сетка)
@@ -263,7 +276,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (r * G2[0] + g * G2[1] + bl * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(r, g, bl) + 1)), br = Math.max(r, g, bl);
       if (dot > 0.93 && br > 150) { o.ga = Math.min(255, (br - 150) * 2.4); o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, k = sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
-    { const sd = t - capT, dk = Math.min(1, sd / 700), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.3 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
+    { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.3 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
   } else if (mt === 2) {
     // скала: пласты осадочной породы разной толщины, волнистые; пласт разбит вертикальными трещинами
     // на глыбы; у глыб — объёмная фаска (светлый верх/левый край, тёмный низ), выветренные карнизы и потёки
@@ -628,7 +641,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[82, 102, 34], [60, 76, 24], [54, 42, 24]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete] }, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[82, 102, 34], [60, 76, 24], [54, 42, 24]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -722,7 +735,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
+        const k = back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)) * caveAO(m, i, W, y, back[i]); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }

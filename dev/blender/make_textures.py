@@ -773,6 +773,39 @@ def wood_planks(name, seed, ph, pw, dark, light, n=512, nails=True, weather=0.3,
     render(sc, name)
 
 
+def granular(name, seed, pal, amp=0.012, ripples=0.0, pebbles=0.0, sparkle=0.0, n=512):
+    """сыпучий слой в разрезе (снег, песок, пепел): зерно в нескольких масштабах, комки, рябь, редкие камешки,
+    искры (у снега — блестящие кристаллы)"""
+    sc = reset(); rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    g1 = fft_noise(n, 0.15, seed + 1); g2 = fft_noise(n, 0.7, seed + 2); lump = fft_noise(n, 1.4, seed + 3)
+    H = (g1 - 0.5) * amp * 0.35 + (g2 - 0.5) * amp * 0.6 + (lump - 0.5) * amp * 1.5
+    if ripples:
+        H += np.sin(yy / n * 6.283 * 24 + (fft_noise(n, 1.6, seed + 4) - 0.5) * 9) * amp * 0.4 * ripples
+    P = np.array(pal, float)
+    t = np.clip(lump * 0.8 + (g2 - 0.5) * 0.6, 0, 0.999) * (len(P) - 1)
+    i0 = np.floor(t).astype(int); fr = (t - i0)[..., None]
+    C = P[i0] * (1 - fr) + P[np.minimum(i0 + 1, len(P) - 1)] * fr
+    C *= (0.88 + 0.24 * g1)[..., None]
+    cav = H - blur_p(H, 3); C *= (0.8 + 0.2 * np.clip(0.5 + cav / (amp * 0.3), 0, 1))[..., None]
+    if pebbles:
+        F1, F2, ID = worley(n, int(260 * pebbles), seed + 5)
+        keep = np.random.default_rng(seed + 6).random(int(260 * pebbles))[ID] < 0.35
+        r = np.random.default_rng(seed + 7).uniform(1.5, 4.5, int(260 * pebbles))[ID]
+        m = keep & (F1 < r)
+        dome = np.sqrt(np.clip(1 - (F1 / r) ** 2, 0, 1))
+        H = np.where(m, H + dome * r * 0.006, H)
+        pc = P[0] * np.random.default_rng(seed + 8).uniform(0.45, 0.8, int(260 * pebbles))[ID][..., None]
+        C = np.where(m[..., None], pc, C)
+    glow = None
+    if sparkle:
+        sp = (fft_noise(n, 0.0, seed + 9) > 0.985).astype(float) * sparkle
+        C = C * (1 - sp[..., None]) + np.array((1.0, 1.0, 1.0)) * sp[..., None]
+        glow = sp * 0.6
+    field_plane('gran', H, np.clip(C, 0, 1), glow=glow, rough=0.85, bump=0.25, gstr=1.5)
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- деревья (спрайты с прозрачным фоном)
 def _cone(bm, p0, p1, r0, r1, seg=10):
     """сужающийся цилиндр ветки от p0 до p1"""
@@ -931,6 +964,10 @@ LIB = {
     'dirt_tropical': lambda: dirt_stones('dirt_tropical', 143, (0.56, 0.40, 0.26), (0.40, 0.27, 0.16), (0.40, 0.36, 0.30), (0.74, 0.70, 0.62), density=1.4),
     'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
                                           [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
+    # ---- сыпучие шапки поверхности: снег, песок, пепел
+    'cap_snow': lambda: granular('cap_snow', 201, [(0.80, 0.86, 0.94), (0.90, 0.94, 0.99), (0.97, 0.98, 1.0)], amp=0.014, sparkle=1.0),
+    'cap_sand': lambda: granular('cap_sand', 202, [(0.78, 0.60, 0.38), (0.88, 0.72, 0.48), (0.95, 0.82, 0.58)], amp=0.01, ripples=0.6, pebbles=0.5),
+    'cap_ash': lambda: granular('cap_ash', 203, [(0.26, 0.24, 0.23), (0.36, 0.34, 0.32), (0.46, 0.43, 0.40)], amp=0.012, pebbles=0.8),
     # ---- ночной город: бетонные панели фасадов
     'concrete_city': lambda: masonry('concrete_city', 151, 120, 58, (0.42, 0.42, 0.44), (0.62, 0.62, 0.64), (0.20, 0.20, 0.22), wrange=(0.8, 1.2), jitter=0.3, depth=0.02, gap_px=1.6),
 }
