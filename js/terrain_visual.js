@@ -257,6 +257,12 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         r += (vc[0] - r) * k; g += (vc[1] - g) * k * 0.7; bl += (vc[2] - bl) * k * 0.5;
       }
     }
+  } else if (mt === 2 && S.tx.rock) {
+    // пласты породы из Blender; светящиеся швы (лава, кристаллы) идут в слой свечения
+    texAt(S.tx.rock, x, y, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
+    if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (r * G2[0] + g * G2[1] + bl * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(r, g, bl) + 1)), br = Math.max(r, g, bl);
+      if (dot > 0.93 && br > 150) { o.ga = Math.min(255, (br - 150) * 2.4); o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
+    if (capT > 0 && t - capT < 10) { const sd = t - capT, k = sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
   } else if (mt === 2) {
     // скала: пласты осадочной породы разной толщины, волнистые; пласт разбит вертикальными трещинами
     // на глыбы; у глыб — объёмная фаска (светлый верх/левый край, тёмный низ), выветренные карнизы и потёки
@@ -384,7 +390,11 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         }
         break;
       }
-      case 4: { // доски со скруглёнными краями
+      case 4: if (P.tex && TexLib.data[P.tex]) {
+        texAt(TexLib.data[P.tex], x, y - (prm ? prm.y0 : 0), o); r = o.r; g = o.g; bl = o.b; o.tex = true;
+        if (prm && prm.h > 60) { const k = 1.1 - 0.35 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h)); r *= k; g *= k; bl *= k; }
+        break;
+      } else { // доски со скруглёнными краями
         const ph = P.plank || 8; const ly = y - (prm ? prm.y0 : 0);
         const row = Math.floor(ly / ph), fy = ly - row * ph;
         const off = hash3(row, 3, info.idx) * 190; const segL = 60 + hash3(row, 4, info.idx) * 120;
@@ -413,6 +423,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       }
       case 5: { // бетон, окна, дорога
         const base = P.base; let f = 0.9 + n2 * 0.12 + (n3 - 0.5) * 0.1;
+        if (S.tx.concrete) { texAt(S.tx.concrete, x, y, o); f = (o.r + o.g + o.b) / (3 * 150); }   // бетонные панели из Blender, тон — из палитры здания
         f *= 0.88 + tileAt(tl.t1, x * 2, y * 4, 1, 19) * 0.24 + (tileAt(tl.t2, x, y, 3, 29) - 0.5) * 0.12;                                      // фактура штукатурки/плитки
         // бетон: заполнитель (крапинки), швы опалубки, потёки дождя, трещины
         if (n1 > 0.9) f *= 1.1; else if (n1 < 0.08) f *= 0.84;
@@ -616,7 +627,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[104, 132, 40], [76, 100, 28], [66, 50, 28]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave] }, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[104, 132, 40], [76, 100, 28], [66, 50, 28]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete] }, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,

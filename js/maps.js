@@ -134,8 +134,8 @@ const PAL = {
   castleStone: { base: '#a89684', alt: '#8a7a6c', mortar: '#2a221c', w: 28, h: 14, var: 0.13, tex: 'brick_light' },
   sandBrick: { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 22, h: 11, var: 0.08 },
   darkStone: { base: '#4a4040', alt: '#3c3434', mortar: '#1a1414', w: 20, h: 10, var: 0.1 },
-  shipWood: { base: '#7a4a2a', gap: '#2a160a', plank: 8, var: 0.18 },
-  lightWood: { base: '#a0703f', gap: '#3a220e', plank: 7, var: 0.16 },
+  shipWood: { base: '#7a4a2a', gap: '#2a160a', plank: 8, var: 0.18, tex: 'wood_ship' },
+  lightWood: { base: '#a0703f', gap: '#3a220e', plank: 7, var: 0.16, tex: 'wood_light' },
   ufoMetal: { base: '#9aa3b5', rust: '#6a7080', plate: [34, 18] },
   steel: { base: '#7a8290', rust: '#8a4a2a', plate: [30, 16] },
 };

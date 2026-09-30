@@ -115,7 +115,7 @@ def lin(c):
     return tuple(v ** 2.2 for v in c)
 
 
-def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bumpk=0.6):
+def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bumpk=0.6, moss_col=(0.30, 0.40, 0.14)):
     """камень: цвет между dark и light (sRGB) по шуму в координатах объекта и по свойству объекта tone;
     moss > 0 — мох на верхних (к +Y) гранях"""
     dark, light = lin(dark), lin(light)
@@ -149,7 +149,7 @@ def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bum
         L.new(add.outputs[0], th.inputs['Value'])
         mm = N.new('ShaderNodeMix'); mm.data_type = 'RGBA'
         L.new(th.outputs['Result'], sock(mm.inputs, 'Factor_Float')); L.new(col, sock(mm.inputs, 'A_Color'))
-        sock(mm.inputs, 'B_Color').default_value = (*lin((0.30, 0.40, 0.14)), 1)
+        sock(mm.inputs, 'B_Color').default_value = (*lin(moss_col), 1)
         col = sock(mm.outputs, 'Result_Color')
     L.new(col, b.inputs['Base Color'])
     return m
@@ -268,39 +268,86 @@ def block_mesh(sx, sy, sz, rng, jitter):
     return me
 
 
-def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=1.0):
-    """кладка из тёсаного камня: блоки разной длины, неровные, со сколами; глубокий тёмный раствор"""
+def mat_wood(name, dark, light):
+    """дерево: вытянутые вдоль доски волокна, сучки, тон доски из свойства tone"""
+    dark, light = lin(dark), lin(light)
+    m, nt, b = principled(name, 0.7, 0.25)
+    N = nt.nodes; L = nt.links
+    tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping')
+    mp.inputs['Scale'].default_value = (0.6, 22, 1)
+    L.new(tc.outputs['Object'], mp.inputs['Vector'])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 3; nz.inputs['Detail'].default_value = 12
+    L.new(mp.outputs['Vector'], nz.inputs['Vector'])
+    tone = N.new('ShaderNodeAttribute'); tone.attribute_type = 'OBJECT'; tone.attribute_name = 'tone'
+    mix = N.new('ShaderNodeMath'); mix.operation = 'MULTIPLY_ADD'
+    L.new(nz.outputs['Fac'], mix.inputs[0]); mix.inputs[1].default_value = 0.9; L.new(tone.outputs['Fac'], mix.inputs[2])
+    ramp = N.new('ShaderNodeValToRGB')
+    ramp.color_ramp.elements[0].position = 0.25; ramp.color_ramp.elements[0].color = (*dark, 1)
+    ramp.color_ramp.elements[1].position = 0.85; ramp.color_ramp.elements[1].color = (*light, 1)
+    L.new(mix.outputs[0], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.5
+    L.new(nz.outputs['Fac'], bump.inputs['Height']); L.new(bump.outputs['Normal'], b.inputs['Normal'])
+    return m
+
+
+def mat_glow(name, col, strength):
+    """светящийся материал (лава в швах, сияние кристаллов)"""
+    m, nt, b = principled(name, 0.9, 0.1)
+    b.inputs['Base Color'].default_value = (*lin(col), 1)
+    for key in ('Emission Color', 'Emission'):
+        if key in b.inputs: b.inputs[key].default_value = (*lin(col), 1); break
+    if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = strength
+    return m
+
+
+def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=1.0, hrange=None, wrange=(0.7, 1.55),
+            mat='stone', moss_col=(0.30, 0.40, 0.14), glow=None, band=0.0, nails=False, depth=0.04, gap_px=1.4):
+    """кладка / пласты / доски: ряды блоков разной длины (hrange — разброс высоты ряда в px),
+    неровные, со сколами; раствор между ними тёмный или светящийся (glow=(цвет, сила))"""
     sc = reset(); rng = random.Random(seed)
     n = 256
     cols = np.array(mortar)[None, None, :] * (0.6 + 0.7 * fft_noise(n, 0.5, seed + 5))[..., None]
     height_plane('mortar', fft_noise(n, 1.1, seed), 0.01, np.clip(cols, 0, 1) ** 2.2, z0=-0.035)
-    bpy.data.objects['mortar'].data.materials.append(mat_vertex_color('mortar', rough=1.0, spec=0.1))
-    mst = mat_stone('block', dark, light, rough=0.72, moss=moss, spec=0.3, scale=3.5, bumpk=0.9)
-    w, h = bw / 100.0, bh / 100.0
-    rows = int(round(S / h)); h = S / rows
-    gap = 0.014
-    for j in range(rows):
-        y = -S / 2 + j * h + h / 2
+    bpy.data.objects['mortar'].data.materials.append(mat_glow('glow', *glow) if glow else mat_vertex_color('mortar', rough=1.0, spec=0.1))
+    mst = mat_wood('wood', dark, light) if mat == 'wood' else mat_stone('block', dark, light, rough=0.72, moss=moss, spec=0.3, scale=3.5, bumpk=0.9, moss_col=moss_col)
+    mnail = mat_stone('nail', (0.12, 0.11, 0.10), (0.35, 0.33, 0.30), rough=0.3, spec=0.8) if nails else None
+    w = bw / 100.0
+    hs = []; tot = 0
+    if hrange:
+        while tot < S - hrange[0] / 100.0:
+            hh = rng.uniform(*hrange) / 100.0; hs.append(hh); tot += hh
+        hs[-1] += S - tot
+    else:
+        rows = int(round(S / (bh / 100.0))); hs = [S / rows] * rows
+    gap = gap_px / 100.0
+    y0 = -S / 2
+    for j, h in enumerate(hs):
+        y = y0 + h / 2; y0 += h
+        btone = rng.uniform(-band, band)
         widths = []; tot = 0
         while tot < S - 0.6 * w:
-            ww = w * rng.uniform(0.7, 1.55); widths.append(ww); tot += ww
+            ww = w * rng.uniform(*wrange); widths.append(ww); tot += ww
         widths[-1] += S - tot                                   # ряд ровно на плитку — бесшовно
         x = -S / 2 + rng.uniform(0, w)
         for ww in widths:
-            me = block_mesh((ww - gap) / 2, (h - gap) / 2, 0.04, rng, jitter)
+            me = block_mesh((ww - gap) / 2, (h - gap) / 2, depth, rng, jitter)
             me.materials.append(mst)
-            place(me, mst, x + ww / 2, y, 0.0, (0, 0, rng.uniform(-0.008, 0.008)), rng.uniform(-0.4, 0.35), 'blk')
+            place(me, mst, x + ww / 2, y, 0.0, (0, 0, rng.uniform(-0.008, 0.008)), btone + rng.uniform(-0.4, 0.35) * (0.5 if band else 1), 'blk')
+            if nails:
+                for ex in (-1, 1):
+                    nm = rock_mesh('nail', 0.012, 1, 1, 0.5, rng.random() * 9, rough=0.05, sub=2)
+                    place(nm, mnail, x + ww / 2 + ex * (ww / 2 - 0.05), y, depth + 0.004, (0, 0, 0), 0.0, 'nail')
             x += ww
     render(sc, name)
 
 
-def slab_wall(name, seed, dark, light, mortar):
+def slab_wall(name, seed, dark, light, mortar, glow=None):
     """стена пещеры: плотно уложенные неровные плиты разного размера"""
     sc = reset(); rng = random.Random(seed)
     n = 256
     cols = np.array(mortar)[None, None, :] * (0.6 + 0.6 * fft_noise(n, 0.6, seed))[..., None]
     height_plane('back', fft_noise(n, 1.2, seed + 1), 0.02, np.clip(cols, 0, 1) ** 2.2, z0=-0.05)
-    bpy.data.objects['back'].data.materials.append(mat_vertex_color('back', rough=1.0, spec=0.1))
+    bpy.data.objects['back'].data.materials.append(mat_glow('glow', *glow) if glow else mat_vertex_color('back', rough=1.0, spec=0.1))
     mst = mat_stone('slab', dark, light, rough=0.75, spec=0.3, scale=3, bumpk=1.0)
     k = 9
     for j in range(k):
@@ -313,7 +360,7 @@ def slab_wall(name, seed, dark, light, mortar):
     render(sc, name)
 
 
-def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80):
+def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80, glow=None):
     """трава сбоку: густые пучки изогнутых травинок разной высоты и оттенка, полевые цветы.
     Прозрачный фон; по горизонтали бесшовно. Высота кадра H_PX px, низ кадра = корни"""
     sc = reset(); rng = random.Random(seed)
@@ -328,6 +375,7 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80):
         for key in ('Subsurface Weight', 'Subsurface'):
             if key in b.inputs: b.inputs[key].default_value = 0.15; break
         mats.append(m)
+    if glow: mats[-1] = mat_glow('bladeglow', *glow)
     # травинки: узкие изогнутые ленты, сужающиеся к кончику
     def blade(x, y, h, lean, w, mi):
         segs = 6; verts = []; faces = []
@@ -499,6 +547,30 @@ LIB = {
     'tree_pine1': lambda: tree_sprite('tree_pine1', 61, 'pine'), 'tree_pine2': lambda: tree_sprite('tree_pine2', 62, 'pine'),
     'tree_birch1': lambda: tree_sprite('tree_birch1', 71, 'birch'),
     'bush1': lambda: tree_sprite('bush1', 81, 'bush', px=160), 'bush2': lambda: tree_sprite('bush2', 82, 'bush', px=160),
+    # ---- каньон: пласты песчаника, песчаная земля, пещеры
+    'rock_canyon': lambda: masonry('rock_canyon', 101, 120, 0, (0.56, 0.31, 0.18), (0.86, 0.58, 0.38), (0.30, 0.16, 0.09), hrange=(16, 46), wrange=(0.5, 1.8), band=0.35, jitter=1.6),
+    'dirt_canyon': lambda: dirt_stones('dirt_canyon', 102, (0.78, 0.56, 0.34), (0.62, 0.40, 0.22), (0.45, 0.30, 0.20), (0.80, 0.62, 0.44), density=1.2),
+    'cave_canyon': lambda: slab_wall('cave_canyon', 103, (0.30, 0.17, 0.10), (0.52, 0.32, 0.20), (0.10, 0.05, 0.03)),
+    # ---- ледяной перевал: сланец с инеем на уступах
+    'rock_arctic': lambda: masonry('rock_arctic', 111, 110, 0, (0.26, 0.31, 0.40), (0.52, 0.58, 0.68), (0.10, 0.12, 0.16), hrange=(18, 50), wrange=(0.5, 1.8), band=0.25, jitter=1.6, moss=0.6, moss_col=(0.92, 0.95, 1.0)),
+    'cave_arctic': lambda: slab_wall('cave_arctic', 113, (0.16, 0.19, 0.25), (0.34, 0.40, 0.50), (0.05, 0.06, 0.08)),
+    # ---- вулкан: базальт, в трещинах светится лава
+    'rock_volcano': lambda: masonry('rock_volcano', 121, 90, 0, (0.13, 0.10, 0.09), (0.32, 0.25, 0.22), (1.0, 0.45, 0.10), hrange=(16, 44), wrange=(0.5, 1.6), band=0.2, jitter=1.8, glow=((1.0, 0.42, 0.08), 6.0), gap_px=2.2),
+    'cave_volcano': lambda: slab_wall('cave_volcano', 123, (0.12, 0.09, 0.08), (0.26, 0.20, 0.17), (1.0, 0.40, 0.08), glow=((1.0, 0.38, 0.06), 2.5)),
+    # ---- кристальная планета: фиолетовая порода, светящиеся голубые жилы
+    'rock_alien': lambda: masonry('rock_alien', 131, 100, 0, (0.18, 0.12, 0.30), (0.40, 0.28, 0.56), (0.35, 0.95, 1.0), hrange=(18, 46), wrange=(0.5, 1.7), band=0.3, jitter=1.6, glow=((0.30, 0.90, 1.0), 3.0)),
+    'dirt_alien': lambda: dirt_stones('dirt_alien', 132, (0.30, 0.20, 0.42), (0.18, 0.12, 0.28), (0.28, 0.20, 0.45), (0.56, 0.44, 0.78), density=1.5),
+    'cave_alien': lambda: slab_wall('cave_alien', 133, (0.12, 0.08, 0.20), (0.28, 0.20, 0.40), (0.30, 0.80, 1.0), glow=((0.30, 0.85, 1.0), 1.5)),
+    'grass_alien': lambda: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)],
+                                       [(1.0, 0.45, 0.95), (0.55, 0.95, 1.0)], glow=((0.35, 1.0, 0.90), 2.0)),
+    # ---- пиратская бухта: доски корабля, тропическая земля и трава
+    'wood_ship': lambda: masonry('wood_ship', 141, 120, 10, (0.30, 0.17, 0.09), (0.58, 0.38, 0.22), (0.10, 0.05, 0.03), wrange=(0.5, 1.6), mat='wood', nails=True, jitter=0.4, depth=0.03, gap_px=1.6),
+    'wood_light': lambda: masonry('wood_light', 142, 100, 9, (0.52, 0.36, 0.22), (0.80, 0.62, 0.42), (0.18, 0.10, 0.06), wrange=(0.5, 1.6), mat='wood', nails=True, jitter=0.4, depth=0.03, gap_px=1.4),
+    'dirt_tropical': lambda: dirt_stones('dirt_tropical', 143, (0.56, 0.40, 0.26), (0.40, 0.27, 0.16), (0.40, 0.36, 0.30), (0.74, 0.70, 0.62), density=1.4),
+    'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
+                                          [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
+    # ---- ночной город: бетонные панели фасадов
+    'concrete_city': lambda: masonry('concrete_city', 151, 120, 58, (0.42, 0.42, 0.44), (0.62, 0.62, 0.64), (0.20, 0.20, 0.22), wrange=(0.8, 1.2), jitter=0.3, depth=0.02, gap_px=1.6),
 }
 
 if __name__ == '__main__':
