@@ -973,7 +973,7 @@ LIB = {
     'brick_light': lambda: masonry('brick_light', 22, 30, 0, (0.44, 0.42, 0.40), (0.82, 0.80, 0.75), (0.62, 0.60, 0.55), moss=0.8, moss_col=(0.33, 0.38, 0.17), jitter=1.4, hrange=(12, 20), wrange=(0.6, 1.5), depth=0.05, gap_px=2.0, tilt=0.03, detail=0.3, mortar_h=0.03),
     # замки на закате: тот же грунт и кладка при низком оранжевом солнце
     'dirt_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), dirt_stones('dirt_castle', 12, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
-    'brick_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), masonry('brick_castle', 23, 30, 16, (0.50, 0.44, 0.38), (0.76, 0.68, 0.58), (0.24, 0.20, 0.16), moss=0.5, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
+    'brick_castle': lambda: (LIGHT.update(col=(1.0, 0.66, 0.40), elev=14, energy=5.2), masonry('brick_castle', 23, 32, 0, (0.46, 0.42, 0.38), (0.72, 0.66, 0.58), (0.58, 0.54, 0.48), moss=0.7, moss_col=(0.33, 0.38, 0.17), jitter=1.4, hrange=(13, 21), wrange=(0.6, 1.5), depth=0.05, gap_px=2.0, tilt=0.03, detail=0.3, mortar_h=0.03), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
     # задняя стена пещер
     'cave_wall': lambda: rock_face('cave_wall', 31, [(0.36, 0.35, 0.34), (0.42, 0.41, 0.39), (0.30, 0.29, 0.28)], layer=(30, 90), blocks=130, streak=0.2, cave=True),
     # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
@@ -1012,7 +1012,7 @@ LIB = {
     'cap_sand': lambda: granular('cap_sand', 202, [(0.78, 0.60, 0.38), (0.88, 0.72, 0.48), (0.95, 0.82, 0.58)], amp=0.01, ripples=0.6, pebbles=0.5),
     'cap_ash': lambda: granular('cap_ash', 203, [(0.26, 0.24, 0.23), (0.36, 0.34, 0.32), (0.46, 0.43, 0.40)], amp=0.012, pebbles=0.8),
     # ---- ночной город: бетонные панели фасадов
-    'concrete_city': lambda: masonry('concrete_city', 151, 120, 58, (0.42, 0.42, 0.44), (0.62, 0.62, 0.64), (0.20, 0.20, 0.22), wrange=(0.8, 1.2), jitter=0.3, depth=0.02, gap_px=1.6),
+    'concrete_city': lambda: masonry('concrete_city', 151, 120, 58, (0.36, 0.36, 0.38), (0.60, 0.60, 0.62), (0.16, 0.16, 0.18), wrange=(0.9, 1.1), jitter=0.5, depth=0.02, gap_px=1.8, detail=0.45, moss=0.25, moss_col=(0.22, 0.24, 0.20)),
 }
 
 if __name__ == '__main__':
