@@ -152,6 +152,14 @@ function caveAO(m, i, W, y, bk) {
   for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; return 0.52 + 0.48 * t * (2 - t); }
   return 1;
 }
+/** нерезкое маскирование 3×3 (только внутри непрозрачных областей, без ореолов по краю) */
+function sharpen(d, W, H, k) {
+  const src = new Uint8ClampedArray(d), R = W * 4;
+  for (let y = 1; y < H - 1; y++) for (let x = 1, j = (y * W + 1) * 4; x < W - 1; x++, j += 4) {
+    if (src[j + 3] < 255 || src[j - 1] < 255 || src[j + 7] < 255 || src[j - R + 3] < 255 || src[j + R + 3] < 255) continue;
+    for (let c = 0; c < 3; c++) { const v = src[j + c], a = (src[j - 4 + c] + src[j + 4 + c] + src[j - R + c] + src[j + R + c]) * 0.25; d[j + c] = v + (v - a) * k; }
+  }
+}
 /** средняя сумма r+g+b текстуры (для модуляции яркостью) */
 function texMean(T) {
   if (!T) return 1; if (T.mean) return T.mean;
@@ -741,6 +749,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       }
     }
   }
+  sharpen(img.data, W, H, 0.55); if (bimg) sharpen(bimg.data, W, H, 0.4);   // камера увеличивает карту — заранее подчёркиваем мелкую фактуру
   T.ctx.putImageData(img, 0, 0);
   if (bimg) {
     T.dctx.putImageData(bimg, 0, 0);

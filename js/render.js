@@ -15,7 +15,7 @@ class Camera {
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
   /** на широких мониторах ширина обзора тоже ограничена (не больше ~2000 px карты) */
-  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 680, 0.72, 1.9), sw / 1800); }
+  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 760, 0.72, 1.7), sw / 2000); }   // меньше увеличение — текстуры ближе к 1:1, резче
   zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.84, sw / 2300), b * 1.7]; }
   reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; }
   update(dt, sc, fx, sw, sh, mouse) {
