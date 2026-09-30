@@ -97,7 +97,12 @@ function _tube(c, x, y, w, h, col) {
   c.fillStyle = g; rrect(c, x, y, w, h, h / 2.4); c.fill(); c.lineWidth = 0.5; c.strokeStyle = 'rgba(8,10,12,0.75)'; c.stroke();
 }
 function _glowDot(c, x, y, r, col, a = 1) { c.save(); c.globalAlpha *= a; c.shadowColor = col; c.shadowBlur = 5; c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.restore(); }
+/* реалистичные модели (рендер Blender, dev/blender/make_weapons.py): кадр 48×24 ед., рукоять в начале координат */
+const HELD_SPRITE = { bazooka: 'wpn_bazooka', rpg: 'wpn_rpg', assault: 'wpn_assault', sniper: 'wpn_sniper', shotgun: 'wpn_shotgun', revolver: 'wpn_revolver',
+  magnum: 'wpn_magnum', uzi: 'wpn_uzi', minigun: 'wpn_minigun', flamer: 'wpn_flamer', autocannon: 'wpn_autocannon', mortar: 'wpn_mortar', homing: 'wpn_homing' };
 function drawHeld(c, id, t = 0) {
+  const spr = typeof TexLib !== 'undefined' && HELD_SPRITE[id] && TexLib.data[HELD_SPRITE[id]];
+  if (spr) { c.drawImage(spr.canvas, -16, -12, 48, 24); return; }
   switch (id) {
     case 'assault':
       _wood(c, -12, -2, 9, 5, '#5d6a52'); _part(c, -4, -3.2, 17, 5.2, '#3b464b'); _part(c, 12, -2.2, 12, 2.4, '#1c2428', 0.5); _muzzle(c, 23.5, -2.2, 2.4);
