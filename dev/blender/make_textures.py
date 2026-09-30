@@ -870,17 +870,23 @@ def tree_sprite(name, seed, kind, px=320):
         _cone(bm, Vector((0, 0, -0.1)), top, 0.22, 0.15, 14)
         for sgn in (-1, 1):                                      # развилка: две толстые ветви
             _cone(bm, top - Vector((0, 0, 0.15)), top + Vector((sgn * 0.55, rng.uniform(-0.1, 0.1), 0.6)), 0.12, 0.07, 10)
-        dome(0, 2.15, 1.4, 0.95, 78, top, 0.05)
+        # крона из нескольких масс листвы с просветами неба между ними; к каждой массе — своя толстая ветвь
+        for (mx, mz, rx, rz, n_) in [(-0.75, 1.95, 0.62, 0.5, 18), (0.7, 2.05, 0.66, 0.52, 18), (0.05, 2.7, 0.72, 0.5, 20),
+                                     (-0.35, 1.55, 0.45, 0.32, 10), (1.05, 1.6, 0.4, 0.3, 9), (-1.1, 2.35, 0.38, 0.3, 8)]:
+            mx += rng.uniform(-0.12, 0.12); mz += rng.uniform(-0.1, 0.1)
+            _cone(bm, top + Vector((0, 0, -0.1)), Vector((mx * 0.7, rng.uniform(-0.1, 0.1), mz - rz * 0.6)), 0.075, 0.035, 9)
+            dome(mx, mz, rx, rz, n_, Vector((mx * 0.7, 0, mz - rz * 0.6)), 0.025)
         shades = [lin(c) for c in ((0.23, 0.33, 0.10), (0.31, 0.43, 0.13), (0.40, 0.52, 0.16), (0.50, 0.61, 0.21), (0.36, 0.45, 0.14), (0.62, 0.68, 0.28))]
-        leaf = dict(R=0.26, n=330, size=0.05, flat=0.8)
+        leaf = dict(R=0.2, n=240, size=0.045, flat=0.8)
     elif kind == 'birch':
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.2)), 0.1, 0.035, 12)
-        for i in range(26):
-            h = rng.uniform(1.4, 3.3); side = rng.choice((-1, 1)); rw = 0.55 * (1 - (h - 1.4) / 2.4) + 0.2
-            p = Vector((side * rng.uniform(0.1, rw), rng.uniform(-0.2, 0.2), h))
-            tips.append(p); _cone(bm, Vector((0, 0, h - 0.15)), p, 0.025, 0.01, 6)
+        # берёза: 5 свисающих масс листвы вдоль ствола, между ними видны тонкие ветви и небо
+        for (mx, mz, rx, rz, n_) in [(-0.45, 1.7, 0.4, 0.35, 8), (0.5, 2.05, 0.42, 0.35, 8), (-0.35, 2.45, 0.38, 0.32, 8), (0.3, 2.85, 0.34, 0.3, 7), (0.0, 3.25, 0.28, 0.25, 6)]:
+            mx += rng.uniform(-0.08, 0.08)
+            _cone(bm, Vector((0, 0, mz - 0.3)), Vector((mx, 0, mz)), 0.03, 0.012, 6)
+            dome(mx, mz, rx, rz, n_, Vector((mx * 0.5, 0, mz - 0.15)), 0.012)
         shades = [lin(c) for c in ((0.42, 0.58, 0.18), (0.55, 0.70, 0.24), (0.68, 0.78, 0.32), (0.48, 0.62, 0.20))]
-        leaf = dict(R=0.24, n=260, size=0.045, flat=0.9)
+        leaf = dict(R=0.17, n=170, size=0.04, flat=0.9)
     elif kind == 'bush':
         H = 1.6; cam.data.ortho_scale = H; cam.location = (0, -10, H / 2 - 0.05)
         top = Vector((0, 0, 0.05))
@@ -891,14 +897,14 @@ def tree_sprite(name, seed, kind, px=320):
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.6)), 0.12, 0.02, 12)
         shades = [lin(c) for c in ((0.15, 0.27, 0.15), (0.21, 0.35, 0.19), (0.30, 0.44, 0.24), (0.40, 0.50, 0.28), (0.18, 0.30, 0.17))]
         leaf = dict(R=0.15, n=110, size=0.05, flat=0.4, needle=True)
-        for i in range(20):
-            h = 0.55 + i * 0.15; wdt = 1.15 * (1 - i / 21) ** 1.1 + 0.12
+        for i in range(15):
+            h = 0.6 + i * 0.2; wdt = 1.2 * (1 - i / 16) ** 1.05 + 0.1
             for a in range(7):
                 ang = a / 7 * math.tau + rng.uniform(-0.3, 0.3) + i
                 d = Vector((math.cos(ang) * wdt, math.sin(ang) * wdt * 0.6, -0.18 * wdt))
                 _cone(bm, Vector((0, 0, h)), Vector((0, 0, h)) + d, 0.02, 0.006, 6)
-                for t in (0.3, 0.55, 0.8, 1.0):
-                    tips.append(Vector((0, 0, h)) + d * t + Vector((0, 0, 0.02 - 0.05 * t)))
+                for t in (0.35, 0.65, 0.95):
+                    tips.append(Vector((0, 0, h)) + d * t + Vector((0, 0, 0.02 - 0.08 * t)))
     trunk = bpy.data.meshes.new('trunk'); bm.to_mesh(trunk); bm.free()
     mb = mat_stone('bark', bark_dark, bark_light, rough=0.85, spec=0.2, scale=9 if kind != 'birch' else 3, bumpk=1.0)
     trunk.materials.append(mb)
