@@ -15,7 +15,13 @@ const UI = {
     $('dialog-ok').addEventListener('click', () => { $('dialog').classList.add('hidden'); if (this.dialogCb) { const f = this.dialogCb; this.dialogCb = null; f(); } });
     $('join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') this.act('join'); });
     $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
-    for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-crates', 'o-sd', 'o-arsenal', 'o-ai']) $(id).addEventListener('change', () => this.onSettingsChanged());
+    for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai']) $(id).addEventListener('change', () => this.onSettingsChanged());
+    $('o-turnTime').addEventListener('input', () => this.onSettingsChanged());
+    $('o-arsenal').addEventListener('change', () => { this.fillAmmo(makeAmmo($('o-arsenal').value)); this.onSettingsChanged(); });
+    $('ammo-all').addEventListener('click', () => { const m = {}; for (const w of WEAPONS) m[w.id] = w.ammo; this.fillAmmo(m); this.onSettingsChanged(); });
+    $('ammo-none').addEventListener('click', () => { this.fillAmmo({}); this.onSettingsChanged(); });
+    $('ammo-reset').addEventListener('click', () => { this.fillAmmo(makeAmmo($('o-arsenal').value)); this.onSettingsChanged(); });
+    this.buildAmmo();
     $('chat-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) this.app.sendChat(v); e.target.value = ''; this.closeChat(); e.preventDefault(); }
       else if (e.key === 'Escape') { this.closeChat(); e.preventDefault(); }
@@ -68,13 +74,13 @@ const UI = {
   openSetup(mode) {
     this.mode = mode; const app = this.app;
     this.settings = Object.assign({}, app.prefs.settings); this.teamsCfg = app.prefs.teams.map(t => Object.assign({}, t));
-    if (mode === 'cpu') this.teamsCfg[1] = Object.assign({}, this.teamsCfg[1], { name: 'Компьютер' });
+    if (mode === 'cpu') this.teamsCfg[1] = Object.assign({}, app.prefs.bot || DEFAULT_PREFS.bot);   // окрас и снаряжение бота настраиваются отдельно
     this.applySettings(this.settings);
     $('setup-title').textContent = mode === 'cpu' ? 'Бой против компьютера' : mode === 'hotseat' ? 'Бой вдвоём на одном компьютере' : mode === 'host' ? 'Комната: вы — хост' : 'Комната друга';
     $('room-box').classList.toggle('hidden', !(mode === 'host' || mode === 'guest'));
     $('o-ai-wrap').classList.toggle('hidden', mode !== 'cpu');
     const guest = mode === 'guest';
-    document.querySelectorAll('#opts select').forEach(s => { s.disabled = guest; });
+    document.querySelectorAll('#opts select, #opts input, #ammo-box input, #ammo-box button').forEach(s => { s.disabled = guest; });
     $('btn-start').classList.toggle('hidden', guest);
     this.setNote(guest ? 'Хост выбирает карту и настройки. Вы можете настроить свою команду.' : mode === 'host' ? 'Отправьте код другу. Когда он подключится — жмите «В бой!»' : '');
     this.buildTeams(); this.markMap(); this.show('s-setup');
@@ -84,13 +90,43 @@ const UI = {
   setPeerStatus(ok, txt) { const s = $('peer-status'); s.textContent = txt || (ok ? '● друг подключился' : '○ ждём друга…'); s.classList.toggle('ok', !!ok); },
   readSettings() {
     const S = this.settings;
-    S.perTeam = +$('o-perTeam').value; S.hp = +$('o-hp').value; S.turnTime = +$('o-turnTime').value; S.wind = $('o-wind').value === '1';
-    S.crates = $('o-crates').value === '1'; S.sd = +$('o-sd').value; S.arsenal = $('o-arsenal').value; S.ai = $('o-ai').value;
+    S.perTeam = +$('o-perTeam').value; S.hp = +$('o-hp').value; S.wind = $('o-wind').value === '1';
+    const tt = Math.round(+$('o-turnTime').value); if (Number.isFinite(tt) && tt >= 5) S.turnTime = Math.min(600, tt);
+    S.crates = false; S.sd = 0; S.arsenal = $('o-arsenal').value; S.ai = $('o-ai').value;
+    S.ammo = this.readAmmo();
     return S;
   },
   applySettings(S) {
     $('o-perTeam').value = String(S.perTeam); $('o-hp').value = String(S.hp); $('o-turnTime').value = String(S.turnTime); $('o-wind').value = S.wind ? '1' : '0';
-    $('o-crates').value = S.crates ? '1' : '0'; $('o-sd').value = String(S.sd); $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal';
+    $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal';
+    this.fillAmmo(S.ammo || makeAmmo(S.arsenal));
+  },
+  /** редактор атак: галочка — оружие есть в бою, число — сколько раз его можно применить (пусто — без ограничения) */
+  buildAmmo() {
+    const g = $('ammo-grid'); g.innerHTML = '';
+    for (const w of WEAPONS) {
+      const row = document.createElement('label'); row.className = 'ammo-row'; row.dataset.w = w.id; row.title = w.desc || w.name;
+      row.innerHTML = '<input type="checkbox"><span></span><input type="number" min="0" max="99" placeholder="∞">';
+      row.querySelector('span').textContent = w.name;
+      const cb = row.querySelector('input[type=checkbox]'), num = row.querySelector('input[type=number]');
+      cb.addEventListener('change', () => { if (cb.checked && num.value === '0') num.value = String(w.ammo > 0 ? w.ammo : ''); row.classList.toggle('off', !cb.checked); this.onSettingsChanged(); });
+      num.addEventListener('input', () => { if (num.value === '0') { cb.checked = false; row.classList.add('off'); } else if (!cb.checked) { cb.checked = true; row.classList.remove('off'); } this.onSettingsChanged(); });
+      g.appendChild(row);
+    }
+  },
+  fillAmmo(m) {
+    for (const row of document.querySelectorAll('#ammo-grid .ammo-row')) {
+      const n = m[row.dataset.w], cb = row.querySelector('input[type=checkbox]'), num = row.querySelector('input[type=number]');
+      const on = n === -1 || n > 0; cb.checked = on; num.value = n > 0 ? String(n) : ''; row.classList.toggle('off', !on);
+    }
+  },
+  readAmmo() {
+    const m = {};
+    for (const row of document.querySelectorAll('#ammo-grid .ammo-row')) {
+      const cb = row.querySelector('input[type=checkbox]'), v = row.querySelector('input[type=number]').value.trim();
+      m[row.dataset.w] = !cb.checked ? 0 : v === '' ? -1 : Math.max(0, Math.min(99, Math.floor(+v) || 0));
+    }
+    return m;
   },
   onSettingsChanged() { if (this.mode === 'guest') return; this.readSettings(); this.app.onLobbyChanged(); },
   buildMaps() {
@@ -119,7 +155,7 @@ const UI = {
     const box = $('team-cards'); box.innerHTML = '';
     this.teamsCfg.forEach((t, i) => {
       const card = document.createElement('div'); card.className = 'team-card'; card.dataset.team = i;
-      const editable = this.mode === 'hotseat' || (this.mode === 'cpu' && i === 0) || (this.mode === 'host' && i === 0) || (this.mode === 'guest' && i === 1);
+      const editable = this.mode === 'hotseat' || this.mode === 'cpu' || (this.mode === 'host' && i === 0) || (this.mode === 'guest' && i === 1);
       if (!editable) card.classList.add('locked');
       const role = this.mode === 'cpu' ? (i ? 'Компьютер' : 'Вы') : this.mode === 'hotseat' ? `Игрок ${i + 1}` : (this.mode === 'host' ? (i ? 'Друг' : 'Вы (хост)') : (i ? 'Вы' : 'Хост'));
       card.innerHTML = `<div class="tc-head"><canvas class="tc-preview" width="140" height="168"></canvas><div style="flex:1"><div class="tc-role"></div><input class="tc-name" maxlength="16"></div></div><div class="tc-colors"></div><div class="tc-hats"></div>`;

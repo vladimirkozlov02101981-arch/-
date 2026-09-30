@@ -14,7 +14,7 @@ class RemoteGame {
     this.terrain.materials = this.raster.mat;
     this.props = resolveProps(this.terrain, map);
     this.settings = start.settings;
-    this.teams = start.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(start.settings.arsenal), dmg: 0, kills: 0 }));
+    this.teams = start.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(start.settings.arsenal, start.settings.ammo), dmg: 0, kills: 0 }));
     this.info = new Map(); this.sView = new Map();
     for (const [id, team, name, x, y, hp] of start.soldiers) {
       this.info.set(id, { team, name, maxHp: hp });

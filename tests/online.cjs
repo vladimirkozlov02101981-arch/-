@@ -14,7 +14,7 @@ const hash=()=>{let h=2166136261;for(const v of App.sc.terrain.mask)h=Math.imul(
     await host.goto(base);await host.waitForSelector('#s-main.show');await host.click('[data-act="online"]');await host.click('[data-act="host"]');await host.waitForSelector('#s-setup.show');
     const code=await host.locator('#room-code').textContent();
     await guest.goto(base+'/#join='+code);await guest.waitForFunction(()=>UI.mode==='guest'&&UI.cur==='s-setup');
-    await host.selectOption('#o-crates','0');await host.selectOption('#o-sd','0');await host.selectOption('#o-turnTime','90');
+    await host.fill('#o-turnTime','90');await host.dispatchEvent('#o-turnTime','change');
     await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game?.turn.phase==='aim');await guest.waitForFunction(()=>App.mode==='guest'&&App.remote?.turn.phase==='aim');
     const initial=await host.evaluate(hash);assert.equal(initial,await guest.evaluate(hash));
     assert.equal(await host.evaluate(()=>App.game.soldiers.length),8);

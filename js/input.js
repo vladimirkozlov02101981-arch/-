@@ -5,7 +5,7 @@
 const Input = {
   keys: {}, pressed: {}, mouse: { x: 0, y: 0, down: [false, false, false], clicked: [false, false, false], moved: false },
   wheel: 0, typing: false, drag: null, onClickRight: null, onBinoc: null, onWheel: null,
-  GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter']),
+  GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'KeyF']),
   init(cv) {
     window.addEventListener('keydown', (e) => {
       if (this.typing || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT'))) return;
@@ -80,15 +80,15 @@ class LocalController {
       if (T.weapon === 'orbital') return 'A / D — ведите луч к цели';
       return 'Огонь!';
     }
-    if (W.id === 'sniper') return this.breath <= 0.05 ? 'Руки дрожат — отпустите Shift и отдышитесь' : 'ЛКМ — выстрел. Shift — задержать дыхание';
+    if (W.id === 'sniper') return this.breath <= 0.05 ? 'Руки дрожат — отпустите Shift и отдышитесь' : 'Мышь — прицел, ЛКМ или F — выстрел. Shift — задержать дыхание';
     if (W.id === 'airstrike') return 'Кликните по району: самолёт пройдёт над ним, бомбы сбрасываете сами';
     if (W.id === 'lightning') return 'Кликните: туча уйдёт по ветру и ударит в самую высокую точку';
     if (W.id === 'orbital') return 'Кликните: спутник наведётся с ошибкой, луч доводите клавишами A/D';
     if (W.id === 'nuke') return 'Кликните по району: разброс и снос ветром — целься с поправкой';
     switch (W.mode) {
-      case 'charge': return 'Зажмите ЛКМ или Enter и отпустите для выстрела';
+      case 'charge': return '↑/↓ — прицел. Зажмите F или ЛКМ и отпустите для выстрела';
       case 'tcharge': return T.target ? 'Цель захвачена с ошибкой. Зажмите ЛКМ для выстрела' : 'Кликните по цели на карте';
-      case 'instant': return W.shots ? `Выстрел ${Math.min(T.shots + 1, W.shots)} из ${W.shots} — ЛКМ или Enter` : 'ЛКМ или Enter — огонь';
+      case 'instant': return W.shots ? `↑/↓ — прицел. Выстрел ${Math.min(T.shots + 1, W.shots)} из ${W.shots} — F или ЛКМ` : '↑/↓ — прицел. F или ЛКМ — огонь';
       case 'target': return 'Кликните по точке на карте';
       case 'place': return 'ЛКМ — поставить, R — повернуть';
       case 'drop': return 'ЛКМ или Enter — положить под ноги';
@@ -119,18 +119,18 @@ class LocalController {
     const canMove = phase === 'aim' || phase === 'retreat' || jet;
     const K = Input.keys, P = Input.pressed;
     const left = !!(K.KeyA || K.ArrowLeft), right = !!(K.KeyD || K.ArrowRight);
-    const up = !!(K.KeyW || K.ArrowUp), down = !!(K.KeyS || K.ArrowDown);
-    if (Input.mouse.moved) this.aimMode = 'mouse';
-    if ((up || down) && !jet) this.aimMode = 'keys';
-    // в бинокль мышь двигает обзор, а не ствол (кроме оружия с выбором точки)
+    // W/S — лазание по лестницам и тяга джетпака; стрелки ↑/↓ — только наклон ствола
+    const up = !!K.KeyW, down = !!K.KeyS, aimUp = !!K.ArrowUp, aimDown = !!K.ArrowDown;
+    // мышью наводится только снайперка; мышь также выбирает точку для авиаудара, молнии и т. п.
     const pickPoint = W.mode === 'target' || W.mode === 'place' || (W.mode === 'tcharge' && !T.target);
-    if (this.aimMode === 'mouse' && (!this.binoc || pickPoint)) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
-    else if (this.aimMode === 'keys') {
+    const mouseAim = T.weapon === 'sniper' && canAct;
+    if (mouseAim && !this.binoc) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
+    else {
       let face = Math.cos(this.base) >= 0 ? 1 : -1;
       if (left !== right && !jet) face = left ? -1 : 1;
       let elev = angNorm(face > 0 ? -this.base : this.base - Math.PI);
       const sp = K.ShiftLeft || K.ShiftRight ? 0.35 : 1.3;
-      if (up && !jet) elev += dt * sp; if (down && !jet) elev -= dt * sp;
+      if (aimUp) elev += dt * sp; if (aimDown) elev -= dt * sp;
       elev = clamp(elev, -1.55, 1.55);
       this.base = face > 0 ? -elev : Math.PI + elev;
     }
@@ -155,7 +155,7 @@ class LocalController {
     if (P.KeyP && (phase === 'aim' || phase === 'retreat')) this.send({ c: 'skip' });
     if (P.Space && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
     // в бинокль клик не стреляет: мышь ведёт обзор (кроме оружия с выбором точки)
-    const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = !!P.Enter;
+    const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = !!(P.Enter || P.KeyF);   // выстрел: ЛКМ, Enter или F
     if (phase === 'use') { if (mFire || kFire) this.send({ c: 'fire' }); }
     else if (canAct) {
       switch (W.mode) {
@@ -166,7 +166,7 @@ class LocalController {
           }
           if (!this.charging) { if (mFire || kFire) { this.charging = true; this.power = 0; this.chargeDir = 1; this.chargeByMouse = mFire; Sfx.chargeStart(); } }
           else {
-            const held = this.chargeByMouse ? Input.mouse.down[0] : !!K.Enter;
+            const held = this.chargeByMouse ? Input.mouse.down[0] : !!(K.Enter || K.KeyF);
             // сила «пульсирует»: до максимума и обратно, пока кнопка зажата; выстрел — только при отпускании
             this.power += (this.chargeDir || 1) * dt / 1.15;
             if (this.power >= 1) { this.power = 1; this.chargeDir = -1; } else if (this.power <= 0.06) { this.power = 0.06; this.chargeDir = 1; }

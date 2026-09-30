@@ -275,30 +275,31 @@ class Renderer {
         c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 1.5; c.stroke();
       }
     }
-    // прицел и сила у активного бойца
-    const s = sc.soldiers.find(o => o.id === T.sid);
-    const W = WEAPON[T.weapon];
-    if (s && s.alive && !s.gone && T.phase === 'aim' && W && T.weapon !== 'sniper' && (W.mode === 'charge' || W.mode === 'tcharge' || W.mode === 'instant')) {   // у снайперки — только оптика
-      const mine = ctl && ctl.mine; const aim = mine ? ctl.aim : s.aim;
-      const [sx, sy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh); const R = 62 * cam.z;
-      const cx = sx + Math.cos(aim) * R, cy = sy + Math.sin(aim) * R;
-      const col = sc.teams[s.team] ? sc.teams[s.team].color : '#fff';
-      c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 4; c.beginPath(); c.arc(cx, cy, 7, 0, TAU); c.stroke();
-      c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, 7, 0, TAU); c.moveTo(cx - 11, cy); c.lineTo(cx - 4, cy); c.moveTo(cx + 4, cy); c.lineTo(cx + 11, cy); c.moveTo(cx, cy - 11); c.lineTo(cx, cy - 4); c.moveTo(cx, cy + 4); c.lineTo(cx, cy + 11); c.stroke();
-      const pw = mine ? (ctl.charging ? ctl.power : -1) : T.charge;
-      if (pw >= 0) {
-        const n = 16; const L = 95 * cam.z;
-        for (let i = 0; i < n; i++) {
-          const k = (i + 1) / n; if (k > pw + 0.001) break;
-          const px = sx + Math.cos(aim) * (18 * cam.z + L * k), py = sy + Math.sin(aim) * (18 * cam.z + L * k);
-          c.fillStyle = `hsl(${120 - k * 120},95%,55%)`; circ(c, px, py, (2.5 + k * 6) * Math.min(1.2, cam.z));
-        }
-      }
-    }
+    // прицела у бойца нет: направление видно по оружию в руках; сила броска — шкала слева в HUD
     if (T.target && T.phase !== 'over') {
       const [x, y] = cam.toScreen(T.target.x, T.target.y, sw, sh); const p = 1 + 0.15 * Math.sin(t * 8);
       c.strokeStyle = '#ff3030'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 12 * p, 0, TAU); c.moveTo(x - 18, y); c.lineTo(x + 18, y); c.moveTo(x, y - 18); c.lineTo(x, y + 18); c.stroke();
     }
+    c.restore();
+  }
+  /** шкала силы броска: слева у края экрана, только пока зажата кнопка выстрела */
+  drawPowerBar(c, sc, ctl, sw, sh) {
+    const T = sc.turn; if (T.phase !== 'aim') return;
+    const pw = ctl && ctl.mine ? (ctl.charging ? ctl.power : -1) : T.charge;
+    if (!(pw >= 0)) return;
+    const w = 26, h = Math.min(320, sh * 0.42), x = 22, y = sh / 2 - h / 2;
+    c.save();
+    hudPanel(c, x - 8, y - 34, w + 16, h + 68, 12);
+    c.fillStyle = 'rgba(0,0,0,0.45)'; rrect(c, x, y, w, h, 6); c.fill();
+    const g = c.createLinearGradient(0, y + h, 0, y); g.addColorStop(0, '#3ad06a'); g.addColorStop(0.55, '#f2d23a'); g.addColorStop(1, '#ff4a3a');
+    const fh = h * clamp(pw, 0, 1);
+    c.save(); rrect(c, x, y, w, h, 6); c.clip(); c.fillStyle = g; c.fillRect(x, y + h - fh, w, fh); c.restore();
+    c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1;
+    for (let k = 1; k < 10; k++) { const yy = y + h - h * k / 10; c.beginPath(); c.moveTo(x, yy); c.lineTo(x + (k % 5 ? 7 : w), yy); c.stroke(); }
+    c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2; rrect(c, x, y, w, h, 6); c.stroke();
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff';
+    c.font = `15px ${FONT_TITLE}`; c.fillText(Math.round(pw * 100) + '%', x + w / 2, y - 17);
+    c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.75)'; c.fillText('до макс. ' + Math.max(0, 100 - Math.round(pw * 100)) + '%', x + w / 2, y + h + 17);
     c.restore();
   }
   /* ---------- HUD ---------- */
@@ -306,6 +307,7 @@ class Renderer {
     const c = this.c, sw = this.sw, sh = this.sh; const T = sc.turn;
     this.drawScope(c, sc, cam, ctl, sw, sh);
     this.drawBinoculars(c, cam, sw, sh, t, sc);
+    this.drawPowerBar(c, sc, ctl, sw, sh);
     c.save(); c.textBaseline = 'middle';
     const team = sc.teams[T.team]; const act = sc.soldiers.find(s => s.id === T.sid);
     // панель хода

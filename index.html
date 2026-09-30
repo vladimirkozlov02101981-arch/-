@@ -70,15 +70,17 @@
           <h3>Поле боя <span class="small muted">/ 8 постоянных карт</span></h3>
           <div id="map-grid" class="map-grid"></div>
           <div class="opts" id="opts">
-            <label>Бойцов в команде<select id="o-perTeam"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+            <label>Бойцов в команде<select id="o-perTeam"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></label>
             <label>Здоровье<select id="o-hp"><option>50</option><option>75</option><option selected>100</option><option>150</option><option>200</option></select></label>
-            <label>Время хода<select id="o-turnTime"><option value="15">15 с (блиц)</option><option value="20">20 с</option><option value="30">30 с</option><option value="45" selected>45 с</option><option value="60">60 с</option><option value="90">90 с</option></select></label>
+            <label>Время хода, с<input id="o-turnTime" type="number" min="5" max="600" step="1" value="45"></label>
             <label>Ветер<select id="o-wind"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
-            <label>Ящики с припасами<select id="o-crates"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
-            <label>Внезапная смерть<select id="o-sd"><option value="0">Выкл</option><option value="6">После 6 раундов</option><option value="10" selected>После 10 раундов</option><option value="15">После 15 раундов</option></select></label>
-            <label>Арсенал<select id="o-arsenal"><option value="all" selected>Все 41 вид</option><option value="classic">Классический</option><option value="tw3">Как в Territory War 3</option></select></label>
+            <label>Арсенал (заготовка)<select id="o-arsenal"><option value="all" selected>Все 41 вид</option><option value="classic">Классический</option><option value="tw3">Как в Territory War 3</option></select></label>
             <label id="o-ai-wrap">Сложность компьютера<select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
           </div>
+          <details class="ammo-box" id="ammo-box"><summary>Атаки и их количество <span class="small muted">— одинаково для обеих команд; пусто = без ограничения, 0 или снятая галочка = оружия нет в бою</span></summary>
+            <div class="ammo-tools"><button type="button" class="btn secondary small" id="ammo-all">Включить все</button><button type="button" class="btn secondary small" id="ammo-none">Снять все</button><button type="button" class="btn secondary small" id="ammo-reset">По заготовке</button></div>
+            <div class="ammo-grid" id="ammo-grid"></div>
+          </details>
         </div>
       </div>
       <div class="row between">
@@ -100,9 +102,9 @@
             <tr><td><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></td><td>Ходьба (запас шагов ограничен)</td></tr>
             <tr><td><kbd>Пробел</kbd></td><td>Прыжок</td></tr>
             <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти, пробел — отпрыгнуть</td></tr>
-            <tr><td>Мышь</td><td>Прицеливание</td></tr>
-            <tr><td><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></td><td>Прицел с клавиатуры (<kbd>Shift</kbd> — точнее)</td></tr>
-            <tr><td>ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: чем дольше, тем сильнее</td></tr>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Прицел (<kbd>Shift</kbd> — точнее). Снайперка наводится мышью</td></tr>
+            
+            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: сила — на шкале слева</td></tr>
             <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия</td></tr>
             <tr><td><kbd>Q</kbd> <kbd>E</kbd>, <kbd>1</kbd>–<kbd>6</kbd></td><td>Сменить оружие / категорию</td></tr>
             <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: вид плавно едет туда, куда ведёте мышь</td></tr>

@@ -16,7 +16,7 @@ class Game {
     this.terrain.materials = this.raster.mat;
     this.props = resolveProps(this.terrain, map);
     const S = cfg.settings;
-    this.teams = cfg.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(S.arsenal), next: 0, lastW: 'bazooka', dmg: 0, kills: 0, order: [] }));
+    this.teams = cfg.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(S.arsenal, S.ammo), next: 0, lastW: 'bazooka', dmg: 0, kills: 0, order: [] }));
     this.soldiers = []; this.entities = []; this.events = []; this.pending = [];
     this.nextId = 1; this.time = 0; this.round = 0; this.over = null; this.teamsDirty = true; this.sdStarted = false;
     this.turn = { team: -1, sid: 0, time: 0, phase: 'wait', delay: 1.8, wind: 0, weapon: 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: 0 };
@@ -256,7 +256,7 @@ class Game {
   beginTurn() {
     const alive = this.aliveTeams();
     if (alive.length <= 1) { this.finish(alive[0] || null); return; }
-    if (this.cfg.settings.crates && this.round > 0 && Math.random() < 0.35 && this.dropCrate()) { this.turn.phase = 'crate'; this.turn.delay = 0.6; return; }
+    if (false && this.cfg.settings.crates && this.round > 0 && Math.random() < 0.35 && this.dropCrate()) { this.turn.phase = 'crate'; this.turn.delay = 0.6; return; }
     this.nextTurn();
   }
   dropCrate() {

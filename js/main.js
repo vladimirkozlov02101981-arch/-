@@ -5,8 +5,9 @@
 const DT = 1 / 60;
 const PREFS_KEY = 'tw_prefs_v1';
 const DEFAULT_PREFS = {
-  settings: { mapId: 'valley', perTeam: 4, hp: 100, turnTime: 45, wind: true, crates: true, sd: 10, arsenal: 'all', ai: 'normal' },
+  settings: { mapId: 'valley', perTeam: 4, hp: 100, turnTime: 45, wind: true, crates: false, sd: 0, arsenal: 'all', ai: 'normal', ammo: null },
   teams: [{ name: 'Красные', color: '#ff4d4d', hat: 'helmet' }, { name: 'Синие', color: '#3d8bff', hat: 'beret' }],
+  bot: { name: 'Компьютер', color: '#3d8bff', hat: 'beret' },
 };
 function sanitizeTeam(t, fb) {
   t = t && typeof t === 'object' ? t : {};
@@ -16,10 +17,10 @@ function sanitizeTeam(t, fb) {
 function sanitizeSettings(S) {
   const D = DEFAULT_PREFS.settings; S = S && typeof S === 'object' ? S : {};
   return {
-    mapId: MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 6),
-    hp: [50, 75, 100, 150, 200].includes(+S.hp) ? +S.hp : D.hp, turnTime: [15, 20, 30, 45, 60, 90].includes(+S.turnTime) ? +S.turnTime : D.turnTime,
-    wind: S.wind !== false, crates: S.crates !== false, sd: [0, 6, 10, 15].includes(+S.sd) ? +S.sd : D.sd,
-    arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal',
+    mapId: MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 20),
+    hp: [50, 75, 100, 150, 200].includes(+S.hp) ? +S.hp : D.hp, turnTime: Number.isFinite(+S.turnTime) && +S.turnTime >= 5 ? clamp(Math.round(+S.turnTime), 5, 600) : D.turnTime,
+    wind: S.wind !== false, crates: false, sd: 0,   // ящиков с припасами и внезапной смерти в игре нет
+    arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal', ammo: sanitizeAmmo(S.ammo),
   };
 }
 
@@ -57,7 +58,7 @@ const App = {
   loadPrefs() {
     let p = null; try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null'); } catch (e) { p = null; }
     p = p || {};
-    this.prefs = { settings: sanitizeSettings(p.settings), teams: [sanitizeTeam((p.teams || [])[0], DEFAULT_PREFS.teams[0]), sanitizeTeam((p.teams || [])[1], DEFAULT_PREFS.teams[1])] };
+    this.prefs = { settings: sanitizeSettings(p.settings), teams: [sanitizeTeam((p.teams || [])[0], DEFAULT_PREFS.teams[0]), sanitizeTeam((p.teams || [])[1], DEFAULT_PREFS.teams[1])], bot: sanitizeTeam(p.bot, DEFAULT_PREFS.bot) };
   },
   savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs)); } catch (e) { /* */ } },
   /* ---------- сцены ---------- */
@@ -97,6 +98,7 @@ const App = {
     if (UI.mode === 'host') { this.prefs.teams[0] = sanitizeTeam(UI.teamsCfg[0], DEFAULT_PREFS.teams[0]); this.savePrefs(); if (!Net.connected) { UI.setNote('Друг ещё не подключился — отправьте ему код комнаты'); Sfx.play('denied'); return; } this.startHostGame(S); return; }
     const teams = this.teamCfgs();
     if (UI.mode === 'hotseat') this.prefs.teams = teams.map(t => Object.assign({}, t)); else this.prefs.teams[0] = teams[0];
+    if (UI.mode === 'cpu') this.prefs.bot = Object.assign({}, teams[1]);
     this.savePrefs();
     this.startLocal({ mapId: S.mapId, settings: S, teams }, UI.mode);
   },
@@ -126,8 +128,19 @@ const App = {
   hostRoom() { UI.status('Создаём комнату…'); this.guestTeam = null; Net.host(); },
   joinRoom(code) { UI.status('Подключаемся…'); Net.join(code); },
   sendLobby() { if (Net.role === 'host' && Net.connected) Net.send({ t: 'lobby', settings: UI.settings, teams: UI.teamsCfg.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])) }); },
-  onLobbyChanged() { if (UI.mode === 'host') this.sendLobby(); },
+  onLobbyChanged() { this.persistSetup(); if (UI.mode === 'host') this.sendLobby(); },
+  /** любые изменения в настройке сразу сохраняются: при следующем запуске игры всё будет как было */
+  persistSetup() {
+    if (!UI.settings || UI.mode === 'guest') return;
+    this.prefs.settings = sanitizeSettings(UI.readSettings());
+    const T = UI.teamsCfg || [];
+    if (UI.mode === 'hotseat') this.prefs.teams = T.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i]));
+    else if (T[0]) this.prefs.teams[0] = sanitizeTeam(T[0], DEFAULT_PREFS.teams[0]);
+    if (UI.mode === 'cpu' && T[1]) this.prefs.bot = sanitizeTeam(T[1], DEFAULT_PREFS.bot);
+    this.savePrefs();
+  },
   onTeamEdited(i) {
+    this.persistSetup();
     if (UI.mode === 'guest' && i === 1) { const t = sanitizeTeam(UI.teamsCfg[1], DEFAULT_PREFS.teams[0]); this.prefs.teams[0] = t; this.savePrefs(); Net.send({ t: 'team', team: t }); }
     else if (UI.mode === 'host' && i === 0) this.sendLobby();
     UI.drawPreviewAll && UI.drawPreviewAll();

@@ -56,11 +56,23 @@ const CLASSIC = ['bazooka', 'grenade', 'cluster', 'shotgun', 'sniper', 'dynamite
 // набор как в Territory War 3: десять видов оружия оригинала (+ пропуск хода)
 const TW3 = ['grenade', 'rpg', 'boot', 'girder', 'pickaxe', 'mortar', 'magnum', 'sniper', 'tpgrenade', 'acid', 'skip'];
 
-function makeAmmo(arsenal) {
+function makeAmmo(arsenal, custom) {
   const a = {};
+  // свой список атак организатора матча: число на каждое оружие (-1 — без ограничения, 0 — нет в бою)
+  if (custom && typeof custom === 'object') {
+    for (const w of WEAPONS) { const n = custom[w.id]; if (n === -1 || n > 0) a[w.id] = n === -1 ? -1 : Math.min(99, n | 0); }
+    if (Object.keys(a).length) return a;
+  }
   const only = arsenal === 'classic' ? CLASSIC : arsenal === 'tw3' ? TW3 : null;
   for (const w of WEAPONS) if (!only || only.includes(w.id)) a[w.id] = w.ammo;
   return a;
+}
+/** очистка списка атак из настроек (для хранения и сети) */
+function sanitizeAmmo(m) {
+  if (!m || typeof m !== 'object') return null;
+  const out = {}; let any = false;
+  for (const w of WEAPONS) { let n = +m[w.id]; if (!Number.isFinite(n)) n = 0; n = n < 0 ? -1 : Math.min(99, Math.floor(n)); out[w.id] = n; if (n) any = true; }
+  return any ? out : null;
 }
 
 /* ---------- рисование оружия в руках (начало координат — рукоять, ствол вдоль +x) ----------
