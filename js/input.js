@@ -126,8 +126,11 @@ class LocalController {
     // снайперка: оптика включается и выключается клавишей E; пока оптика включена — наведение мышью
     if (T.weapon !== 'sniper' || !canAct) this.scopeOn = false;
     else if (P.KeyE && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); P.KeyE = false; }
-    const mouseAim = T.weapon === 'sniper' && canAct && this.scopeOn;
-    if (mouseAim && !this.binoc) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
+    // наведение: мышью (как раньше) или стрелками ↑/↓ — работает то, чем пользовались последним. У снайперки мышь ведёт ствол только в оптике
+    if (Input.mouse.moved) this.aimMode = 'mouse';
+    if (aimUp || aimDown) this.aimMode = 'keys';
+    const mouseAim = canAct && this.aimMode === 'mouse' && (T.weapon !== 'sniper' || this.scopeOn);
+    if (mouseAim && (!this.binoc || pickPoint)) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
     else {
       let face = Math.cos(this.base) >= 0 ? 1 : -1;
       if (left !== right && !jet) face = left ? -1 : 1;

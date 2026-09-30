@@ -96,10 +96,16 @@ class Soldier {
   fly() { if (this.st === 'dead' && !this.alive) { this.st = 'fly'; } else if (this.st !== 'fly') { this.st = 'fly'; this.vrot = rand(-7, 7); } this.y -= 1; }
   setAim(a) { this.aim = angNorm(a); const c = Math.cos(this.aim); if (Math.abs(c) > 0.02) this.face = c > 0 ? 1 : -1; }
   jump(g, dir) {
-    const d = dir || this.face;
-    if (!['stand','walk','climb'].includes(this.st) || !this.alive || (this.wl[4] === 3 && this.wl[5] === 3) || (g.turn.ox === undefined ? g.turn.walk < 36 : !walkOk(g, this, this.x + d * 40))) return;
+    let d = dir || this.face;
+    // «почти на земле» тоже считается: на кочках и краях воронок боец на миг отрывается от поверхности
+    const coyote = this.st === 'air' && this.vy > -40 && this.vy < 160 && (onGround(g.terrain, this.x, this.y + 2) || onGround(g.terrain, this.x, this.y + 5));
+    if ((!['stand','walk','climb'].includes(this.st) && !coyote) || !this.alive || (this.wl[4] === 3 && this.wl[5] === 3)) return;
+    if (g.turn.ox === undefined && g.turn.walk < 36) return;
+    // запас хода кончился — прыгнуть всё равно можно, но только на месте (вверх), а не вперёд за границу
+    const inPlace = g.turn.ox !== undefined && !walkOk(g, this, this.x + d * 40);
+
     this.face = d;
-    const lf = Math.sqrt(this.legFactor()); this.st = 'air'; this.vx = d * JUMP_VX * lf; this.vy = -JUMP_VY * (0.55 + 0.45 * lf); this.y -= 1;
+    const lf = Math.sqrt(this.legFactor()); this.st = 'air'; this.vx = inPlace ? 0 : d * JUMP_VX * lf; this.vy = -JUMP_VY * (0.55 + 0.45 * lf); this.y -= 1;
     if (g.turn.ox === undefined) g.turn.walk = Math.max(0, g.turn.walk - 36);
     g.emit({ t: 'jump', x: R1(this.x), y: R1(this.y) });
   }

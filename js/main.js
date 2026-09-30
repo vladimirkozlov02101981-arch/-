@@ -20,7 +20,7 @@ function sanitizeSettings(S) {
     mapId: MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 20),
     hp: Number.isFinite(+S.hp) && +S.hp >= 1 ? clamp(Math.round(+S.hp), 1, 1000) : D.hp, turnTime: Number.isFinite(+S.turnTime) && +S.turnTime >= 5 ? clamp(Math.round(+S.turnTime), 5, 600) : D.turnTime,
     wind: S.wind !== false, crates: false, sd: 0,   // ящиков с припасами и внезапной смерти в игре нет
-    arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal', ammo: sanitizeAmmo(S.ammo),
+    arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal', side: ['left', 'right', 'random'].includes(S.side) ? S.side : 'random', swap: !!S.swap, ammo: sanitizeAmmo(S.ammo),
   };
 }
 
@@ -95,6 +95,7 @@ const App = {
     const S = sanitizeSettings(UI.readSettings());
     this.prefs.settings = Object.assign({}, S);
     if (UI.mode === 'guest') return;
+    S.swap = S.side === 'right' || (S.side === 'random' && Math.random() < 0.5);   // сторона первой команды: выбранная или случайная
     if (UI.mode === 'host') { this.prefs.teams[0] = sanitizeTeam(UI.teamsCfg[0], DEFAULT_PREFS.teams[0]); this.savePrefs(); if (!Net.connected) { UI.setNote('Друг ещё не подключился — отправьте ему код комнаты'); Sfx.play('denied'); return; } this.startHostGame(S); return; }
     const teams = this.teamCfgs();
     if (UI.mode === 'hotseat') this.prefs.teams = teams.map(t => Object.assign({}, t)); else this.prefs.teams[0] = teams[0];
@@ -106,8 +107,8 @@ const App = {
     this.lastCfg = cfg; this.lastLocalMode = kind;
     this.launch(() => { const g = new Game(cfg); g.buildVisual(); return g; }, (g) => {
       this.mode = kind; this.game = g; this.setScene(g);
-      if (kind === 'cpu') { this.ais = [new AI(g, 1, cfg.settings.ai)]; this.myTeams = [0]; this.ctl = new LocalController((c) => g.cmd(0, c)); }
-      else { this.myTeams = [0, 1]; this.ctl = new LocalController((c) => g.cmd(g.turn.team, c)); }
+      if (kind === 'cpu') { this.ais = [new AI(g, 1, cfg.settings.ai)]; this.myTeams = [0]; this.ctl = new LocalController((c) => g.cmd(0, c)); g.greenTeam = 0; }
+      else { this.myTeams = [0, 1]; this.ctl = new LocalController((c) => g.cmd(g.turn.team, c)); g.greenTeam = Math.random() < 0.5 ? 0 : 1; }   // на одном экране зелёные достаются случайно
       this.ctl.myTeams = this.myTeams;
     });
   },
@@ -198,7 +199,7 @@ const App = {
     const teams = [sanitizeTeam(UI.teamsCfg[0], DEFAULT_PREFS.teams[0]), sanitizeTeam(this.guestTeam || UI.teamsCfg[1], DEFAULT_PREFS.teams[1])];
     const cfg = { mapId: S.mapId, settings: S, teams };
     this.launch(() => { const g = new Game(cfg); g.buildVisual(); return g; }, (g) => {
-      this.mode = 'host'; this.game = g; this.setScene(g); this.myTeams = [0];
+      this.mode = 'host'; this.game = g; g.greenTeam = 0; this.setScene(g); this.myTeams = [0];
       this.ctl = new LocalController((c) => g.cmd(0, c)); this.ctl.myTeams = [0];
       this.waitReady = 30; this.snapAcc = 0; this.teamsAcc = 0; this.netEv = [];
       Net.sendBig(Object.assign({ t: 'start', you: 1, v: NET_VERSION }, g.startInfo()));
@@ -212,7 +213,7 @@ const App = {
       soldiers: d.soldiers.filter(a => Array.isArray(a) && isNum(a[0]) && isNum(a[1]) && isNum(a[3]) && isNum(a[4])).slice(0, 24).map(a => [a[0] | 0, clamp(a[1] | 0, 0, 1), String(a[2]).slice(0, 16), +a[3], +a[4], clamp(a[5] | 0, 1, 999)]),
     };
     this.launch(() => { const r = new RemoteGame(start); r.buildVisual(); return r; }, (r) => {
-      this.mode = 'guest'; this.remote = r; this.setScene(r); this.myTeams = [1];
+      this.mode = 'guest'; this.remote = r; r.greenTeam = 1; this.setScene(r); this.myTeams = [1];
       this.ctl = new LocalController((c) => Net.send({ t: 'c', c })); this.ctl.myTeams = [1];
       Net.send({ t: 'ready' });
     });
@@ -309,6 +310,7 @@ const App = {
   },
   simStep(dt) {
     const g = this.game;
+    for (const o of g.entities) { o.px = o.x; o.py = o.y; } for (const o of g.soldiers) { o.px = o.x; o.py = o.y; }   // для плавной отрисовки между шагами
     for (const ai of this.ais) ai.update(dt);
     g.step(dt);
     if (g.events.length) {
@@ -341,6 +343,13 @@ const App = {
     Input.binocOn = this.cam.binoc;
     if (this.ctl && !document.hidden && !this.paused && !UI.chatOpen && !UI.cur) this.ctl.update(dt, sc, this.cam, sw, sh, turn); else if (this.ctl) this.ctl.suspend();
     this.fx.update(this.paused ? 0 : dt, sc, this.cam, sw, sh);
+    { const cur = !this.demo && !UI.cur && !this.paused ? 'none' : 'default'; if (this.cv.style.cursor !== cur) this.cv.style.cursor = cur; }   // в бою курсора не видно
+    // плавность: симуляция идёт шагами по 1/60 с, а кадры экрана — чаще или неровно; рисуем положение между двумя шагами
+    const lerpK = this.game && !this.paused && !this.demo ? clamp(this.acc / DT, 0, 1) : 1, moved = [];
+    if (lerpK < 1) for (const o of [...sc.entities, ...sc.soldiers]) {
+      if (o.px === undefined || Math.abs(o.x - o.px) > 60 || Math.abs(o.y - o.py) > 60) continue;
+      moved.push(o, o.x, o.y); o.x = o.px + (o.x - o.px) * lerpK; o.y = o.py + (o.y - o.py) * lerpK;
+    }
     this.cam.update(dt, sc, this.fx, sw, sh, Input.mouse);
     sc.bg.update(dt, sc.turn.wind, sw);
     Sfx.setListener(this.cam.x, this.cam.y, this.cam.z, sw);
@@ -351,6 +360,7 @@ const App = {
       this.ren.drawHUD(sc, this.cam, this.ctl, this.t, (this.mode === 'host' || this.mode === 'guest') ? { ping: Net.rtt } : null);
     }
     this.fx.drawScreen(this.ren.c, sc, this.cam, sw, sh);
+    for (let i = 0; i < moved.length; i += 3) { moved[i].x = moved[i + 1]; moved[i].y = moved[i + 2]; }
     if (this.waitReady > 0) { const c = this.ren.c; c.save(); c.font = `22px ${FONT_TITLE}`; c.textAlign = 'center'; textOutlined(c, 'Ждём, пока друг загрузит карту…', sw / 2, sh / 2, '#fff', 'rgba(0,0,0,0.85)', 6); c.restore(); }
     UI.updateTray(sc, turn, this.ctl);
     Input.endFrame();

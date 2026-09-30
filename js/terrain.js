@@ -129,36 +129,63 @@ class Terrain {
   }
   /** воронка с учётом прочности: каждый пиксель выбивается, только если он ближе к центру, чем позволяет его материал.
       Земля и дерево вылетают широко, камень и кирпич — меньше, бетон и металл держатся; край рваный (детерминированный шум — одинаково у всех игроков) */
-  maskBlast(cx, cy, r) {
+  /** взрыв как настоящая волна: из центра расходятся лучи. В воздухе луч теряет силу с расстоянием, в материале — по его прочности
+      (земля и дерево рвутся легко, камень и кирпич хуже, бетон и металл держат). Перекрытие, которое не пробито, заслоняет всё за собой:
+      помещение по ту сторону не страдает. Шум прочности детерминированный — у обоих игроков воронка одинаковая.
+      Возвращает карту достигнутых волной пикселей в квадрате вокруг центра */
+  blastRays(cx, cy, r) {
     const W = this.W, H = this.H, m = this.mask, mt = this.materials;
-    const K = [1, 1.12, 0.78, 0.74, 1.15, 0.62, 0.42, 0.9, 0.72, 0.7];
-    const y0 = Math.max(0, cy - r), y1 = Math.min(H - 1, cy + r), x0 = Math.max(0, cx - r), x1 = Math.min(W - 1, cx + r);
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const i = y * W + x; if (!m[i]) continue;
-      const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy; if (d2 > r * r) continue;
-      const k = mt ? K[mt[i] || 1] || 1 : 1;
-      if (k >= 1) { m[i] = 0; continue; }
-      let h = (Math.imul(x >> 2, 73856093) ^ Math.imul(y >> 2, 19349663)) >>> 0; h = ((h ^ (h >>> 13)) * 1274126177) >>> 0;
-      const lim = r * (k * (0.88 + 0.24 * ((h & 1023) / 1023)));
-      if (d2 <= lim * lim) m[i] = 0;
+    const K = [1, 1.12, 0.6, 0.55, 1.1, 0.4, 0.22, 0.8, 0.55, 0.5];
+    const x0 = Math.max(0, cx - r - 1), y0 = Math.max(0, cy - r - 1), x1 = Math.min(W, cx + r + 2), y1 = Math.min(H, cy + r + 2), w = x1 - x0, h = y1 - y0;
+    const reached = new Uint8Array(Math.max(0, w * h)); if (w <= 0 || h <= 0) return { reached, x0, y0, w, h };
+    const rays = Math.ceil(TAU * r * 1.6) + 8, st = 0.7;
+    const kill = [];
+    for (let a = 0; a < rays; a++) {
+      const ang = a / rays * TAU, dx = Math.cos(ang), dy = Math.sin(ang);
+      let e = r;
+      for (let t = 0; t <= r; t += st) {
+        const px = Math.round(cx + dx * t), py = Math.round(cy + dy * t);
+        if (px < x0 || px >= x1 || py < y0 || py >= y1) break;
+        const i = py * W + px;
+        if (m[i]) {
+          let hsh = (Math.imul(px >> 2, 73856093) ^ Math.imul(py >> 2, 19349663)) >>> 0; hsh = ((hsh ^ (hsh >>> 13)) * 1274126177) >>> 0;
+          const k = mt ? K[mt[i] || 1] || 1 : 1, cost = st / k * (0.8 + 0.4 * ((hsh & 1023) / 1023));
+          e -= cost; if (e <= 0) break;
+          kill.push(i);
+        } else e -= st;
+        if (e <= 0) break;
+        reached[(py - y0) * w + (px - x0)] = 1;
+      }
     }
+    for (const i of kill) m[i] = 0;
+    return { reached, x0, y0, w, h };
+  }
+  /** стирает с холста всё, до чего дошла волна и чего больше нет в маске; scorch — опалить уцелевшую кромку рядом с выбитым */
+  applyBlast(ctx, B, scorch, col) {
+    if (!ctx || !(B.w > 0 && B.h > 0)) return;
+    let img; try { img = ctx.getImageData(B.x0, B.y0, B.w, B.h); } catch (e) { return; }
+    const d = img.data, m = this.mask, W = this.W, R = B.reached, w = B.w, h = B.h;
+    const cleared = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const q = y * w + x; if (R[q] && !m[(B.y0 + y) * W + B.x0 + x]) { d[q * 4 + 3] = 0; cleared[q] = 1; } }
+    if (scorch && col) {
+      // копоть: уцелевшие пиксели в 5 px от выбитых темнеют к краю воронки
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const q = y * w + x; if (cleared[q] || !m[(B.y0 + y) * W + B.x0 + x] || d[q * 4 + 3] === 0) continue;
+        let best = 9;
+        for (let dy = -5; dy <= 5 && best > 1; dy++) { const yy = y + dy; if (yy < 0 || yy >= h) continue; for (let dx = -5; dx <= 5; dx++) { const xx = x + dx; if (xx < 0 || xx >= w) continue; if (cleared[yy * w + xx]) { const dd = Math.abs(dx) + Math.abs(dy); if (dd < best) best = dd; } } }
+        if (best > 6) continue;
+        const k = 0.85 * (1 - (best - 1) / 6);
+        d[q * 4] += (col[0] * 0.5 - d[q * 4]) * k; d[q * 4 + 1] += (col[1] * 0.5 - d[q * 4 + 1]) * k; d[q * 4 + 2] += (col[2] * 0.5 - d[q * 4 + 2]) * k;
+      }
+    }
+    ctx.putImageData(img, B.x0, B.y0);
   }
   carve(cx, cy, r, scorch = true) {
     cx = Math.round(cx); cy = Math.round(cy); r = Math.round(r); if (r <= 0) return;
-    this.maskBlast(cx, cy, r);
-    const c = this.ctx; c.save();
-    // воронка вырезается целиком (без полупрозрачной каймы): маска и картинка совпадают пиксель в пиксель
-    this.clearMasked(c, cx, cy, r + 1);
-    if (scorch) {
-      c.globalCompositeOperation = 'source-atop';
-      const [sr, sg, sb] = this.scorch; const R = r + Math.min(18, 6 + r * 0.3);
-      const g = c.createRadialGradient(cx, cy, r * 0.92, cx, cy, R);
-      g.addColorStop(0, `rgba(${Math.round(sr * 0.5)},${Math.round(sg * 0.5)},${Math.round(sb * 0.5)},0.95)`); g.addColorStop(0.35, `rgba(${sr},${sg},${sb},0.6)`); g.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
-      c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
-    }
-    c.restore();
-    this.clearMasked(this.dctx, cx, cy, r + 1);
-    if (this.gctx) { const g = this.gctx; g.save(); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.arc(cx, cy, r + 3, 0, TAU); g.fill(); g.restore(); }
+    const B = this.blastRays(cx, cy, r);
+    this.applyBlast(this.ctx, B, scorch, this.scorch);
+    this.applyBlast(this.dctx, B, false);   // задняя стена и декор — только там, куда дошла волна (за целым перекрытием всё остаётся)
+    this.applyBlast(this.gctx, B, false);
     this.version++;
   }
   carveLine(x1, y1, x2, y2, r) {

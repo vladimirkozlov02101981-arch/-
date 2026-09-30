@@ -44,7 +44,7 @@ class Game {
     const names = SOLDIER_NAMES.slice();
     let nameIndex = 0;
     for (const team of this.teams) {
-      const left = team.idx === 0;
+      const left = (team.idx === 0) !== !!S.swap;   // S.swap — первая команда (я / хост) начинает справа
       const cands = shuffleArr(all.filter(c => left ? c.x < this.W * .44 : c.x > this.W * .56), rng);
       const chosen = [];
       for (const spacing of [150, 100, 65, 35, 12]) {
@@ -135,7 +135,8 @@ class Game {
     const sl = Math.hypot(snx, sny), sp = Math.hypot(ivx, ivy);
     const fwd = sp > 60 ? Math.min(0.45, sp / 2400) : 0, fx0 = sp > 0 ? ivx / sp : 0, fy0 = sp > 0 ? ivy / sp : 0;
     // потеря энергии на 3 px пути в материале и шанс рикошета: 1 земля, 2 скала, 3 кирпич, 4 дерево, 5 бетон, 6 металл, 7 лёд, 8 кристалл, 9 базальт
-    const ABS = [0, 0.08, 0.2, 0.18, 0.04, 0.28, 0.6, 0.1, 0.15, 0.22], RIC = [0, 0.05, 0.35, 0.25, 0.04, 0.4, 0.7, 0.3, 0.45, 0.35];
+    // потеря энергии за 3 px: доска пробивается, 10 см земли или кирпича осколок уже не проходит
+    const ABS = [0, 0.35, 0.9, 0.8, 0.12, 1.2, 2, 0.3, 0.6, 0.9], RIC = [0, 0.05, 0.35, 0.25, 0.04, 0.4, 0.7, 0.3, 0.45, 0.35];
     for (let i = 0; i < F.n; i++) {
       const a = (i + Math.random()) / F.n * TAU; let cx = Math.cos(a), cy = Math.sin(a);
       // уводим луч от поверхности и вперёд по ходу снаряда
@@ -150,7 +151,7 @@ class Game {
         cy += 0.004;                                                      // осколок проседает под своим весом
         e -= 3 / L * 0.9;                                                  // сопротивление воздуха
         if (px < 0 || px >= this.W || py < 0 || py >= this.H) break;
-        const solid = t > 6 && T.isSolid(px, py);
+        const solid = T.isSolid(px, py);
         if (solid) {
           const m = T.materialAt(px, py) || 2;
           if (!inside) {

@@ -15,8 +15,8 @@ class Camera {
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
   /** на широких мониторах ширина обзора тоже ограничена (не больше ~2000 px карты) */
-  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 760, 0.72, 1.7), sw / 2000); }   // меньше увеличение — текстуры ближе к 1:1, резче
-  zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.84, sw / 2300), b * 1.7]; }
+  baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 560, 0.9, 2.4), sw / 1500); }   // меньше увеличение — текстуры ближе к 1:1, резче
+  zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.6, sw / 2300), b * 4]; }   // колесом можно приблизить в 4 раза
   reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; }
   update(dt, sc, fx, sw, sh, mouse) {
     if (!this.inited) { this.inited = true; this.x = sc.W / 2; this.y = sc.waterY - 420; this.z = this.tz = this.baseZoom(sh, sw); }
@@ -73,6 +73,8 @@ class Camera {
 }
 
 /** цветокоррекция по темам: [свет сверху, тени снизу] (режим soft-light) */
+/** зелёные — свои (в сети — моя команда, против ИИ — я, на одном экране — случайно назначенная команда), красные — противник */
+function hpFriend(sc, team) { const g = sc.greenTeam ?? 0; return team === g; }
 const GRADE = {
   valley: ['rgba(255,214,140,0.5)', 'rgba(110,70,40,0.4)'],
   desert: ['rgba(255,200,130,0.55)', 'rgba(110,60,120,0.45)'],
@@ -184,7 +186,10 @@ class Renderer {
     for (const s of sc.soldiers) {
       if (s.gone) continue; const an = this.animFor(s, dt);
       if (s.x < v.x0 - 40 || s.x > v.x1 + 40 || s.y < v.y0 - 40 || s.y > v.y1 + 60) continue;
-      drawSoldier(c, s, sc.teams[s.team], t, an);
+      // по неровной земле (рваные края воронок, щебень) ступни идут по каждому пикселю, а тело — плавно: как у настоящего шага
+      const ground = s.st === 'walk' || s.st === 'stand';
+      if (!ground || an.sy === undefined || Math.abs(s.y - an.sy) > 14) an.sy = s.y; else an.sy += (s.y - an.sy) * Math.min(1, dt * 14);
+      const ry = s.y; s.y = an.sy; drawSoldier(c, s, sc.teams[s.team], t, an); s.y = ry;
     }
     fx.drawWorld(c, sc, t);
     this.drawLiquid(c, sc, v, t, false);
@@ -273,14 +278,18 @@ class Renderer {
     c.save(); c.textAlign = 'center'; c.textBaseline = 'middle';
     for (const s of sc.soldiers) {
       if (s.gone || !s.alive) continue;
-      const [x, y] = cam.toScreen(s.x, s.y - 46, sw, sh);
+      // плашка здоровья висит над бойцом выше, чем может подняться ствол (оружие вверх — до ~60 px над ступнями), и ещё на 14 px экрана выше
+      const top = Math.min(-42, s.wpn ? -26 + Math.sin(s.aim) * 38 - 4 : -42);   // верх головы или конец поднятого ствола — что выше
+      const [hx, hy] = cam.toScreen(s.x, s.y + top, sw, sh), x = hx, y = hy - 12;
       if (x < -60 || x > sw + 60 || y < -60 || y > sh + 60) continue;
-      const team = sc.teams[s.team]; const col = team ? team.color : '#fff';
-      const hpTxt = String(s.hp); c.font = `600 13px ${FONT_UI}`;
-      const w = Math.max(28, c.measureText(hpTxt).width + 12);
-      rrect(c, x - w / 2, y - 8, w, 16, 5); c.fillStyle = 'rgba(10,12,18,0.72)'; c.fill(); c.strokeStyle = col; c.lineWidth = 1.5; c.stroke();
-      c.fillStyle = '#fff'; c.fillText(hpTxt, x, y + 0.5);
-      c.font = `11px ${FONT_UI}`; textOutlined(c, s.name, x, y - 16, col, 'rgba(0,0,0,0.8)', 3);
+      const friend = hpFriend(sc, s.team), col = friend ? '#3ddc6a' : '#ff4d4d', colD = friend ? '#1c7a36' : '#8a1e1e';
+      const k = clamp(s.hp / (s.maxHp || 100), 0, 1), w = 46, h = 13;
+      c.save(); c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 5; c.shadowOffsetY = 1.5;
+      rrect(c, x - w / 2, y - h / 2, w, h, 6.5); c.fillStyle = 'rgba(12,16,24,0.82)'; c.fill(); c.restore();
+      if (k > 0) { c.save(); rrect(c, x - w / 2 + 2, y - h / 2 + 2, w - 4, h - 4, 4.5); c.clip(); const gr = c.createLinearGradient(0, y - h / 2, 0, y + h / 2); gr.addColorStop(0, col); gr.addColorStop(1, colD); c.fillStyle = gr; c.fillRect(x - w / 2 + 2, y - h / 2 + 2, (w - 4) * k, h - 4); c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillRect(x - w / 2 + 2, y - h / 2 + 2, (w - 4) * k, 2.5); c.restore(); }
+      c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 1; rrect(c, x - w / 2 + 0.5, y - h / 2 + 0.5, w - 1, h - 1, 6); c.stroke();
+      c.font = `700 11px ${FONT_UI}`; textOutlined(c, String(s.hp), x, y + 0.5, '#fff', 'rgba(0,0,0,0.85)', 3);
+      c.font = `600 11px ${FONT_UI}`; textOutlined(c, s.name, x, y - 14, col, 'rgba(0,0,0,0.85)', 3);
       if (s.id === T.sid && (T.phase === 'aim' || T.phase === 'wait') && t - this.turnStart < 4) {
         const b = Math.abs(Math.sin((t - this.turnStart) * 5)) * 7;
         c.fillStyle = col; c.beginPath(); c.moveTo(x - 8, y - 42 - b); c.lineTo(x + 8, y - 42 - b); c.lineTo(x, y - 30 - b); c.closePath(); c.fill();
@@ -361,7 +370,7 @@ class Renderer {
       hudPanel(c, 12, by - 12, 250, 26, 9);
       c.textAlign = 'left'; c.font = `13px ${FONT_TITLE}`; c.fillStyle = tm.color; c.fillText(tm.name, 22, by + 1);
       c.fillStyle = 'rgba(255,255,255,0.12)'; rrect(c, 120, by - 6, 108, 12, 6); c.fill();
-      c.fillStyle = tm.color; rrect(c, 120, by - 6, Math.max(6, 108 * hp / mx), 12, 6); c.fill();
+      c.fillStyle = hpFriend(sc, tm.idx ?? sc.teams.indexOf(tm)) ? '#3ddc6a' : '#ff4d4d'; rrect(c, 120, by - 6, Math.max(6, 108 * hp / mx), 12, 6); c.fill();
       c.fillStyle = '#fff'; c.font = `11px ${FONT_UI}`; c.textAlign = 'right'; c.fillText(`${alive}`, 250, by + 1);
       by += 30;
     }

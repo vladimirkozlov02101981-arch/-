@@ -15,7 +15,7 @@ const UI = {
     $('dialog-ok').addEventListener('click', () => { $('dialog').classList.add('hidden'); if (this.dialogCb) { const f = this.dialogCb; this.dialogCb = null; f(); } });
     $('join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') this.act('join'); });
     $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
-    for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai']) $(id).addEventListener('change', () => this.onSettingsChanged());
+    for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai', 'o-side']) $(id).addEventListener('change', () => this.onSettingsChanged());
     $('o-turnTime').addEventListener('input', () => this.onSettingsChanged());
     $('o-hp').addEventListener('input', () => this.onSettingsChanged());
     $('o-arsenal').addEventListener('change', () => { this.fillAmmo(makeAmmo($('o-arsenal').value)); this.onSettingsChanged(); });
@@ -91,7 +91,7 @@ const UI = {
   setPeerStatus(ok, txt) { const s = $('peer-status'); s.textContent = txt || (ok ? '● друг подключился' : '○ ждём друга…'); s.classList.toggle('ok', !!ok); },
   readSettings() {
     const S = this.settings;
-    S.perTeam = +$('o-perTeam').value; { const hp = Math.round(+$('o-hp').value); if (Number.isFinite(hp) && hp >= 1) S.hp = Math.min(1000, hp); } S.wind = $('o-wind').value === '1';
+    S.perTeam = +$('o-perTeam').value; { const hp = Math.round(+$('o-hp').value); if (Number.isFinite(hp) && hp >= 1) S.hp = Math.min(1000, hp); } S.wind = $('o-wind').value === '1'; S.side = $('o-side').value;
     const tt = Math.round(+$('o-turnTime').value); if (Number.isFinite(tt) && tt >= 5) S.turnTime = Math.min(600, tt);
     S.crates = false; S.sd = 0; S.arsenal = $('o-arsenal').value; S.ai = $('o-ai').value;
     S.ammo = this.readAmmo();
@@ -99,7 +99,7 @@ const UI = {
   },
   applySettings(S) {
     $('o-perTeam').value = String(S.perTeam); $('o-hp').value = String(S.hp); $('o-turnTime').value = String(S.turnTime); $('o-wind').value = S.wind ? '1' : '0';
-    $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal';
+    $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal'; $('o-side').value = S.side || 'random';
     this.fillAmmo(S.ammo || makeAmmo(S.arsenal));
   },
   /** редактор атак: галочка — оружие есть в бою, число — сколько раз его можно применить (пусто — без ограничения) */
