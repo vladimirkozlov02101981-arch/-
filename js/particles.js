@@ -5,7 +5,7 @@
 const FIRE_COLS = ['#fff6c2', '#ffd35a', '#ffa22a', '#ff6a1a', '#d8341a', '#7a1a10'];
 
 class Particles {
-  constructor() { this.a = []; this.max = 2800; }
+  constructor() { this.a = []; this.max = 2800; this.onRest = null; }   // onRest(p) — частица легла на землю: остаётся на карте
   add(p) { if (this.a.length >= this.max) this.a.splice(0, 300); this.a.push(p); return p; }
   smoke(x, y, vx, vy, size, life, col, grow = 2.2, al = 0.8) { return this.add({ t: 0, x, y, vx, vy, s: size, s2: size * grow, life, max: life, col, al, g: -14, drag: 1.3, wind: 0.08 }); }
   fire(x, y, vx, vy, size, life) { return this.add({ t: 1, x, y, vx, vy, s: size, s2: size * 0.3, life, max: life, g: -60, drag: 2.2, wind: 0.05 }); }
@@ -21,11 +21,12 @@ class Particles {
     const A = this.a;
     for (let i = A.length - 1; i >= 0; i--) {
       const p = A[i]; p.life -= dt;
-      if (p.life <= 0) { A[i] = A[A.length - 1]; A.pop(); continue; }
+      if (p.life <= 0) { if (this.onRest && (p.t === 3 || p.t === 7) && p.y < wy) this.onRest(p); A[i] = A[A.length - 1]; A.pop(); continue; }
       if (p.drag) { const k = 1 - p.drag * dt; p.vx *= k; p.vy *= k; }
       if (p.wind) p.vx += wind * p.wind * dt;
       if (p.g) p.vy += p.g * dt;
       const nx = p.x + p.vx * dt, ny = p.y + p.vy * dt;
+      if (p.t === 4 && this.onRest && T.isSolid(nx, ny)) { this.onRest(p); A[i] = A[A.length - 1]; A.pop(); continue; }   // капля крови впиталась — пятно
       if (p.collide && T.isSolid(nx, ny)) {
         if (T.isSolid(p.x, ny)) { p.vy *= -0.3; p.vx *= 0.65; } else p.vx *= -0.5;
         if (Math.abs(p.vy) < 40) { p.vy = 0; p.vx *= 0.7; p.vr *= 0.5; }

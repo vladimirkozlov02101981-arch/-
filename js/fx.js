@@ -11,9 +11,24 @@ TRAIL_RATE.plasma = .014; ENT_LIGHT.plasma = ['#80e6ff', 95];
 class FX {
   constructor() { this.isLocalTeam = () => true; this.onOver = null; this.onTurn = null; this.reset(null); }
   reset(sc) {
-    this.P = new Particles(); this.lights = []; this.texts = []; this.banners = []; this.traces = []; this.bolts = [];
+    this.P = new Particles(); this.P.onRest = (p) => this.litterAdd(p.t === 4 ? 2 : p.t === 7 ? 3 : 4, p.x, p.y, p.rot || 0, p.col, p.s);
+    this.litter = []; this.flyers = [];   // всё, что упало на карту, лежит до конца боя; летящие осколки
+    this.lights = []; this.texts = []; this.banners = []; this.traces = []; this.bolts = [];
     this.shake = 0; this.flash = 0; this.flashCol = '#ffffff'; this.focus = null; this.trailAcc = new Map(); this.frameLights = [];
     this.weather = sc ? new Weather(sc.theme.weather) : null; this.propAcc = 0; this.t = 0; this.lightCv = null;
+  }
+  /** предмет на карте до конца боя: 0 осколок, 1 пуля в преграде, 2 пятно крови, 3 гильза, 4 обломок */
+  litterAdd(k, x, y, rot = 0, col, s = 2) { if (this.litter.length > 9000) this.litter.splice(0, 500); this.litter.push({ k, x, y, rot, col, s, vy: 0 }); }
+  /** после разрушения земли то, что лежало на ней, падает вниз; застрявшее в стене выпадает вместе с куском */
+  litterSettle(sc, dt) {
+    const T = sc.terrain, wy = sc.waterY;
+    for (let i = this.litter.length - 1; i >= 0; i--) {
+      const o = this.litter[i]; if (o.k === 2 && !o.falling && T.isSolid(o.x, o.y + 1)) continue;
+      if (o.k !== 2 && (T.isSolid(o.x, o.y + 1) || T.isSolid(o.x, o.y))) { o.vy = 0; continue; }
+      if (o.k === 2) { this.litter.splice(i, 1); continue; }   // кровь, у которой пропала опора, — исчезает с землёй
+      o.vy = Math.min(900, o.vy + 900 * dt); o.y += o.vy * dt;
+      if (o.y > wy + 4 || o.y > T.H) this.litter.splice(i, 1);
+    }
   }
   banner(txt, col = '#fff', big = false, life = 2.2) { this.banners.push({ txt, col, big, life, max: life }); if (this.banners.length > 4) this.banners.shift(); }
   text(txt, x, y, col, size = 18, id) { const o = { txt, x, y, vy: -38, life: 1.4, max: 1.4, col, size, id }; this.texts.push(o); return o; }
@@ -25,6 +40,7 @@ class FX {
       case 'footstep': Sfx.play('footstep',ev); break;
       case 'impact':
         Sfx.play(ev.material===6?'metalImpact':ev.material===4?'woodImpact':'stoneImpact',ev);
+        this.litterAdd(1, ev.x, ev.y);   // пуля застряла в преграде
         for(let i=0;i<4;i++)P.spark(ev.x,ev.y,rand(-80,80),rand(-110,-20),.2,ev.material===6?'#ffe9ad':'#b8ad96');break;
       case 'carve': if (!isHost) sc.terrain.carve(ev.x, ev.y, ev.r, ev.s !== 0); break;
       case 'cline': if (!isHost) sc.terrain.carveLine(ev.x1, ev.y1, ev.x2, ev.y2, ev.r); break;
@@ -38,14 +54,8 @@ class FX {
         // у каждого осколка — ломаная траектория: рикошеты, пробитие преград; искры и пыль там, где он ударил или застрял
         for (const e of ev.e || []) {
           const path = Array.isArray(e[0]) ? e : [[ev.x, ev.y], e];
-          for (let k = 1; k < path.length; k++) {
-            const [x1, y1] = path[k - 1], [x2, y2] = path[k];
-            const f = k === 1 ? 0.35 + Math.random() * 0.4 : 1;
-            this.traces.push({ x1: x1 + (x2 - x1) * (k === 1 ? f * 0.5 : 0), y1: y1 + (y2 - y1) * (k === 1 ? f * 0.5 : 0), x2: x1 + (x2 - x1) * f, y2: y1 + (y2 - y1) * f, k: 3, life: 0.12 + k * 0.03, max: 0.12 + k * 0.03 });
-            if (k < path.length - 1 && Math.random() < 0.7) P.spark(x2, y2, rand(-80, 80), rand(-110, -10), 0.3, '#ffe0a0');   // рикошет / пробитие
-          }
-          const [xe, ye] = path[path.length - 1];
-          if (Math.random() < 0.5) P.spark(xe, ye, rand(-60, 60), rand(-90, -10), 0.25, '#ffd08a');
+          // каждый осколок виден в полёте: раскалённая точка идёт по своей траектории со своей скоростью
+          this.flyers.push({ path, seg: 1, u: 0, sp: rand(900, 1500), x: path[0][0], y: path[0][1], px: path[0][0], py: path[0][1] });
         }
         break;
       case 'nuke': this.nukeFx(ev.x, ev.y, sc); break;
@@ -189,6 +199,21 @@ class FX {
   update(dt, sc, cam, sw, sh) {
     this.t += dt; const P = this.P;
     P.update(dt, sc);
+    // полёт осколков: по ломаной (рикошеты, пробития), на изломах — искры; в конце осколок остаётся на карте
+    for (let i = this.flyers.length - 1; i >= 0; i--) {
+      const f = this.flyers[i]; f.px = f.x; f.py = f.y; let step = f.sp * dt; f.sp *= 1 - 0.9 * dt;
+      while (step > 0 && f.seg < f.path.length) {
+        const [x1, y1] = f.path[f.seg - 1], [x2, y2] = f.path[f.seg], L = Math.hypot(x2 - x1, y2 - y1) || 1, left = L * (1 - f.u);
+        if (step < left) { f.u += step / L; step = 0; f.x = x1 + (x2 - x1) * f.u; f.y = y1 + (y2 - y1) * f.u; }
+        else { step -= left; f.seg++; f.u = 0; f.x = x2; f.y = y2; if (f.seg < f.path.length) P.spark(x2, y2, rand(-80, 80), rand(-110, -10), 0.3, '#ffe0a0'); }
+      }
+      if (f.seg >= f.path.length) {
+        P.spark(f.x, f.y, rand(-50, 50), rand(-80, -10), 0.22, '#ffd08a');
+        this.litterAdd(0, f.x, f.y, rand(0, TAU), null, rand(1.2, 2.4));
+        this.flyers[i] = this.flyers[this.flyers.length - 1]; this.flyers.pop();
+      }
+    }
+    this.litterSettle(sc, dt);
     for (const e of sc.entities) {
       const rate = TRAIL_RATE[e.k]; if (!rate) continue;
       if (e.k === 'drill' && e.s === 1) { if (Math.random() < dt * 30) P.debris(e.x, e.y, rand(-80, 80), rand(-120, -20), rand(1.5, 3), pick(sc.theme.ground.strata), 0.8); continue; }
@@ -250,10 +275,24 @@ class FX {
   }
   /* ---------- рисование ---------- */
   drawWorld(c, sc, t) {
+    // то, что осталось на поле боя: осколки, пули, гильзы, обломки, кровь
+    for (const o of this.litter) {
+      if (o.k === 2) { c.fillStyle = 'rgba(96,8,8,0.75)'; c.beginPath(); c.ellipse(o.x, o.y, o.s * 1.2, o.s * 0.55, 0, 0, TAU); c.fill(); continue; }
+      c.save(); c.translate(o.x, o.y); c.rotate(o.rot);
+      if (o.k === 0) { c.fillStyle = '#3a3634'; c.fillRect(-o.s * 0.6, -o.s * 0.35, o.s * 1.2, o.s * 0.7); c.fillStyle = 'rgba(200,190,170,0.6)'; c.fillRect(-o.s * 0.6, -o.s * 0.35, o.s * 0.6, 0.4); }
+      else if (o.k === 1) { c.fillStyle = 'rgba(20,16,14,0.85)'; c.beginPath(); c.arc(0, 0, 1.3, 0, TAU); c.fill(); c.fillStyle = '#b08a3a'; c.fillRect(-0.5, -0.5, 1, 1); }
+      else if (o.k === 3) { c.fillStyle = '#b8903a'; c.fillRect(-1.3, -0.5, 2.6, 1); c.fillStyle = '#e8c870'; c.fillRect(-1.3, -0.5, 2.6, 0.35); }
+      else { c.fillStyle = o.col || '#6a5a48'; c.fillRect(-o.s / 2, -o.s / 2, o.s, o.s * 0.8); }
+      c.restore();
+    }
     this.P.draw(c, false);
     c.save(); c.globalCompositeOperation = 'lighter';
     for (const e of sc.entities) drawEntityAdditive(c, e, t, sc);
     drawProps(c, sc, t, true);
+    for (const f of this.flyers) {   // летящие осколки: короткий раскалённый след
+      c.strokeStyle = 'rgba(255,200,110,0.95)'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(f.px - (f.x - f.px) * 1.5, f.py - (f.y - f.py) * 1.5); c.lineTo(f.x, f.y); c.stroke();
+      c.fillStyle = '#fff2c0'; c.fillRect(f.x - 0.8, f.y - 0.8, 1.6, 1.6);
+    }
     for (const tr of this.traces) {
       const k = tr.life / tr.max;
       if (tr.k === 0) { c.strokeStyle = `rgba(255,230,150,${0.8 * k})`; c.lineWidth = 1.3; c.beginPath(); c.moveTo(tr.x1, tr.y1); c.lineTo(tr.x2, tr.y2); c.stroke(); }
