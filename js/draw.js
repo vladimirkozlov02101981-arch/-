@@ -106,7 +106,7 @@ function drawHat(c, hat, col, hx, hy, face) {
 function drawSoldierSprite(c, s, team, t, an) {
   const SA = SoldierArt, face = s.face || 1, dead = !s.alive, col = team ? team.color : '#888', K = SA.K, C = SA.CELL;
   c.save(); c.translate(s.x, s.y);
-  if ((s.st === 'stand' || s.st === 'walk' || s.st === 'climb') && !dead) { c.fillStyle = 'rgba(10,6,4,0.4)'; c.beginPath(); c.ellipse(0, 0.4, 11, 2.6, 0, 0, TAU); c.fill(); }
+  if ((s.st === 'stand' || s.st === 'walk' || s.st === 'climb') && !dead) { c.save(); c.filter = 'blur(1.5px)'; c.fillStyle = 'rgba(10,6,4,0.55)'; c.beginPath(); c.ellipse(0, 0.6, 10, 2.6, 0, 0, TAU); c.fill(); c.restore(); }   // контактная тень
   if (s.st === 'fly') { c.translate(0, -18); c.rotate(s.rot); c.translate(0, 18); }
   else if (s.st === 'dead') { c.translate(0, -2); c.rotate(face * 1.45); c.translate(0, 2); }
   const holding = s.wpn && !dead && s.st !== 'fly' && s.st !== 'climb' && s.wpn !== 'jetpack';
@@ -126,7 +126,7 @@ function drawSoldierSprite(c, s, team, t, an) {
   }
   c.save(); if (face < 0) c.scale(-1, 1);
   if (s.hurt > 0 && !dead) c.filter = 'brightness(1.3) sepia(0.6) saturate(4) hue-rotate(-30deg)';
-  c.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K, C * K, C * K);
+  c.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
   c.restore();
   if (holding) {
     const sx = (SA.SHOULDER[0] - SA.FOOT[0]) * K * face, sy = (SA.SHOULDER[1] - SA.FOOT[1]) * K;

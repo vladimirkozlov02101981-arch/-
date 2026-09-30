@@ -68,7 +68,7 @@ TexLib.load();
    Лист free: строки — стойка, шаг, бег, лазание; лист aim: строка — угол прицела (−90°…+90° через 15°),
    столбец 0 — стойка, 1…12 — шаг. Светлые пластины брони перекрашиваются в цвет команды. */
 const SoldierArt = {
-  CELL: 144, FOOT: [72, 126], MPP: 2.3 / 144, SHOULDER: [72.8, 38.5], K: 0.373,
+  CELL: 144, FOOT: [72, 126], MPP: 2.3 / 144, SHOULDER: [72.8, 38.5], K: 0.40,
   FREE: { idle: [0, 8], walk: [1, 12], run: [2, 10], climb: [3, 8] },
   cache: new Map(),
   ok() { return !!(TexLib.data.soldier_free && TexLib.data.soldier_aim); },
@@ -76,13 +76,16 @@ const SoldierArt = {
     const key = name + color; let cv = this.cache.get(key); if (cv) return cv;
     const T = TexLib.data['soldier_' + name]; cv = makeCanvas(T.w, T.h); const c = cv.getContext('2d');
     const img = c.createImageData(T.w, T.h), d = img.data, s = T.d; d.set(s);
-    const [tr, tg, tb] = hex2rgb(color), tl = (tr * 0.3 + tg * 0.59 + tb * 0.11) || 1;
+    // светлые пластины брони: на шлеме — цвет команды, остальное — полевая олива (как у настоящей формы)
+    const [tr, tg, tb] = hex2rgb(color), tl = (tr * 0.3 + tg * 0.59 + tb * 0.11) || 1, OL = [96, 104, 70], ol = OL[0] * 0.3 + OL[1] * 0.59 + OL[2] * 0.11, C = this.CELL, W = T.w;
     for (let j = 0; j < d.length; j += 4) {
       if (s[j + 3] < 8) continue;
       const r = s[j], g = s[j + 1], b = s[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      if (mx < 45 || r < g || g < b || (mx - mn) / mx < 0.16) continue;              // только тёплые светлые пластины брони
-      const L = r * 0.3 + g * 0.59 + b * 0.11, k = Math.min(1, ((mx - mn) / mx - 0.16) * 5) * 0.55, f = L / tl * 0.95;   // оттенок команды, фактура брони сохраняется
-      d[j] = r + (tr * f - r) * k; d[j + 1] = g + (tg * f - g) * k; d[j + 2] = b + (tb * f - b) * k;
+      if (mx < 40 || r < g || g < b || (mx - mn) / mx < 0.14) continue;
+      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = ((j >> 2) / W | 0) % C, helm = cy < 40;
+      const k = Math.min(1, ((mx - mn) / mx - 0.14) * 5) * (helm ? 0.9 : 0.8);
+      const T3 = helm ? [tr, tg, tb] : OL, f = L / (helm ? tl : ol) * (helm ? 1.0 : 0.95);
+      d[j] = r + (T3[0] * f - r) * k; d[j + 1] = g + (T3[1] * f - g) * k; d[j + 2] = b + (T3[2] * f - b) * k;
     }
     c.putImageData(img, 0, 0); this.cache.set(key, cv); return cv;
   },
