@@ -806,6 +806,72 @@ def granular(name, seed, pal, amp=0.012, ripples=0.0, pebbles=0.0, sparkle=0.0, 
     render(sc, name)
 
 
+def facade(name, seed, n=512, cols=16, rows=12, wall=(0.44, 0.44, 0.47), lit=0.4):
+    """ночной фасад многоэтажки (карта высот): бетонные панели, утопленные окна с откосами и подоконниками,
+    часть окон светится (тёплый свет, шторы, силуэты мебели), остальные — тёмное стекло с отражением неба;
+    кондиционеры, водостоки, потёки под подоконниками. Светящиеся окна — эмиссия (в игре дают свечение)"""
+    global LIGHT
+    L0 = dict(LIGHT); LIGHT.update(col=(0.62, 0.7, 1.0), elev=35, energy=1.4)
+    sc = reset(); LIGHT.update(L0)
+    sc.world.node_tree.nodes['Background'].inputs[0].default_value = (0.25, 0.28, 0.5, 1)
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.35
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    cw = n / cols; rh = n / rows
+    fx = xx % cw; fy = (n - 1 - yy) % rh                         # fy от верха этажа (строки массива — снизу вверх)
+    ci = (xx // cw).astype(int); ri = ((n - 1 - yy) // rh).astype(int)
+    ww, wh, wx0, wy0 = cw * 0.55, rh * 0.52, cw * 0.22, rh * 0.28
+    inx = (fx >= wx0) & (fx < wx0 + ww); iny = (fy >= wy0) & (fy < wy0 + wh); win = inx & iny
+    lx = (fx - wx0) / ww; ly = (fy - wy0) / wh
+    # стена: панели, шероховатость, швы
+    H = (fft_noise(n, 1.2, seed) - 0.5) * 0.004 + (fft_noise(n, 0.4, seed + 1) - 0.5) * 0.0015
+    C = np.ones((n, n, 3)) * np.array(wall) * (0.85 + 0.25 * fft_noise(n, 1.4, seed + 2))[..., None]
+    C *= (0.92 + 0.12 * fft_noise(n, 0.3, seed + 3))[..., None]
+    seam = (np.abs(fy - rh * 0.1) < 1.0) | ((xx % (cw * 4)) < 1.2)
+    H = np.where(seam, H - 0.004, H); C = np.where(seam[..., None], C * 0.7, C)
+    # подоконник и козырёк
+    sill = inx & (fy >= wy0 + wh) & (fy < wy0 + wh + 3); lint = (fx >= wx0 - 2) & (fx < wx0 + ww + 2) & (fy >= wy0 - 3) & (fy < wy0)
+    H = np.where(sill, H + 0.01, H); C = np.where(sill[..., None], np.array((0.62, 0.62, 0.64)), C)
+    H = np.where(lint, H + 0.006, H)
+    # потёки под подоконниками
+    st = aniso_noise(n, 1.3, seed + 4, 1.0, 0.08)
+    below = inx & (fy >= wy0 + wh + 3) & (fy < rh)
+    C = np.where(below[..., None], C * (1 - 0.35 * np.clip((st - 0.4) * 2, 0, 1) * (1 - (fy - wy0 - wh) / rh))[..., None], C)
+    # окна: утоплены, откосы темнее
+    H = np.where(win, -0.05, H)
+    rw = rng.random((rows + 1, cols + 1)); hue = rng.random((rows + 1, cols + 1)); curt = rng.random((rows + 1, cols + 1))
+    L = rw[ri, ci] < lit
+    edge = (lx < 0.06) | (lx > 0.94) | (ly < 0.06) | (ly > 0.94)
+    frame = win & (edge | (np.abs(lx - 0.5) < 0.03) | (np.abs(ly - 0.4) < 0.025))
+    glass = win & ~frame
+    # тёмное стекло: отражение неба (светлее вверху) + диагональный блик
+    sky = np.stack([0.10 + 0.12 * (1 - ly), 0.12 + 0.14 * (1 - ly), 0.22 + 0.2 * (1 - ly)], -1)
+    diag = ((lx * 1.2 + ly + hue[ri, ci]) % 1.0) < 0.08
+    sky = np.where(diag[..., None], sky + 0.18, sky)
+    # светящееся окно: тёплый интерьер, шторы с одной стороны, силуэт мебели
+    h_ = hue[ri, ci]
+    warm = np.where((h_ < 0.4)[..., None], np.array((1.0, 0.78, 0.46)), np.where((h_ < 0.75)[..., None], np.array((1.0, 0.9, 0.72)), np.array((0.75, 0.85, 1.0))))
+    inter = warm * (0.75 + 0.3 * ly)[..., None]
+    cs = np.where(curt[ri, ci] > 0.5, lx < 0.2 + curt[ri, ci] * 0.2, lx > 0.8 - curt[ri, ci] * 0.2)
+    inter = np.where(cs[..., None], inter * 0.62 * (0.9 + 0.1 * np.sin(lx * 60))[..., None], inter)
+    furn = (ly > 0.7) & (np.abs(lx - 0.3 - curt[ri, ci] * 0.4) < 0.12)
+    inter = np.where(furn[..., None], inter * 0.35, inter)
+    gl = glass & L
+    C = np.where((glass & ~L)[..., None], sky, C); C = np.where(gl[..., None], inter, C)
+    C = np.where(frame[..., None], np.array((0.2, 0.2, 0.22)), C)
+    reveal = (inx & iny) & False
+    # кондиционеры под частью окон
+    ac = (rw[ri, ci] > 0.8) & (fx >= wx0 + ww * 0.5) & (fx < wx0 + ww * 0.95) & (fy >= wy0 + wh + 5) & (fy < wy0 + wh + 13)
+    H = np.where(ac, 0.03, H); C = np.where(ac[..., None], np.array((0.55, 0.56, 0.58)) * (0.9 + 0.1 * ((xx % 2) > 0))[..., None], C)
+    # водосток
+    pipe = np.abs((xx % (cw * 8)) - cw * 8 + 3) < 2.5
+    H = np.where(pipe, H + 0.012 * np.sqrt(np.clip(1 - (((xx % (cw * 8)) - cw * 8 + 3) / 2.5) ** 2, 0, 1)), H)
+    C = np.where(pipe[..., None], np.array((0.3, 0.31, 0.33)), C)
+    glow = np.where(gl, 1.0, 0.0)
+    field_plane('facade', H, np.clip(C, 0, 1), glow=glow, rough=0.85, bump=0.3, gstr=2.2)
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- деревья (спрайты с прозрачным фоном)
 def _cone(bm, p0, p1, r0, r1, seg=10):
     """сужающийся цилиндр ветки от p0 до p1"""
@@ -1089,6 +1155,7 @@ LIB = {
     'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
                                           [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
     'haystack1': lambda: haystack_sprite('haystack1', 91),
+    'facade_city': lambda: facade('facade_city', 161),
     'alien_tree1': lambda: alien_mushroom('alien_tree1', 301), 'alien_tree2': lambda: alien_mushroom('alien_tree2', 302),
     # ---- сыпучие шапки поверхности: снег, песок, пепел
     'cap_snow': lambda: granular('cap_snow', 201, [(0.80, 0.86, 0.94), (0.90, 0.94, 0.99), (0.97, 0.98, 1.0)], amp=0.014, sparkle=1.0),
