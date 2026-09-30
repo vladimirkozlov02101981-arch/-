@@ -19,7 +19,7 @@ function bodyFree(T, x, y) {
 function onGround(T, x, y) { return T.isSolid(x - 3, y) || T.isSolid(x, y) || T.isSolid(x + 3, y); }
 /** уступ до MANTLE px с ровным верхом боец преодолевает шагом (ступени, края мостов, плиты);
     крутой склон так не взять — впереди должна быть площадка */
-const MANTLE = 14;
+const MANTLE = 22;
 /** запас хода — радиус по горизонтали от точки начала хода: назад и по лестницам можно сколько угодно */
 function walkOk(g, s, nx) { const o = g.turn.ox, d = Math.abs(nx - o); return d <= WALK_BUDGET || d < Math.abs(s.x - o); }
 function mantleFrom(T, x, y, dir) {
