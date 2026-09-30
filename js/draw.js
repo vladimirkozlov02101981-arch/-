@@ -102,6 +102,21 @@ function drawHat(c, hat, col, hx, hy, face) {
 
 /** боец: s — вид (x, y, aim, face, st, rot, wpn, alive, hurt, thrust), an — кэш анимации.
     Собственный дизайн: коренастый мультяшный солдатик с большой головой и каской цвета команды */
+const NO_WOUNDS = [0, 0, 0, 0, 0, 0];
+/** кровь и раны на теле (координаты — фигура смотрит вправо, ступни в 0,0) */
+function drawWounds(c, wl, far, t, id) {
+  for (let i = 0; i < 6; i++) {
+    const lv = wl[i]; if (!lv) continue;
+    let x, y;
+    if (i === 0) { x = 1; y = -37; } else if (i === 1) { x = 0; y = -25; }
+    else { const isFar = (i % 2) === far; if (i < 4) { x = isFar ? -3 : 3; y = -27; } else { x = isFar ? -2.5 : 2; y = lv === 3 ? -9 : -8; } }
+    const R = lv === 3 ? 2.6 : lv === 2 ? 2.1 : 1.4;
+    c.fillStyle = 'rgba(90,6,6,0.85)'; c.beginPath(); c.ellipse(x, y, R, R * 0.8, 0.4, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(170,16,14,0.9)'; c.beginPath(); c.ellipse(x - 0.3, y - 0.3, R * 0.6, R * 0.45, 0.4, 0, TAU); c.fill();
+    if (lv >= 2) { const dl = 2 + ((t * 3 + id + i) % 3); c.fillStyle = 'rgba(120,8,8,0.8)'; c.fillRect(x - 0.4, y + R * 0.6, 0.8, dl); }   // стекает кровь
+    if (lv === 3) { c.fillStyle = '#e8d2c0'; c.beginPath(); c.arc(x, y + (i >= 4 ? 1.8 : 0), 0.7, 0, TAU); c.fill(); }   // кость в культе
+  }
+}
 /** боец из 3D-кадров: кадр по состоянию, фазе шага и углу прицела; оружие — у плеча модели */
 function drawSoldierSprite(c, s, team, t, an) {
   const SA = SoldierArt, face = s.face || 1, dead = !s.alive, col = team ? team.color : '#888', K = SA.K, C = SA.CELL;
@@ -124,9 +139,25 @@ function drawSoldierSprite(c, s, team, t, an) {
     c.fillStyle = '#3a4048'; rrect(c, -face * 7 - 3.5, -30, 7, 14, 2.4); c.fill(); c.fillStyle = '#c0402f'; c.fillRect(-face * 7 - 3, -25, 6, 2);
     if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 7 - 6.5, -17, 13, 18 + Math.random() * 7); c.restore(); }
   }
+  const wl = s.wl || NO_WOUNDS;
+  // хромота: с раненой ногой шаг проваливается на больную сторону
+  const legW = Math.max(wl[4], wl[5]);
+  if (legW && s.st === 'walk' && !dead) c.translate(0, Math.max(0, Math.sin(an.walk * 0.5)) * (legW >= 3 ? 3.2 : legW * 0.9));
   c.save(); if (face < 0) c.scale(-1, 1);
   if (s.hurt > 0 && !dead) c.filter = 'brightness(1.3) sepia(0.6) saturate(4) hue-rotate(-30deg)';
-  c.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
+  // стороны тела на экране: при взгляде вправо левая половина (по карте) — дальняя
+  const far = face > 0 ? 0 : 1;
+  const lostLeg = [4, 5].filter(i => wl[i] === 3);
+  if (lostLeg.length) {
+    // потерянная нога: голень стирается, на её месте — окровавленная культя
+    const cv = SA.tmp || (SA.tmp = makeCanvas(C, C)), tc = cv.getContext('2d');
+    tc.globalCompositeOperation = 'copy'; tc.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, 0, 0, C, C); tc.globalCompositeOperation = 'destination-out';
+    for (const i of lostLeg) { const isFar = (i - 4) === far; tc.fillRect(isFar ? SA.FOOT[0] - 22 : SA.FOOT[0] - 2, SA.FOOT[1] - 22, 26, 30); }
+    tc.globalCompositeOperation = 'source-over';
+    c.drawImage(cv, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);
+  } else c.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
+  c.filter = 'none';
+  drawWounds(c, wl, far, t, s.id);
   c.restore();
   if (holding) {
     const sx = (SA.SHOULDER[0] - SA.FOOT[0]) * K * face, sy = (SA.SHOULDER[1] - SA.FOOT[1]) * K;

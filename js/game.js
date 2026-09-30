@@ -104,10 +104,14 @@ class Game {
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
       const shielding = exposure.get(s) ?? 1;
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
-      const imp = Math.min(820, knock * 1.45) * Math.pow(fw, 1.1) * shielding;
-      if (imp >= 25) { s.vx += dx * imp; s.vy += dy * imp; s.fly(); }
+      // тело весит ~80 кг: вблизи его подбрасывает и крутит, на среднем расстоянии сбивает с ног, вдали — лишь толкает
+      const imp = Math.min(760, knock * 1.35) * Math.pow(fw, 1.35) * shielding;
+      if (imp >= 140) { s.vx += dx * imp; s.vy += dy * imp - imp * 0.18; s.fly(); s.vrot = (s.vrot || 0) + (dx >= 0 ? 1 : -1) * Math.min(14, imp / 45); }
+      else if (imp >= 40) { s.vx += dx * imp * 0.8; s.vy += Math.min(0, dy * imp) - 60; s.fly(); s.vrot = (dx >= 0 ? 1 : -1) * imp / 60; }
+      else if (imp >= 8 && s.st !== 'fly') s.x += dx * Math.min(3, imp / 12);   // слабая волна — лишь качнуло
       // урон: максимум D в эпицентре, линейно убывает с расстоянием до нуля на краю волны
-      if (D > 0 && s.alive && fd > 0) this.damage(s, Math.round(D * fd * shielding), o.owner);
+      // точка удара волны — ближайшая к взрыву часть тела: взрыв под ногами ранит ноги, рядом с головой — голову
+      if (D > 0 && s.alive && fd > 0) this.damage(s, Math.round(D * fd * shielding), o.owner, clamp(x, s.x - 5, s.x + 5), by, fd > 0.55);
     }
     if (o.frag && FRAGS[o.frag]) this.fragments(x, y - 3, FRAGS[o.frag], o.owner);
     for (const e of this.entities) {
@@ -131,14 +135,23 @@ class Game {
         for (const s of this.soldiers) {
           if (!s.alive || s.gone || px < s.x - 7 || px > s.x + 7 || py < s.y - 36 || py > s.y + 1) continue;
           const dmg = F.d * (1 - t / L);
-          const h = hits.get(s) || { d: 0, vx: 0, vy: 0 }; h.d += dmg; h.vx += cx * 14; h.vy += cy * 14; hits.set(s, h);
+          const h = hits.get(s) || { d: 0, vx: 0, vy: 0, parts: [0, 0, 0, 0, 0, 0] }; h.d += dmg; h.vx += cx * 14; h.vy += cy * 14; h.parts[s.partAt(px, py)] += dmg; hits.set(s, h);
           ex = px; ey = py; done = true; break;
         }
       }
       ends.push([Math.round(ex), Math.round(ey)]);
     }
     this.emit({ t: 'frags', x: R1(x), y: R1(y), e: ends });
-    for (const [s, h] of hits) { if (!s.alive) continue; s.vx += h.vx; s.vy += h.vy; const v = Math.round(h.d); if (v > 0) this.damage(s, v, owner); }
+    for (const [s, h] of hits) {
+      if (!s.alive) continue; s.vx += h.vx; s.vy += h.vy;
+      // каждый осколок ранит ту часть тела, куда попал; урон по здоровью — суммой
+      const v = Math.round(h.d); if (v <= 0) continue;
+      let best = 1; for (let i = 0; i < 6; i++) if (h.parts[i] > h.parts[best]) best = i;
+      for (let i = 0; i < 6; i++) if (i !== best && h.parts[i] > 0 && s.wound(i, h.parts[i], false)) this.emit({ t: 'gib', id: s.id, p: i, x: R1(s.x), y: R1(s.y), f: s.face });
+      const bx = s.x + (best === 2 || best === 4 ? -4 : best === 3 || best === 5 ? 4 : 0), by = s.y - [32, 21, 21, 21, 7, 7][best];
+      this.damage(s, Math.min(v, Math.round(h.parts[best]) || v), owner, bx, by, false);
+      const rest = v - Math.min(v, Math.round(h.parts[best]) || v); if (rest > 0 && s.alive) { s.hp = Math.max(0, s.hp - rest); this.emit({ t: 'dmg', id: s.id, v: rest, x: R1(s.x), y: R1(s.y) }); const ot = owner ? owner.team : -1; if (ot >= 0 && ot !== s.team) this.teams[ot].dmg += rest; if (s.hp <= 0) { s.die(this, 'hit'); if (ot >= 0 && ot !== s.team) this.teams[ot].kills++; this.teamsDirty = true; } }
+    }
   }
   blastTransmission(x,y,tx,ty) {
     const d=Math.hypot(tx-x,ty-y);if(d<8)return 1;
@@ -148,8 +161,10 @@ class Game {
     return Math.max(.025,Math.exp(-thickness/15));
   }
   nuke(x, y, owner) { this.emit({ t: 'nuke', x: R1(x), y: R1(y) }); this.explode(x, y, 135, 82, { owner, knock: 760, k: 2 }); }
-  damage(s, v, owner) {
+  /** hx, hy — точка попадания (для ранений); без неё урон идёт в торс */
+  damage(s, v, owner, hx, hy, heavy) {
     if (!s.alive || v <= 0) return;
+    if (s.wound) { const part = isNum(hx) ? s.partAt(hx, hy) : 1; if (s.wound(part, Math.min(v, s.hp), heavy)) this.emit({ t: 'gib', id: s.id, p: part, x: R1(s.x), y: R1(s.y), f: s.face }); }
     v = Math.min(Math.round(v), s.hp); s.hp -= v; s.hurt = 0.3;
     const ot = owner ? owner.team : -1; if (ot >= 0 && ot !== s.team) this.teams[ot].dmg += v;
     this.emit({ t: 'dmg', id: s.id, v, x: R1(s.x), y: R1(s.y) });
@@ -183,7 +198,7 @@ class Game {
       // подкрутка броска: 0 — нет, 1 — вперёд, -1 — назад
       case 'spin': if (T.phase === 'aim') T.spin = T.spin === 0 ? 1 : T.spin === 1 ? -1 : 0; break;
       case 'fire':
-        if (T.phase === 'aim') this.fire(s, c);
+        if (T.phase === 'aim') { if (isNum(c.pw) && s.armFactor) c.pw = Math.min(c.pw, s.armFactor()); this.fire(s, c); }   // раненые руки не дают бросить в полную силу
         else if (T.phase === 'use' && this.usage && this.usage.fire) this.usage.fire(this);
         break;
       case 'skip': if (T.phase === 'aim' || T.phase === 'retreat') this.endTurn(); break;

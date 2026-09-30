@@ -117,21 +117,31 @@ class Terrain {
       if (xa <= xb) m.fill(0, y * W + xa, y * W + xb + 1);
     }
   }
+  /** стирает на слое все пиксели, которых больше нет в маске (в квадрате вокруг воронки) — края чёткие, без полупрозрачности */
+  clearMasked(ctx, cx, cy, r) {
+    if (!ctx) return;
+    const W = this.W, H = this.H, m = this.mask, x0 = Math.max(0, cx - r - 2), y0 = Math.max(0, cy - r - 2), x1 = Math.min(W, cx + r + 3), y1 = Math.min(H, cy + r + 3);
+    const w = x1 - x0, h = y1 - y0; if (w <= 0 || h <= 0) return;
+    let img; try { img = ctx.getImageData(x0, y0, w, h); } catch (e) { ctx.save(); ctx.globalCompositeOperation = 'destination-out'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); ctx.restore(); return; }
+    const d = img.data;
+    for (let y = 0; y < h; y++) { const row = (y0 + y) * W + x0; for (let x = 0; x < w; x++) if (!m[row + x]) { const dx = x0 + x - cx, dy = y0 + y - cy; if (dx * dx + dy * dy <= (r + 1.5) * (r + 1.5)) d[(y * w + x) * 4 + 3] = 0; } }
+    ctx.putImageData(img, x0, y0);
+  }
   carve(cx, cy, r, scorch = true) {
     cx = Math.round(cx); cy = Math.round(cy); r = Math.round(r); if (r <= 0) return;
     this.maskCircle(cx, cy, r);
     const c = this.ctx; c.save();
-    c.globalCompositeOperation = 'destination-out';
-    c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+    // воронка вырезается целиком (без полупрозрачной каймы): маска и картинка совпадают пиксель в пиксель
+    this.clearMasked(c, cx, cy, r + 1);
     if (scorch) {
       c.globalCompositeOperation = 'source-atop';
       const [sr, sg, sb] = this.scorch; const R = r + Math.min(18, 6 + r * 0.3);
       const g = c.createRadialGradient(cx, cy, r * 0.92, cx, cy, R);
-      g.addColorStop(0, `rgba(${sr},${sg},${sb},0.85)`); g.addColorStop(0.4, `rgba(${sr},${sg},${sb},0.45)`); g.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
+      g.addColorStop(0, `rgba(${Math.round(sr * 0.5)},${Math.round(sg * 0.5)},${Math.round(sb * 0.5)},0.95)`); g.addColorStop(0.35, `rgba(${sr},${sg},${sb},0.6)`); g.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
       c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill();
     }
     c.restore();
-    const d = this.dctx; d.save(); d.globalCompositeOperation = 'destination-out'; d.beginPath(); d.arc(cx, cy, r * 1.12 + 2, 0, TAU); d.fill(); d.restore();
+    this.clearMasked(this.dctx, cx, cy, r + 1);
     if (this.gctx) { const g = this.gctx; g.save(); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.arc(cx, cy, r + 3, 0, TAU); g.fill(); g.restore(); }
     this.version++;
   }

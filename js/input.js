@@ -145,6 +145,9 @@ class LocalController {
       this.swayAmp = approach(this.swayAmp ?? amp, amp, 4, dt);
       sway = this.swayAmp * (Math.sin(this.swayT * 1.4) * 0.8 + Math.sin(this.swayT * 3.1 + 1.3) * 0.45);
     }
+    // раненая рука: ствол гуляет, тем сильнее, чем тяжелее рана
+    const aw = s.wl ? Math.max(s.wl[2], s.wl[3]) : 0;
+    if (aw && canAct) { this.woundT = (this.woundT || 0) + dt; sway += [0, 0.012, 0.03, 0.055][aw] * (Math.sin(this.woundT * 2.3) * 0.7 + Math.sin(this.woundT * 5.1 + 0.7) * 0.4); }
     this.aim = this.base + sway;
     if (phase === 'aim' && T.shots === 0 && !this.charging) {
       if (P.KeyQ) this.cycle(sc, T, -1); if (P.KeyE) this.cycle(sc, T, 1);
@@ -169,7 +172,8 @@ class LocalController {
             const held = this.chargeByMouse ? Input.mouse.down[0] : !!(K.Enter || K.KeyF);
             // сила «пульсирует»: до максимума и обратно, пока кнопка зажата; выстрел — только при отпускании
             this.power += (this.chargeDir || 1) * dt / 1.15;
-            if (this.power >= 1) { this.power = 1; this.chargeDir = -1; } else if (this.power <= 0.06) { this.power = 0.06; this.chargeDir = 1; }
+            const cap = s.armFactor ? s.armFactor() : s.wl ? [2, 3].reduce((f, i) => f * [1, 0.95, 0.85, 0.7][s.wl[i]], 1) : 1;   // раненые руки: предел силы
+            if (this.power >= cap) { this.power = cap; this.chargeDir = -1; } else if (this.power <= 0.06) { this.power = 0.06; this.chargeDir = 1; }
             Sfx.chargeSet(this.power);
             if (!held) { this.send({ c: 'fire', aim: this.aim, pw: Math.max(0.06, this.power) }); this.cancelCharge(); }
           }

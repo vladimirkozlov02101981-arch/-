@@ -65,18 +65,41 @@ class Soldier {
     this.st = 'stand'; this.face = team % 2 ? -1 : 1; this.aim = this.face > 0 ? -0.5 : Math.PI + 0.5;
     this.rot = 0; this.vrot = 0; this.walkAcc = 0; this.hurt = 0; this.wpn = null; this.thrust = false;
     this.fuel = 0; this.restT = 0; this.maxVy = 0;
+    // ранения по частям тела: 0 голова, 1 торс, 2 левая рука, 3 правая рука, 4 левая нога, 5 правая нога (стороны — по карте)
+    this.wd = [0, 0, 0, 0, 0, 0]; this.wl = [0, 0, 0, 0, 0, 0];
   }
+  /** часть тела по точке попадания */
+  partAt(px, py) {
+    const h = this.y - py, side = px < this.x ? 0 : 1;
+    if (h >= 28) return 0;
+    if (h >= 15) return Math.abs(px - this.x) >= 3.5 ? 2 + side : 1;
+    return 4 + side;
+  }
+  /** ранение: урон копится по частям тела; тяжёлое попадание в руку или ногу может её оторвать. Возвращает true, если конечность потеряна */
+  wound(part, dmg, heavy) {
+    if (!(dmg > 0)) return false;
+    this.wd[part] += dmg; const w = this.wd[part];
+    let lost = false;
+    if (part >= 2 && this.wl[part] < 3 && ((w >= 42 && dmg >= 16 && Math.random() < (heavy ? 0.7 : 0.4)) || w >= 70)) { this.wl[part] = 3; lost = true; }
+    else if (this.wl[part] < 3) this.wl[part] = w >= 34 ? 2 : w >= 14 ? 1 : 0;
+    return lost;
+  }
+  /** насколько бодро ходит: каждая раненая нога замедляет, потерянная — сильно */
+  legFactor() { let f = 1; for (const i of [4, 5]) f *= [1, 0.86, 0.68, 0.42][this.wl[i]]; return f; }
+  /** предел силы броска и точность: раненые и потерянные руки */
+  armFactor() { let f = 1; for (const i of [2, 3]) f *= [1, 0.95, 0.85, 0.7][this.wl[i]]; return f; }
+  woundCode() { let c = 0; for (let i = 0; i < 6; i++) c |= (this.wl[i] & 3) << (i * 2); return c; }
   snap() {
     const fl = (this.alive ? 1 : 0) | (this.gone ? 2 : 0) | (this.thrust ? 4 : 0) | (this.hurt > 0 ? 8 : 0);
-    return [this.id, Math.round(this.x * 10), Math.round(this.y * 10), Math.round(this.aim * 100), this.face, this.hp, ST_IDX[this.st], Math.round(this.rot * 100), this.wpn ? WEAPON[this.wpn].idx : -1, fl];
+    return [this.id, Math.round(this.x * 10), Math.round(this.y * 10), Math.round(this.aim * 100), this.face, this.hp, ST_IDX[this.st], Math.round(this.rot * 100), this.wpn ? WEAPON[this.wpn].idx : -1, fl, this.woundCode()];
   }
   fly() { if (this.st === 'dead' && !this.alive) { this.st = 'fly'; } else if (this.st !== 'fly') { this.st = 'fly'; this.vrot = rand(-7, 7); } this.y -= 1; }
   setAim(a) { this.aim = angNorm(a); const c = Math.cos(this.aim); if (Math.abs(c) > 0.02) this.face = c > 0 ? 1 : -1; }
   jump(g, dir) {
     const d = dir || this.face;
-    if (!['stand','walk','climb'].includes(this.st) || !this.alive || (g.turn.ox === undefined ? g.turn.walk < 36 : !walkOk(g, this, this.x + d * 40))) return;
+    if (!['stand','walk','climb'].includes(this.st) || !this.alive || (this.wl[4] === 3 && this.wl[5] === 3) || (g.turn.ox === undefined ? g.turn.walk < 36 : !walkOk(g, this, this.x + d * 40))) return;
     this.face = d;
-    this.st = 'air'; this.vx = d * JUMP_VX; this.vy = -JUMP_VY; this.y -= 1;
+    const lf = Math.sqrt(this.legFactor()); this.st = 'air'; this.vx = d * JUMP_VX * lf; this.vy = -JUMP_VY * (0.55 + 0.45 * lf); this.y -= 1;
     if (g.turn.ox === undefined) g.turn.walk = Math.max(0, g.turn.walk - 36);
     g.emit({ t: 'jump', x: R1(this.x), y: R1(this.y) });
   }
@@ -147,7 +170,7 @@ class Soldier {
         const legacy = g.turn.ox === undefined;
         if (ctrl && ctrl.l !== ctrl.r && this.alive && (!legacy || g.turn.walk > 0)) {
           const dir = ctrl.l ? -1 : 1;
-          this.walkAcc += WALK_SPEED * dt;
+          this.walkAcc += WALK_SPEED * this.legFactor() * dt;   // с раненой ногой — медленнее, с потерянной — ковыляет
           while (this.walkAcc >= 1) {
             this.walkAcc -= 1;
             if (legacy ? g.turn.walk <= 0 : !walkOk(g, this, this.x + dir)) { this.walkAcc = 0; break; }

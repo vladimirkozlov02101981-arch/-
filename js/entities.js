@@ -535,7 +535,7 @@ class BallisticBullet extends Ent {
       if(target) {
         const head=this.kind===1 && this.y<target.y-21;
         const energy=Math.max(.62,1-this.travel/this.range*.25);
-        g.damage(target,(head?(this.head??this.damage+20):this.damage)*energy,this.owner);
+        g.damage(target,(head?(this.head??this.damage+20):this.damage)*energy,this.owner,this.x,this.y,this.damage>=40);
         target.vx+=Math.cos(a)*this.knock*.45;target.vy+=Math.sin(a)*this.knock*.45-this.knock*.08;
         if(this.knock>100)target.fly();
         if(head)g.emit({t:'msg',txt:'ХЕДШОТ!',c:'#dfed79'});

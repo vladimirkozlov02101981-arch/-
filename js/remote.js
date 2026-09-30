@@ -37,7 +37,7 @@ class RemoteGame {
     const S = new Map(), E = new Map();
     for (const a of m.S || []) {
       const fl = a[9];
-      S.set(a[0], { x: a[1] / 10, y: a[2] / 10, aim: a[3] / 100, face: a[4], hp: a[5], st: ST[a[6]] || 'stand', rot: a[7] / 100, wpn: a[8] >= 0 && WEAPONS[a[8]] ? WEAPONS[a[8]].id : null, alive: !!(fl & 1), gone: !!(fl & 2), thrust: !!(fl & 4), hurt: (fl & 8) ? 0.2 : 0 });
+      S.set(a[0], { x: a[1] / 10, y: a[2] / 10, aim: a[3] / 100, face: a[4], hp: a[5], st: ST[a[6]] || 'stand', rot: a[7] / 100, wpn: a[8] >= 0 && WEAPONS[a[8]] ? WEAPONS[a[8]].id : null, alive: !!(fl & 1), gone: !!(fl & 2), thrust: !!(fl & 4), hurt: (fl & 8) ? 0.2 : 0, wl: [0, 1, 2, 3, 4, 5].map(i => ((a[10] | 0) >> (i * 2)) & 3) });
     }
     for (const a of m.E || []) E.set(a[0], { id: a[0], k: KINDS[a[1]], x: a[2] / 10, y: a[3] / 10, a: a[4] / 100, f: a[5] / 10, s: a[6], team: a[7], v: a[8] || 0 });
     const turn = m.T ? this.decodeTurn(m.T) : null;

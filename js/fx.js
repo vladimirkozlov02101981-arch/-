@@ -42,6 +42,7 @@ class FX {
         break;
       case 'nuke': this.nukeFx(ev.x, ev.y, sc); break;
       case 'dmg': {
+        for (let i = 0, n = Math.min(10, 2 + (ev.v >> 3)); i < n; i++) this.P.drop(ev.x + rand(-3, 3), ev.y - rand(8, 30), rand(-90, 90), rand(-160, -30), i % 2 ? '#8a0c0c' : '#b31414', rand(1, 1.8));   // кровь из раны
         const now = this.t; let o = this.texts.find(x => x.id === ev.id && now - x.born < 0.4 && x.dmg);
         if (o) { o.v += ev.v; o.txt = '-' + o.v; o.life = o.max; }
         else { o = this.text('-' + ev.v, ev.x, ev.y - 42, '#ff5a4a', 18, ev.id); o.dmg = true; o.v = ev.v; o.born = now; }
@@ -99,6 +100,14 @@ class FX {
       case 'bat': Sfx.play('bat', ev); if (ev.h) for (let i = 0; i < 8; i++) P.star(ev.x, ev.y, rand(-150, 150), rand(-200, -40), 0.8); break;
       case 'flame': Sfx.play('flame', ev); break;
       case 'acidSpray': Sfx.play('acidSpray', ev); break;
+      case 'gib': {   // оторванная конечность отлетает, брызги крови
+        const leg = ev.p >= 4, y0 = ev.y - (leg ? 6 : 24), dir = (ev.p % 2 ? 1 : -1);
+        this.P.debris(ev.x, y0, dir * rand(90, 190), rand(-260, -160), leg ? 3.4 : 2.8, '#4e5a36', 3.5);
+        for (let i = 0; i < 18; i++) this.P.drop(ev.x + rand(-3, 3), y0 + rand(-3, 3), dir * rand(20, 160) + rand(-40, 40), rand(-220, -40), i % 3 ? '#8a0c0c' : '#c01818', rand(1.2, 2.2));
+        this.text(leg ? 'Оторвало ногу!' : 'Оторвало руку!', ev.x, ev.y - 60, '#ff6a5a', 15);
+        Sfx.play('hurt', ev);
+        break;
+      }
       case 'charge': Sfx.play('charge', ev); for (let i = 0; i < 20; i++) { const a = rand(0, TAU), r = rand(30, 60); P.glow(ev.x + Math.cos(a) * r, ev.y + Math.sin(a) * r, -Math.cos(a) * r * 2.2, -Math.sin(a) * r * 2.2, 2.5, 0.45, '#7ff0ff'); } break;
       case 'dig': Sfx.play('dig', ev); break;
       case 'bh': Sfx.play('blackhole', ev); break;
