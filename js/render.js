@@ -146,9 +146,21 @@ class Renderer {
       for (let i = 0; i < 24; i++) { const gx = x0 + (((i * 173.3 + t * 9 * (i % 3 + 1)) % span) + span) % span; c.beginPath(); c.ellipse(gx, wy + 8 + (i * 7 % 40), 12 + (i % 5) * 5, 3, 0, 0, TAU); c.fill(); }
       c.globalCompositeOperation = 'lighter'; const g2 = c.createLinearGradient(0, wy - 50, 0, wy + 40); g2.addColorStop(0, 'rgba(255,120,30,0)'); g2.addColorStop(1, 'rgba(255,150,50,0.35)'); c.fillStyle = g2; c.fillRect(x0, wy - 50, span, 90);
     } else {
-      for (let i = 0; i < 46; i++) {
-        const gx = x0 + (((i * 137.5 + Math.floor(t * 0.6 + i * 0.37) * 57.3) % span) + span) % span; const gy = wy + 5 + (i * 13 % 70);
-        c.fillStyle = rgba(L.glint || '#ffffff', 0.22 * (0.5 + 0.5 * Math.sin(t * 3 + i))); c.fillRect(gx, gy, 6 + (i % 4) * 3, 1.2);
+      // лучи света в толще воды: мягкие наклонные клинья, медленно колышутся
+      c.save(); c.globalCompositeOperation = 'lighter';
+      const rayCol = hex2rgb(L.top);
+      for (let i = 0; i < 9; i++) {
+        const rx = x0 + ((((i * 311.7 + Math.sin(t * 0.25 + i) * 40) % span) + span) % span), w = 26 + (i % 3) * 18, len = 170 + (i % 4) * 60;
+        const g = c.createLinearGradient(0, wy, 0, wy + len); g.addColorStop(0, `rgba(${rayCol[0]},${rayCol[1]},${rayCol[2]},${0.10 + 0.05 * Math.sin(t * 0.7 + i)})`); g.addColorStop(1, `rgba(${rayCol[0]},${rayCol[1]},${rayCol[2]},0)`);
+        c.fillStyle = g; c.beginPath(); c.moveTo(rx, wy + 2); c.lineTo(rx + w, wy + 2); c.lineTo(rx + w * 0.6 + len * 0.35, wy + len); c.lineTo(rx + len * 0.35 - w * 0.4, wy + len); c.closePath(); c.fill();
+      }
+      c.restore();
+      // рябь и солнечные блики: много коротких бликов у поверхности, сгущаются в «солнечную дорожку»
+      const sunX = x0 + span * 0.72;
+      for (let i = 0; i < 160; i++) {
+        const gx = x0 + (((i * 137.5 + Math.floor(t * 0.8 + i * 0.37) * 57.3) % span) + span) % span, gy = wy + 3 + Math.pow((i * 7 % 23) / 23, 1.6) * 60;
+        const near = Math.exp(-Math.pow((gx - sunX) / (span * 0.12), 2)), a = (0.12 + 0.55 * near) * (0.5 + 0.5 * Math.sin(t * 3.2 + i * 1.7));
+        c.fillStyle = rgba(L.glint || '#ffffff', a); c.fillRect(gx, gy, 3 + (i % 5) * 2 + near * 6, 1 + near * 0.6);
       }
     }
     c.restore();

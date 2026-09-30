@@ -501,7 +501,7 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80, glow=None):
         me = bpy.data.meshes.new('b'); me.from_pydata(verts, [], faces); me.materials.append(mats[mi])
         for p in me.polygons: p.use_smooth = True
         return me
-    count = 4200
+    count = int(4200 * (height / 0.26) ** 1.2)
     for i in range(count):
         x = rng.uniform(-S / 2, S / 2); y = rng.uniform(-0.25, 0.25)
         clump = 0.5 + 0.5 * math.sin(x * 3.1 + seed) * math.sin(x * 7.3 + 1)
@@ -1146,7 +1146,7 @@ def alien_mushroom(name, seed, px=560):
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
-    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0),
+    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.50, 0.35, 0.22), (0.37, 0.25, 0.155), (0.46, 0.45, 0.43), (0.74, 0.73, 0.70), density=2.0),
     # тёмная башня и светлая кладка стен и моста
     'brick_keep': lambda: masonry('brick_keep', 21, 30, 0, (0.50, 0.49, 0.47), (0.76, 0.74, 0.70), (0.52, 0.50, 0.46), moss=0.95, moss_col=(0.33, 0.38, 0.17), jitter=1.5, hrange=(13, 21), wrange=(0.6, 1.5), depth=0.05, gap_px=2.2, tilt=0.03, detail=0.6, mortar_h=0.03),
     'brick_light': lambda: masonry('brick_light', 22, 30, 0, (0.44, 0.42, 0.40), (0.82, 0.80, 0.75), (0.62, 0.60, 0.55), moss=0.8, moss_col=(0.33, 0.38, 0.17), jitter=1.4, hrange=(12, 20), wrange=(0.6, 1.5), depth=0.05, gap_px=2.0, tilt=0.03, detail=0.3, mortar_h=0.03),
@@ -1156,8 +1156,8 @@ LIB = {
     # задняя стена пещер
     'cave_wall': lambda: rock_face('cave_wall', 31, [(0.36, 0.35, 0.34), (0.42, 0.41, 0.39), (0.30, 0.29, 0.28)], layer=(30, 90), blocks=130, streak=0.2, cave=True),
     # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
-    'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.26, 0.36, 0.10), (0.36, 0.46, 0.13), (0.46, 0.55, 0.17), (0.60, 0.62, 0.28), (0.79, 0.72, 0.44)],
-                                        [(0.85, 0.15, 0.12), (0.95, 0.80, 0.18), (0.95, 0.94, 0.88), (0.35, 0.45, 0.95), (0.95, 0.45, 0.65)]),
+    'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.30, 0.42, 0.12), (0.40, 0.53, 0.15), (0.52, 0.63, 0.20), (0.64, 0.70, 0.30), (0.79, 0.72, 0.44)],
+                                        [(0.85, 0.15, 0.12), (0.95, 0.80, 0.18), (0.95, 0.94, 0.88), (0.35, 0.45, 0.95), (0.95, 0.45, 0.65)], height=0.34, H_PX=100),
     # деревья-спрайты: 3 дуба, 2 сосны, берёза
     'tree_oak1': lambda: tree_sprite('tree_oak1', 51, 'oak'), 'tree_oak2': lambda: tree_sprite('tree_oak2', 52, 'oak'), 'tree_oak3': lambda: tree_sprite('tree_oak3', 53, 'oak'),
     'tree_pine1': lambda: tree_sprite('tree_pine1', 61, 'pine'), 'tree_pine2': lambda: tree_sprite('tree_pine2', 62, 'pine'),
