@@ -323,24 +323,61 @@ def block_mesh(sx, sy, sz, rng, jitter):
 
 
 def mat_wood(name, dark, light):
-    """дерево: вытянутые вдоль доски волокна, сучки, тон доски из свойства tone"""
+    """дерево: годичные слои (волна с искажением) вдоль доски, у каждой доски свой рисунок и тон,
+    тёмные поры, сучки, потёртые светлые кромки, грязь в углублениях"""
     dark, light = lin(dark), lin(light)
-    m, nt, b = principled(name, 0.7, 0.25)
+    m, nt, b = principled(name, 0.68, 0.28)
     N = nt.nodes; L = nt.links
-    tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping')
-    mp.inputs['Scale'].default_value = (0.6, 22, 1)
-    L.new(tc.outputs['Object'], mp.inputs['Vector'])
-    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 3; nz.inputs['Detail'].default_value = 12
-    L.new(mp.outputs['Vector'], nz.inputs['Vector'])
+    tc = N.new('ShaderNodeTexCoord'); oi = N.new('ShaderNodeObjectInfo')
+    rnd = N.new('ShaderNodeVectorMath'); rnd.operation = 'SCALE'; rnd.inputs['Scale'].default_value = 37.0
+    L.new(oi.outputs['Random'], rnd.inputs[0])
+    add = N.new('ShaderNodeVectorMath'); add.operation = 'ADD'
+    L.new(tc.outputs['Object'], add.inputs[0]); L.new(rnd.outputs[0], add.inputs[1])
+    mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (0.25, 30, 1)
+    L.new(add.outputs[0], mp.inputs['Vector'])
+    wv = N.new('ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = 'Y'
+    wv.inputs['Scale'].default_value = 2.2; wv.inputs['Distortion'].default_value = 3; wv.inputs['Detail'].default_value = 6
+    wv.inputs['Detail Scale'].default_value = 1.2
+    L.new(mp.outputs['Vector'], wv.inputs['Vector'])
+    mp2 = N.new('ShaderNodeMapping'); mp2.inputs['Scale'].default_value = (0.5, 40, 1)
+    L.new(add.outputs[0], mp2.inputs['Vector'])
+    pore = N.new('ShaderNodeTexNoise'); pore.inputs['Scale'].default_value = 25; pore.inputs['Detail'].default_value = 10
+    L.new(mp2.outputs['Vector'], pore.inputs['Vector'])
+    big = N.new('ShaderNodeTexNoise'); big.inputs['Scale'].default_value = 1.5; big.inputs['Detail'].default_value = 4
+    L.new(add.outputs[0], big.inputs['Vector'])
     tone = N.new('ShaderNodeAttribute'); tone.attribute_type = 'OBJECT'; tone.attribute_name = 'tone'
-    mix = N.new('ShaderNodeMath'); mix.operation = 'MULTIPLY_ADD'
-    L.new(nz.outputs['Fac'], mix.inputs[0]); mix.inputs[1].default_value = 0.9; L.new(tone.outputs['Fac'], mix.inputs[2])
+    # фактор: слои + крупные пятна + тон доски
+    f1 = N.new('ShaderNodeMath'); f1.operation = 'MULTIPLY_ADD'; f1.inputs[1].default_value = 0.9
+    L.new(wv.outputs['Fac'], f1.inputs[0]); L.new(big.outputs['Fac'], f1.inputs[2]); f1.inputs[2].default_value = 0
+    bg2 = N.new('ShaderNodeMath'); bg2.operation = 'MULTIPLY'; bg2.inputs[1].default_value = 0.4; L.new(big.outputs['Fac'], bg2.inputs[0]); L.new(bg2.outputs[0], f1.inputs[2])
+    f2 = N.new('ShaderNodeMath'); f2.operation = 'ADD'
+    L.new(f1.outputs[0], f2.inputs[0]); L.new(tone.outputs['Fac'], f2.inputs[1])
     ramp = N.new('ShaderNodeValToRGB')
-    ramp.color_ramp.elements[0].position = 0.25; ramp.color_ramp.elements[0].color = (*dark, 1)
-    ramp.color_ramp.elements[1].position = 0.85; ramp.color_ramp.elements[1].color = (*light, 1)
-    L.new(mix.outputs[0], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
-    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.5
-    L.new(nz.outputs['Fac'], bump.inputs['Height']); L.new(bump.outputs['Normal'], b.inputs['Normal'])
+    ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[0].color = (*dark, 1)
+    ramp.color_ramp.elements[1].position = 1.1; ramp.color_ramp.elements[1].color = (*light, 1)
+    L.new(f2.outputs[0], ramp.inputs['Fac'])
+    # поры: тёмные штрихи
+    pr = N.new('ShaderNodeMapRange'); pr.inputs['From Min'].default_value = 0.3; pr.inputs['From Max'].default_value = 0.6
+    pr.inputs['To Min'].default_value = 0.72; pr.inputs['To Max'].default_value = 1.05
+    L.new(pore.outputs['Fac'], pr.inputs['Value'])
+    geo = N.new('ShaderNodeNewGeometry')
+    pt = N.new('ShaderNodeMapRange'); pt.inputs['From Min'].default_value = 0.45; pt.inputs['From Max'].default_value = 0.58
+    pt.inputs['To Min'].default_value = 0.6; pt.inputs['To Max'].default_value = 1.3
+    L.new(geo.outputs['Pointiness'], pt.inputs['Value'])
+    mm = N.new('ShaderNodeMath'); mm.operation = 'MULTIPLY'
+    L.new(pr.outputs['Result'], mm.inputs[0]); L.new(pt.outputs['Result'], mm.inputs[1])
+    mc = N.new('ShaderNodeMix'); mc.data_type = 'RGBA'; mc.blend_type = 'MULTIPLY'; sock(mc.inputs, 'Factor_Float').default_value = 1.0
+    L.new(ramp.outputs['Color'], sock(mc.inputs, 'A_Color'))
+    cv = N.new('ShaderNodeCombineXYZ'); L.new(mm.outputs[0], cv.inputs[0]); L.new(mm.outputs[0], cv.inputs[1]); L.new(mm.outputs[0], cv.inputs[2])
+    L.new(cv.outputs[0], sock(mc.inputs, 'B_Color'))
+    L.new(sock(mc.outputs, 'Result_Color'), b.inputs['Base Color'])
+    # рельеф: слои и поры
+    hb = N.new('ShaderNodeMath'); hb.operation = 'MULTIPLY_ADD'; hb.inputs[1].default_value = 0.5
+    L.new(pore.outputs['Fac'], hb.inputs[0]); L.new(wv.outputs['Fac'], hb.inputs[2])
+    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.35; bump.inputs['Distance'].default_value = 0.003
+    L.new(hb.outputs[0], bump.inputs['Height']); L.new(bump.outputs['Normal'], b.inputs['Normal'])
+    rr = N.new('ShaderNodeMapRange'); rr.inputs['To Min'].default_value = 0.8; rr.inputs['To Max'].default_value = 0.55
+    L.new(pore.outputs['Fac'], rr.inputs['Value']); L.new(rr.outputs['Result'], b.inputs['Roughness'])
     return m
 
 
@@ -662,6 +699,77 @@ def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=60, 
     render(sc, name)
 
 
+def wood_planks(name, seed, ph, pw, dark, light, n=512, nails=True, weather=0.3, gap=1.6):
+    """обшивка из досок (карта высот): ряды досок высотой ph px разной длины (pw — средняя), в каждой — свои
+    годичные слои (синус по искривлённой координате), сучки с завитками слоёв, тёмные поры, скруглённые кромки,
+    щели, гвозди, выгоревшие светлые и грязные тёмные места"""
+    sc = reset(); rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    rows = max(1, int(round(n / ph))); rh = n / rows
+    row = np.floor(yy / rh).astype(int); fy = yy - row * rh
+    H = np.zeros((n, n)); C = np.zeros((n, n, 3)); pid = np.zeros((n, n), int)
+    D = np.array(dark); Lc = np.array(light)
+    fn = fft_noise(n, 1.2, seed + 1); fine = aniso_noise(n, 0.9, seed + 2, 0.05, 1.0)
+    pores = aniso_noise(n, 0.3, seed + 3, 0.04, 1.0)
+    for r in range(rows):
+        m = row == r
+        off = rng.uniform(0, pw); x0 = -off; k = 0
+        while x0 < n:
+            L_ = pw * rng.uniform(0.6, 1.6); x1 = min(n, x0 + L_)
+            seg = m & (xx >= x0) & (xx < x1)
+            if not seg.any(): x0 = x1; continue
+            pidv = r * 1000 + k; k += 1
+            pr = np.random.default_rng(seed * 7919 + pidv)
+            tone = pr.uniform(-0.18, 0.18)
+            # годичные слои: координата поперёк доски, искривлённая шумом и сучками
+            gy = fy + (fn - 0.5) * pr.uniform(6, 14) + np.sin(xx * pr.uniform(0.01, 0.03) + pr.uniform(0, 6)) * pr.uniform(1, 4)
+            knots = []
+            for _ in range(int(pr.random() < 0.3)):
+                knots.append((pr.uniform(x0 + 8, max(x0 + 9, x1 - 8)), pr.uniform(0.25, 0.75) * rh, pr.uniform(2.5, 5.5)))
+            kd = np.full((n, n), 1e9)
+            for kx, ky, kr in knots:
+                dx = (xx - kx) / 2.2; dy = fy - ky; d = np.sqrt(dx * dx + dy * dy)
+                gy = gy + np.exp(-(d / (kr * 3)) ** 2) * (kr * 3) * np.sign(dy + 1e-3) * 0.9
+                kd = np.minimum(kd, d / kr)
+            ring = 0.5 + 0.5 * np.sin(gy * pr.uniform(0.45, 0.8) + pr.uniform(0, 6))
+            ring = ring ** 3
+            t = np.clip(0.55 + tone + (fine - 0.5) * 0.5 - ring * 0.35 + (fn - 0.5) * 0.3, 0, 1)
+            col = D * (1 - t)[..., None] + Lc * t[..., None]
+            col *= (0.82 + 0.3 * pores)[..., None]
+            kn = np.clip(1.0 - kd, 0, 1) ** 0.7                            # сучок: тёмное ядро
+            col *= (1 - 0.55 * kn)[..., None]
+            # кромки доски: скругление и тёмная грязь в стыках
+            ex = np.minimum(xx - x0, x1 - xx); ey = np.minimum(fy, rh - fy)
+            e = np.minimum(ex, ey)
+            bev = np.clip(e / 3.0, 0, 1)
+            h = 0.006 * np.sqrt(bev) + pr.uniform(-0.002, 0.002) + ring * 0.0006 - kn * 0.001
+            H = np.where(seg, h, H); C = np.where(seg[..., None], col, C); pid = np.where(seg, pidv, pid)
+            x0 = x1
+    # щели между досками
+    ex = np.abs(np.diff(pid, axis=1, append=pid[:, :1])) > 0
+    ey = np.abs(np.diff(pid, axis=0, append=pid[:1, :])) > 0
+    gapm = blur_p((ex | ey).astype(float), gap * 0.6) > 0.18
+    H = np.where(gapm, -0.004, H); C = np.where(gapm[..., None], C * 0.25, C)
+    # выветривание: светлые выгоревшие пятна, тёмные потёки
+    w = fft_noise(n, 1.5, seed + 5); st = aniso_noise(n, 1.3, seed + 6, 1.0, 0.1)
+    C = C * (1 + weather * 0.35 * (w - 0.5))[..., None]
+    C = C * (1 - weather * 0.4 * np.clip((st - 0.55) * 3, 0, 1))[..., None]
+    if nails:                                                    # гвозди у торцов досок
+        yb = (np.arange(rows) + 0.5) * rh
+        for x in np.where(ex.any(axis=0))[0][::1]:
+            pass
+        endx = [(r, np.where(ex[int(yb[r]) % n])[0]) for r in range(rows)]
+        for r, xs_ in endx:
+            for x in xs_:
+                for sx in (-5, 5):
+                    cx = (x + sx) % n; cy = yb[r]
+                    d = np.sqrt(((xx - cx + n / 2) % n - n / 2) ** 2 + ((yy - cy + n / 2) % n - n / 2) ** 2)
+                    nm = d < 1.6
+                    H = np.where(nm, H + 0.001, H); C = np.where(nm[..., None], np.array((0.22, 0.2, 0.18)) * (1.2 - d / 2)[..., None], C)
+    field_plane('wood', H, np.clip(C, 0, 1), rough=0.75, bump=0.15)
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- деревья (спрайты с прозрачным фоном)
 def _cone(bm, p0, p1, r0, r1, seg=10):
     """сужающийся цилиндр ветки от p0 до p1"""
@@ -815,8 +923,8 @@ LIB = {
     'grass_alien': lambda: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)],
                                        [(1.0, 0.45, 0.95), (0.55, 0.95, 1.0)], glow=((0.35, 1.0, 0.90), 2.0)),
     # ---- пиратская бухта: доски корабля, тропическая земля и трава
-    'wood_ship': lambda: masonry('wood_ship', 141, 120, 10, (0.30, 0.17, 0.09), (0.58, 0.38, 0.22), (0.10, 0.05, 0.03), wrange=(0.5, 1.6), mat='wood', nails=True, jitter=0.4, depth=0.03, gap_px=1.6),
-    'wood_light': lambda: masonry('wood_light', 142, 100, 9, (0.52, 0.36, 0.22), (0.80, 0.62, 0.42), (0.18, 0.10, 0.06), wrange=(0.5, 1.6), mat='wood', nails=True, jitter=0.4, depth=0.03, gap_px=1.4),
+    'wood_ship': lambda: wood_planks('wood_ship', 141, 20, 170, (0.24, 0.13, 0.07), (0.56, 0.36, 0.20)),
+    'wood_light': lambda: wood_planks('wood_light', 142, 17, 140, (0.46, 0.32, 0.20), (0.80, 0.63, 0.43), weather=0.5),
     'dirt_tropical': lambda: dirt_stones('dirt_tropical', 143, (0.56, 0.40, 0.26), (0.40, 0.27, 0.16), (0.40, 0.36, 0.30), (0.74, 0.70, 0.62), density=1.4),
     'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
                                           [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
