@@ -98,6 +98,7 @@ class FX {
       case 'storm': Sfx.play('thunder', ev); for (let i = 0; i < 10; i++) this.P.smoke(ev.x + rand(-60, 60), ev.y + rand(-15, 15), rand(-10, 10), rand(-6, 6), rand(18, 30), rand(1.6, 2.4), '#3a4152', 1.4, 0.55); break;
       case 'bat': Sfx.play('bat', ev); if (ev.h) for (let i = 0; i < 8; i++) P.star(ev.x, ev.y, rand(-150, 150), rand(-200, -40), 0.8); break;
       case 'flame': Sfx.play('flame', ev); break;
+      case 'acidSpray': Sfx.play('acidSpray', ev); break;
       case 'charge': Sfx.play('charge', ev); for (let i = 0; i < 20; i++) { const a = rand(0, TAU), r = rand(30, 60); P.glow(ev.x + Math.cos(a) * r, ev.y + Math.sin(a) * r, -Math.cos(a) * r * 2.2, -Math.sin(a) * r * 2.2, 2.5, 0.45, '#7ff0ff'); } break;
       case 'dig': Sfx.play('dig', ev); break;
       case 'bh': Sfx.play('blackhole', ev); break;

@@ -20,16 +20,22 @@ class PlasmaBall extends Ent {
 KIND_IDX.acid = KINDS.length; KINDS.push('acid');
 const ACID_RANGE = 280;
 class AcidShot extends Ent {
-  constructor(g, s, aim) {
-    const m = muzzle(s, aim, 22);
-    super(g, 'acid', m.x, m.y, Math.cos(aim) * 950, Math.sin(aim) * 950);
-    this.owner = s; this.team = s.team; this.hit = new Set([s.id]); this.pushable = false; this.a = aim; this.sx = m.x; this.sy = m.y;
+  /** одна капля струи; delay — через сколько секунд после нажатия капля вылетает из ствола (вместе капли дают сплошную струю) */
+  constructor(g, s, aim, delay = 0, hit = null) {
+    const m = muzzle(s, aim, 22), sp = 950 + (Math.random() - 0.5) * 50;
+    super(g, 'acid', m.x, m.y, Math.cos(aim) * sp, Math.sin(aim) * sp);
+    this.owner = s; this.team = s.team; this.hit = hit || new Set([s.id]); this.pushable = false; this.a = aim; this.sx = m.x; this.sy = m.y;
+    this.delay = delay; this.aim = aim; this.f = delay > 0 ? 0 : 1;
   }
   update(g, dt) {
+    if (this.delay > 0) {                                    // ещё в стволе: держится у дула
+      this.delay -= dt; const m = muzzle(this.owner, this.aim, 22); this.x = this.sx = m.x; this.y = this.sy = m.y;
+      if (this.delay > 0) return; this.f = 1;
+    }
     this.age += dt;
     const x0 = this.x, y0 = this.y, grav = this.age < 0.45 ? 0.06 : Math.min(1.3, (this.age - 0.45) * 3);
     this.vy += g.gravity * grav * dt; this.x += this.vx * dt; this.y += this.vy * dt; this.a = Math.atan2(this.vy, this.vx);
-    if (g.terrain.segmentHit(x0, y0, this.x, this.y) || g.terrain.isSolid(this.x, this.y)) g.carveLine(x0, y0, this.x, this.y, 5);
+    if (g.terrain.segmentHit(x0, y0, this.x, this.y) || g.terrain.isSolid(this.x, this.y)) g.carveLine(x0, y0, this.x, this.y, 4);
     const steps = Math.max(1, Math.ceil(Math.hypot(this.x - x0, this.y - y0) / 3));
     for (let i = 1; i <= steps; i++) {
       const o = g.soldierAt(x0 + (this.x - x0) * i / steps, y0 + (this.y - y0) * i / steps, 3, null);
@@ -103,7 +109,7 @@ Object.assign(FIRE, {
     g.carveLine(x0,y0,x0+dx*38,y0+dy*38,19); g.emit({t:'dig',x:R1(x0+dx*20),y:R1(y0+dy*20)});
     const h=hitscan(g,s.x,s.y-15,p.aim,34,s); if(h.type==='soldier'){g.damage(h.s,10,s);h.s.vx+=dx*160;h.s.vy+=dy*160-60;h.s.fly();}
   },
-  acid(g,s,p) { g.spawn(new AcidShot(g,s,p.aim)); g.emit({t:'flame',x:R1(s.x),y:R1(s.y)}); },
+  acid(g,s,p) { const hit = new Set([s.id]); for (let i = 0; i < 24; i++) g.spawn(new AcidShot(g, s, p.aim + (Math.random() - 0.5) * 0.02, i * 0.02, hit)); g.emit({t:'acidSpray',x:R1(s.x),y:R1(s.y)}); },   // сплошная струя из 24 капель, урон один раз на бойца
   tpgrenade(g,s,p) {
     const m=muzzle(s,p.aim,10), sp=780*p.pw, e=new TpGrenade(g,m.x,m.y,Math.cos(p.aim)*sp+s.vx*.3,Math.sin(p.aim)*sp,s);
     e.spin=p.spin|0; g.spawn(e); g.emit({t:'launch',x:R1(m.x),y:R1(m.y),w:'throw'});

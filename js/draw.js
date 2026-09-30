@@ -228,9 +228,11 @@ function drawEntityBody(c, e, t, held) {
       c.save(); c.shadowColor='#73eaff'; c.shadowBlur=18; c.fillStyle='#80e6ff'; circ(c,0,0,6); c.fillStyle='#fff'; circ(c,-1,-1,3);
       c.strokeStyle='#ba9bff';c.lineWidth=1.5;c.beginPath();c.ellipse(0,0,10,4,t*6,0,TAU);c.stroke();c.restore();break;
     case 'acid': {
-      c.save(); c.shadowColor = '#b8ff3a'; c.shadowBlur = 10; c.fillStyle = '#9ef03a';
-      c.beginPath(); c.ellipse(0, 0, 6.5, 3.2, 0, 0, TAU); c.fill(); c.fillStyle = '#e8ffb0'; circ(c, 1.8, -0.8, 1.3);
-      c.fillStyle = 'rgba(150,230,60,0.55)'; circ(c, -7, 0.6, 2.2); circ(c, -11, -0.4, 1.4); c.restore(); break;
+      if (!e.f) break;                                      // капля ещё в стволе
+      c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(150,240,60,0.35)';
+      c.beginPath(); c.ellipse(-4, 0, 13, 4.2, 0, 0, TAU); c.fill(); c.restore();
+      c.save(); c.fillStyle = '#8fe032'; c.beginPath(); c.ellipse(-3, 0, 11, 2.1, 0, 0, TAU); c.fill();   // вытянутая капля: соседние сливаются в струю
+      c.fillStyle = 'rgba(232,255,176,0.9)'; c.beginPath(); c.ellipse(-1, -0.7, 6, 0.7, 0, 0, TAU); c.fill(); c.restore(); break;
     }
     case 'tpg': {
       const g = c.createRadialGradient(-1.2, -1.4, 0.4, 0, 0, 4.8); g.addColorStop(0, '#f4e2ff'); g.addColorStop(0.55, '#a45cff'); g.addColorStop(1, '#3c1470');

@@ -18,9 +18,10 @@ const Sfx = (() => {
     try {
       ac = new (window.AudioContext || window.webkitAudioContext)();
       comp = ac.createDynamicsCompressor();
-      comp.threshold.value = -14; comp.knee.value = 12; comp.ratio.value = 5;
+      comp.threshold.value = -6; comp.knee.value = 10; comp.ratio.value = 3;
       master = ac.createGain(); master.gain.value = enabled ? volume : 0;
-      master.connect(comp); comp.connect(ac.destination);
+      const lim = ac.createDynamicsCompressor(); lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15;   // ограничитель: громкий взрыв без хрипа
+      master.connect(comp); comp.connect(lim); lim.connect(ac.destination);
       reverb=ac.createConvolver();reverb.connect(master);makeImpulse();
       const len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
@@ -137,6 +138,13 @@ const Sfx = (() => {
       osc.connect(g); g.connect(d); osc.start(t); osc.stop(t + 2.3);
     },
     blackhole(pos) { const t = ac.currentTime, d = out(pos, 1); tone(d, t, 2.8, { f0: 90, f1: 28, gain: 0.6, attack: 0.3 }); noise(d, t, 2.8, { f0: 200, f1: 900, gain: 0.35, attack: 1.8 }); },
+    acidSpray(pos) {                                         // струя жидкости: шипящий напор + бульканье + брызги
+      const t = ac.currentTime, d = out(pos, 0.7);
+      noise(d, t, 0.55, { type: 'highpass', f0: 2600, f1: 1800, gain: 0.32, attack: 0.02 });
+      noise(d, t, 0.5, { type: 'bandpass', f0: 900, q: 1.2, gain: 0.22, attack: 0.02 });
+      for (let i = 0; i < 9; i++) { const dt = 0.03 + i * 0.055 + Math.random() * 0.03, f = 280 + Math.random() * 420; tone(d, t + dt, 0.05, { type: 'sine', f0: f, f1: f * 1.9, gain: 0.07, attack: 0.004 }); }
+      for (let i = 0; i < 5; i++) noise(d, t + 0.45 + i * 0.07 + Math.random() * 0.05, 0.06, { type: 'bandpass', f0: 3500, q: 2, gain: 0.12, attack: 0.002 });   // капли шлёпаются и шипят
+    },
     flame(pos) { const t = ac.currentTime, d = out(pos, 0.6); noise(d, t, 0.3, { type: 'bandpass', f0: 800, q: 0.6, gain: 0.35, attack: 0.03 }); },
     tick() { const t = ac.currentTime, d = out(null, 0.5); tone(d, t, 0.05, { type: 'square', f0: 1100, gain: 0.08 }); },
     turn() { const t = ac.currentTime, d = out(null, 0.6); tone(d, t, 0.18, { type: 'triangle', f0: 660, gain: 0.2 }); tone(d, t + 0.11, 0.3, { type: 'triangle', f0: 990, gain: 0.2 }); },
@@ -166,14 +174,14 @@ const Sfx = (() => {
     autocannon: { f: ['cannon1', 'cannon2'], v: 0.9, r: [1.08, 1.2] },
     launch: { f: ['launch1', 'launch2'], v: 0.75, r: [0.95, 1.05] },
     small: { f: ['small1', 'boom1', 'boom2'], v: 0.5, r: [1.15, 1.3] },
-    bounce: { f: ['bounce1', 'bounce2'], v: 0.45, r: [0.9, 1.1], o: 0.1 },
+    bounce: { f: ['bounce1', 'bounce2'], v: 0.14, r: [0.9, 1.1], o: 0.1 },
     laser: { f: ['rail'], v: 0.8, r: [0.95, 1.02] },
     zap: { f: ['zap', 'rail'], v: 0.8, r: [0.9, 1.1] },
     thunder: { f: ['thunder'], v: 1, r: [0.9, 1.05], o: 0.8 },
-    metalImpact: { f: ['ric1', 'ric2', ...R4('metal')], v: 0.45, r: [0.92, 1.1] },
-    woodImpact: { f: R4('wood'), v: 0.5, r: [0.9, 1.1] },
-    stoneImpact: { f: [...R4('stone'), 'ric1', 'ric2'], v: 0.4, r: [0.95, 1.15] },
-    land: { f: R4('land'), v: 0.55, r: [0.9, 1.05] },
+    metalImpact: { f: ['ric1', 'ric2', ...R4('metal')], v: 0.22, r: [0.92, 1.1] },
+    woodImpact: { f: R4('wood'), v: 0.24, r: [0.9, 1.1] },
+    stoneImpact: { f: [...R4('stone'), 'ric1', 'ric2'], v: 0.2, r: [0.95, 1.15] },
+    land: { f: R4('land'), v: 0.3, r: [0.9, 1.05] },
     bat: { f: R4('punch'), v: 0.9, r: [0.85, 0.95] },
     hurt: { f: R4('punch'), v: 0.35, r: [1.1, 1.3] },
     splash: { f: ['splash1', 'splash2'], v: 0.8, r: [0.85, 1] },
@@ -197,8 +205,8 @@ const Sfx = (() => {
     if (name === 'explosion') {
       // запись взрыва + синтезированный низкий удар для веса; крупные взрывы ниже и громче
       const size = clamp(arg || 1, 0.6, 3), n = pick(size > 1.6 ? ['boom3', 'boom4', 'boom1'] : ['boom1', 'boom2', 'boom4']);
-      if (!sample(n, pos, Math.min(1.1, 0.62 + size * 0.2), rr([0.84, 0.98]) / Math.sqrt(Math.max(1, size * 0.8)), n === 'boom3' ? 0.45 : 0)) return false;
-      const t = ac.currentTime, d = out(pos, 0.55 + size * 0.15); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.8 });
+      if (!sample(n, pos, 1.5 + size * 0.45, rr([0.84, 0.98]) / Math.sqrt(Math.max(1, size * 0.8)), n === 'boom3' ? 0.45 : 0)) return false;
+      const t = ac.currentTime, d = out(pos, 1.0 + size * 0.3); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.9 }); noise(d, t, 0.9 + size * 0.5, { f0: 700, f1: 60, gain: 0.55 });   // удар и рокот — взрыв заметно громче любого стука
       // эхо от рельефа: приглушённый повтор через четверть-полсекунды
       setTimeout(() => { if (ac) sample(n, pos ? { x: pos.x, y: pos.y - 200 } : null, 0.22 + size * 0.06, 0.8); }, 250 + Math.random() * 200);
       // осыпание: мелкие камешки падают ещё около секунды
