@@ -122,7 +122,7 @@ def lin(c):
     return tuple(v ** 2.2 for v in c)
 
 
-def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bumpk=0.6, moss_col=(0.30, 0.40, 0.14)):
+def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bumpk=0.6, moss_col=(0.30, 0.40, 0.14), detail=0.0, lichen=(0.72, 0.70, 0.58)):
     """камень: цвет между dark и light (sRGB) по шуму в координатах объекта и по свойству объекта tone;
     moss > 0 — мох на верхних (к +Y) гранях"""
     dark, light = lin(dark), lin(light)
@@ -158,6 +158,35 @@ def mat_stone(name, dark, light, rough=0.55, moss=0.0, spec=0.45, scale=6.0, bum
         L.new(th.outputs['Result'], sock(mm.inputs, 'Factor_Float')); L.new(col, sock(mm.inputs, 'A_Color'))
         sock(mm.inputs, 'B_Color').default_value = (*lin(moss_col), 1)
         col = sock(mm.outputs, 'Result_Color')
+    if detail:
+        # крапины зерна (гранит/песчаник), тёмные поры и светлая стёртая кромка по выпуклостям (pointiness)
+        vs = N.new('ShaderNodeTexVoronoi'); vs.inputs['Scale'].default_value = scale * 30
+        L.new(tc.outputs['Object'], vs.inputs['Vector'])
+        sp = N.new('ShaderNodeMapRange'); sp.inputs['From Min'].default_value = 0.0; sp.inputs['From Max'].default_value = 0.35
+        sp.inputs['To Min'].default_value = 0.7; sp.inputs['To Max'].default_value = 1.1
+        L.new(vs.outputs['Distance'], sp.inputs['Value'])
+        geo2 = N.new('ShaderNodeNewGeometry')
+        pt = N.new('ShaderNodeMapRange'); pt.inputs['From Min'].default_value = 0.44; pt.inputs['From Max'].default_value = 0.58
+        pt.inputs['To Min'].default_value = 0.62; pt.inputs['To Max'].default_value = 1.25
+        L.new(geo2.outputs['Pointiness'], pt.inputs['Value'])
+        m1 = N.new('ShaderNodeMix'); m1.data_type = 'RGBA'; m1.blend_type = 'MULTIPLY'
+        sock(m1.inputs, 'Factor_Float').default_value = 1.0
+        L.new(col, sock(m1.inputs, 'A_Color')); L.new(sp.outputs['Result'], sock(m1.inputs, 'B_Color'))
+        m2 = N.new('ShaderNodeMix'); m2.data_type = 'RGBA'; m2.blend_type = 'MULTIPLY'
+        sock(m2.inputs, 'Factor_Float').default_value = 1.0
+        L.new(sock(m1.outputs, 'Result_Color'), sock(m2.inputs, 'A_Color')); L.new(pt.outputs['Result'], sock(m2.inputs, 'B_Color'))
+        col = sock(m2.outputs, 'Result_Color')
+        # лишайник: бледные рыжевато-серые пятна
+        nl = N.new('ShaderNodeTexNoise'); nl.inputs['Scale'].default_value = scale * 5; nl.inputs['Detail'].default_value = 6
+        L.new(tc.outputs['Object'], nl.inputs['Vector'])
+        lt = N.new('ShaderNodeMapRange'); lt.inputs['From Min'].default_value = 0.62; lt.inputs['From Max'].default_value = 0.66
+        L.new(nl.outputs['Fac'], lt.inputs['Value'])
+        lm = N.new('ShaderNodeMath'); lm.operation = 'MULTIPLY'; lm.inputs[1].default_value = detail
+        L.new(lt.outputs['Result'], lm.inputs[0])
+        m3 = N.new('ShaderNodeMix'); m3.data_type = 'RGBA'
+        L.new(lm.outputs[0], sock(m3.inputs, 'Factor_Float')); L.new(col, sock(m3.inputs, 'A_Color'))
+        sock(m3.inputs, 'B_Color').default_value = (*lin(lichen), 1)
+        col = sock(m3.outputs, 'Result_Color')
     L.new(col, b.inputs['Base Color'])
     return m
 
@@ -187,13 +216,24 @@ def height_plane(name, H, amp, colors, z0=0.0, margin=0.3):
     return ob
 
 
-def rock_mesh(name, r, sx, sy, sz, seed, rough=0.28, sub=4):
-    """камень: икосфера, сплюснутая и продавленная шумом"""
+def rock_mesh(name, r, sx, sy, sz, seed, rough=0.28, sub=4, facets=0):
+    """камень: икосфера, сплюснутая и продавленная шумом; facets > 0 — сколотые плоские грани (как у настоящего
+    обломка породы) и мелкая бугристость"""
     bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=sub, radius=r)
     off = Vector((seed * 13.1, seed * 7.7, seed * 3.3))
+    rr = random.Random(int(seed * 1000) + 7)
+    planes = []
+    for _ in range(facets):
+        nrm = Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), rr.uniform(-0.6, 1))).normalized()
+        planes.append((nrm, rr.uniform(0.62, 0.88)))
     for v in bm.verts:
         p = v.co.normalized()
         d = 1 + rough * noise.noise(p * 1.6 + off) + rough * 0.35 * noise.noise(p * 4.0 + off)
+        if facets:
+            d += 0.05 * noise.noise(p * 9 + off) + 0.025 * abs(noise.noise(p * 22 + off))
+            for nrm, cut in planes:                              # срез плоскостью: точка не выходит за плоскость скола
+                pd = p.dot(nrm) * d
+                if pd > cut: d *= cut / pd + (pd - cut) * 0.04
         v.co = Vector((p.x * r * sx * d, p.y * r * sy * d, p.z * r * sz * d))
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
     for p in me.polygons: p.use_smooth = True
@@ -229,14 +269,14 @@ def dirt_stones(name, seed, dirt_a, dirt_b, stone_dark, stone_light, density=1.0
     height_plane('dirt', H, 0.09, np.clip(cols, 0, 1) ** 2.2)
     mdirt = mat_vertex_color('dirt', rough=0.97, spec=0.15)
     bpy.data.objects['dirt'].data.materials.append(mdirt)
-    mst = mat_stone('stone', stone_dark, stone_light, rough=0.75, spec=0.3, scale=5, bumpk=0.9, moss=0.25, moss_col=(0.62, 0.62, 0.46))
+    mst = mat_stone('stone', stone_dark, stone_light, rough=0.8, spec=0.25, scale=5, bumpk=1.2, moss=0.2, moss_col=(0.50, 0.50, 0.36), detail=0.55)
     # камни: много мелких и средних, немного крупных валунов; наполовину в земле
     count = int(190 * density)
     for i in range(count):
         q = rng.random()
         r = 0.025 + 0.035 * q if q < 0.5 else (0.06 + 0.07 * rng.random() if q < 0.9 else 0.13 + 0.12 * rng.random())
         sz = rng.uniform(0.6, 0.95)
-        me = rock_mesh('rock%d' % i, r, rng.uniform(0.9, 1.4), rng.uniform(0.75, 1.05), sz, rng.random() * 100, rough=0.22)
+        me = rock_mesh('rock%d' % i, r, rng.uniform(0.9, 1.4), rng.uniform(0.75, 1.05), sz, rng.random() * 100, rough=0.2, sub=5 if r > 0.1 else 4, facets=rng.randint(2, 6))
         place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.045 - r * sz * rng.uniform(0.1, 0.5),
               (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.3, 0.3), 'rock')
     # крошка: сотни мелких камешков 0.5–3 см — одним мешем (плотность ~400 на м²)
@@ -270,7 +310,7 @@ def block_mesh(sx, sy, sz, rng, jitter):
         p = v.co
         q = Vector((p.x * sx * 2, p.y * sy * 2, p.z * sz * 2))
         top = max(0.0, p.z * 2)                                # 1 на лицевой стороне
-        q.z += (noise.noise(q * 14 + ofs) * 0.012 + noise.noise(q * 45 + ofs) * 0.004) * jitter * top
+        q.z += (noise.noise(q * 14 + ofs) * 0.012 + noise.noise(q * 45 + ofs) * 0.004 + abs(noise.noise(q * 90 + ofs)) * 0.002) * jitter * top
         q.x += noise.noise(q * 8 + ofs) * 0.012 * jitter
         q.y += noise.noise(q * 8 + ofs + Vector((5, 5, 5))) * 0.008 * jitter
         for cx, cy, cr in chips:                               # скол угла
@@ -326,7 +366,8 @@ def mat_glow(name, col, strength):
 
 
 def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=1.0, hrange=None, wrange=(0.7, 1.55),
-            mat='stone', moss_col=(0.30, 0.40, 0.14), glow=None, band=0.0, nails=False, depth=0.04, gap_px=1.4, natural=False):
+            mat='stone', moss_col=(0.30, 0.40, 0.14), glow=None, band=0.0, nails=False, depth=0.04, gap_px=1.4, natural=False,
+            tilt=0.0, detail=0.0, mortar_h=0.01):
     """кладка / пласты / доски: ряды блоков разной длины (hrange — разброс высоты ряда в px),
     неровные, со сколами; раствор между ними тёмный или светящийся (glow=(цвет, сила))"""
     sc = reset(); rng = random.Random(seed)
@@ -335,9 +376,9 @@ def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=1.0, hrang
     if glow:                                                      # светятся только отдельные тонкие жилы, остальное — тёмная порода
         vein = np.clip((fft_noise(n, 1.3, seed + 9) - 0.62) * 6, 0, 1)[..., None]
         cols = np.array((0.05, 0.04, 0.035))[None, None, :] * (1 - vein) + np.array(glow[0])[None, None, :] * vein
-    height_plane('mortar', fft_noise(n, 1.1, seed), 0.01, np.clip(cols, 0, 1) ** 2.2, z0=-0.035)
+    height_plane('mortar', fft_noise(n, 1.1, seed) * 0.6 + fft_noise(n, 0.4, seed + 3) * 0.4, mortar_h, np.clip(cols, 0, 1) ** 2.2, z0=-0.035)
     bpy.data.objects['mortar'].data.materials.append(mat_attr_glow('glow', glow[1]) if glow else mat_vertex_color('mortar', rough=1.0, spec=0.1))
-    mst = mat_wood('wood', dark, light) if mat == 'wood' else mat_stone('block', dark, light, rough=0.72, moss=moss, spec=0.3, scale=3.5, bumpk=0.9, moss_col=moss_col)
+    mst = mat_wood('wood', dark, light) if mat == 'wood' else mat_stone('block', dark, light, rough=0.72, moss=moss, spec=0.3, scale=3.5, bumpk=0.9 + detail, moss_col=moss_col, detail=detail)
     mnail = mat_stone('nail', (0.12, 0.11, 0.10), (0.35, 0.33, 0.30), rough=0.3, spec=0.8) if nails else None
     w = bw / 100.0
     hs = []; tot = 0
@@ -362,7 +403,7 @@ def masonry(name, seed, bw, bh, dark, light, mortar, moss=0.0, jitter=1.0, hrang
             yo = rng.uniform(-(1 - hk), (1 - hk)) * h / 2 if natural else 0.0
             me = block_mesh((ww - gap) / 2, (h * hk - gap) / 2, depth, rng, jitter)
             me.materials.append(mst)
-            place(me, mst, x + ww / 2, y + yo, 0.0, (0, 0, rng.uniform(-0.008, 0.008)), btone + rng.uniform(-0.4, 0.35) * (0.5 if band else 1), 'blk')
+            place(me, mst, x + ww / 2, y + yo, rng.uniform(-1, 1) * tilt * 0.12, (rng.uniform(-tilt, tilt), rng.uniform(-tilt, tilt), rng.uniform(-0.008, 0.008) - tilt * rng.uniform(-0.3, 0.3)), btone + rng.uniform(-0.4, 0.35) * (0.5 if band else 1), 'blk')
             if nails:
                 for ex in (-1, 1):
                     nm = rock_mesh('nail', 0.012, 1, 1, 0.5, rng.random() * 9, rough=0.05, sub=2)
@@ -446,6 +487,178 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80, glow=None):
             if abs(x + dx) - 0.1 > S / 2: continue
             o1 = bpy.data.objects.new('stem', st); o1.location = (x + dx, y, -0.03); sc.collection.objects.link(o1)
             o2 = bpy.data.objects.new('head', me); o2.location = (x + dx, y, h - 0.03); o2.scale = (1, 1, 0.7); sc.collection.objects.link(o2)
+    render(sc, name)
+
+
+# ---------------------------------------------------------------- природная порода (карта высот)
+def blur_p(A, sig):
+    """периодическое гауссово размытие (FFT)"""
+    n = A.shape[0]; f = np.fft.fftfreq(n)
+    g = np.exp(-2 * (np.pi * sig) ** 2 * (f[:, None] ** 2 + f[None, :] ** 2))
+    return np.real(np.fft.ifft2(np.fft.fft2(A) * g))
+
+
+def aniso_noise(n, beta, seed, sx=1.0, sy=1.0):
+    """периодический шум, вытянутый по осям (sx, sy > 1 — мельче по этой оси); индексы [y, x]"""
+    rng = np.random.default_rng(seed)
+    fy = np.fft.fftfreq(n)[:, None] * sy; fx = np.fft.fftfreq(n)[None, :] * sx
+    f = np.sqrt(fx * fx + fy * fy); f[0, 0] = 1
+    spec = (rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))) / f ** beta; spec[0, 0] = 0
+    a = np.real(np.fft.ifft2(spec)); a -= a.min(); a /= max(1e-9, a.max())
+    return a
+
+
+def worley(n, cnt, seed, sy=1.0):
+    """периодический шум Ворони: F1, F2 (в пикселях) и номер ближайшей точки; sy > 1 — ячейки вытянуты по x"""
+    rng = np.random.default_rng(seed)
+    P = rng.uniform(0, n, size=(cnt, 2))
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
+    F1 = np.full((n, n), 1e9, np.float32); F2 = F1.copy(); ID = np.zeros((n, n), np.int32)
+    for i, (py, px) in enumerate(P):
+        dy = np.abs(yy - py); dy = np.minimum(dy, n - dy) * sy
+        dx = np.abs(xx - px); dx = np.minimum(dx, n - dx)
+        d = np.sqrt(dx * dx + dy * dy)
+        m1 = d < F1; m2 = (~m1) & (d < F2)
+        F2 = np.where(m1, F1, np.where(m2, d, F2)); ID = np.where(m1, i, ID); F1 = np.where(m1, d, F1)
+    return F1, F2, ID
+
+
+def warp_p(A, ux, uy):
+    """сдвиг карты A[y, x] на поля ux, uy (px), с переносом через край и билинейной выборкой"""
+    n = A.shape[0]
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    X = xx + ux; Y = yy + uy
+    x0 = np.floor(X).astype(int); y0 = np.floor(Y).astype(int); fx = X - x0; fy = Y - y0
+    x0 %= n; y0 %= n; x1 = (x0 + 1) % n; y1 = (y0 + 1) % n
+    return (A[y0, x0] * (1 - fx) * (1 - fy) + A[y0, x1] * fx * (1 - fy) + A[y1, x0] * (1 - fx) * fy + A[y1, x1] * fx * fy)
+
+
+def field_plane(name, H, C, glow=None, rough=0.92, bump=0.35, gstr=0.0):
+    """плитка из карты высот H[y, x] (м, y вверх) и цветов C[y, x, 3] (sRGB 0..1), с полями за краем.
+    glow[y, x] 0..1 — доля свечения (лава, кристаллы), цвет свечения = цвет пикселя"""
+    n = H.shape[0]; step = S / n; k = 24; m = n + 2 * k
+    idx = (np.arange(m) - k) % n
+    Hm = H[np.ix_(idx, idx)]; Cm = C[np.ix_(idx, idx)]
+    xs = (np.arange(m) - k + 0.5) * step - S / 2
+    X, Y = np.meshgrid(xs, xs)                                # [j = y, i = x]
+    verts = np.stack([X.ravel(), Y.ravel(), Hm.ravel()], 1).astype(np.float32)
+    i = np.arange(m - 1); j = np.arange(m - 1)
+    a = (j[:, None] * m + i[None, :]).ravel()
+    quads = np.stack([a, a + 1, a + m + 1, a + m], 1)
+    me = bpy.data.meshes.new(name)
+    me.vertices.add(len(verts)); me.vertices.foreach_set('co', verts.ravel())
+    me.loops.add(quads.size); me.loops.foreach_set('vertex_index', quads.ravel().astype(np.int32))
+    me.polygons.add(len(quads)); me.polygons.foreach_set('loop_start', (np.arange(len(quads)) * 4).astype(np.int32))
+    me.update(calc_edges=True)
+    ca = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
+    cc = np.clip(Cm.reshape(-1, 3), 0, 1) ** 2.2
+    ca.data.foreach_set('color', np.concatenate([cc, np.ones((cc.shape[0], 1))], 1).astype(np.float32).ravel())
+    me.polygons.foreach_set('use_smooth', np.ones(len(quads), bool))
+    m_, nt, b = principled(name + '_m', rough, 0.3)
+    N = nt.nodes; L = nt.links
+    at = N.new('ShaderNodeAttribute'); at.attribute_name = 'Col'
+    L.new(at.outputs['Color'], b.inputs['Base Color'])
+    tc = N.new('ShaderNodeTexCoord')
+    nb = N.new('ShaderNodeTexNoise'); nb.inputs['Scale'].default_value = 90; nb.inputs['Detail'].default_value = 8
+    L.new(tc.outputs['Object'], nb.inputs['Vector'])
+    bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = bump; bp.inputs['Distance'].default_value = 0.004
+    L.new(nb.outputs['Fac'], bp.inputs['Height']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
+    if glow is not None:
+        ga = me.color_attributes.new('Glow', 'FLOAT_COLOR', 'POINT')
+        gm = glow[np.ix_(idx, idx)].reshape(-1, 1)
+        gc = cc * gm
+        ga.data.foreach_set('color', np.concatenate([gc, np.ones((gc.shape[0], 1))], 1).astype(np.float32).ravel())
+        ag = N.new('ShaderNodeAttribute'); ag.attribute_name = 'Glow'
+        for key in ('Emission Color', 'Emission'):
+            if key in b.inputs: L.new(ag.outputs['Color'], b.inputs[key]); break
+        if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = gstr
+    me.materials.append(m_)
+    ob = bpy.data.objects.new(name, me); bpy.context.scene.collection.objects.link(ob)
+    return ob
+
+
+def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=60, streak=0.25, cap=None, capk=1.0,
+              glow=None, gstr=6.0, dark_cracks=0.55, n=512, tilt=0.0, rough_k=1.0, cave=False):
+    """скальная стена в разрезе: осадочные пласты разной твёрдости (твёрдые выступают карнизами, мягкие выветрены),
+    вертикальные трещины внутри пласта, крупные глыбовые разломы, эрозия, потёки, налёт (cap: снег/песок/мох на
+    уступах сверху), свечение в глубоких трещинах (glow = цвет). pal — цвета пластов sRGB"""
+    sc = reset(); rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
+    # изгиб пластов: плавный крупный + мелкая рябь
+    wy = (aniso_noise(n, 1.8, seed + 1, 1, 1) - 0.5) * 34 + (fft_noise(n, 1.2, seed + 2) - 0.5) * 6 + tilt * xx
+    Y = (yy + wy) % n
+    # пласты
+    th = []; tot = 0
+    while tot < n - layer[0]:
+        t = rng.uniform(*layer); th.append(t); tot += t
+    th = np.array(th); th *= n / th.sum(); edges = np.concatenate([[0], np.cumsum(th)])
+    nl = len(th); hard = rng.uniform(0, 1, nl); hard[rng.uniform(0, 1, nl) < 0.35] *= 0.3
+    ci = rng.integers(0, len(pal), nl); tone = rng.uniform(-0.12, 0.12, nl)
+    lid = np.clip(np.searchsorted(edges, Y, side='right') - 1, 0, nl - 1)
+    t = (Y - edges[lid]) / th[lid]                              # 0 низ пласта .. 1 верх
+    hd = hard[lid]
+    # профиль: твёрдый пласт — ровная стенка со скруглённой верхней кромкой и подрезом снизу; мягкий — вогнутый
+    top = np.clip((t - 0.8) / 0.2, 0, 1); bot = np.clip((0.14 - t) / 0.14, 0, 1)
+    prof = hd * (1 - 0.8 * top ** 2 - 0.9 * bot ** 1.5) + (1 - hd) * (0.35 + 0.5 * np.sin(np.pi * t) ** 0.7) * 0.6
+    H = prof * amp * 0.8
+    # вертикальные трещины: в каждом пласте свои, рваные, заканчиваются на границах
+    jx = (fft_noise(n, 1.4, seed + 3) - 0.5) * 16
+    crack = np.zeros((n, n))
+    for L_ in range(nl):
+        m = lid == L_
+        if not m.any(): continue
+        k = int(rng.integers(0, 1 + int(3 * joints * (0.3 + hard[L_])))) if joints > 0 else 0
+        xs_ = rng.uniform(0, n, k)
+        for cx in xs_:
+            d = np.abs(((xx + jx - cx + n / 2) % n) - n / 2)
+            w = rng.uniform(0.9, 2.0)
+            fade = np.clip((fft_noise(n, 1.2, int(cx * 7) + L_) - 0.3) * 4, 0, 1)   # трещина рвётся, не идёт через весь пласт
+            crack = np.where(m, np.maximum(crack, np.exp(-(d / w) ** 2) * rng.uniform(0.5, 1.0) * fade), crack)
+    # глыбовые разломы (Ворони): редкие рваные трещины через несколько пластов
+    F1, F2, ID = worley(n, blocks, seed + 4, sy=1.6)
+    ew = F2 - F1
+    ew = warp_p(ew, (fft_noise(n, 1.3, seed + 5) - 0.5) * 10, (fft_noise(n, 1.3, seed + 6) - 0.5) * 10)
+    frac = np.exp(-(ew / 1.6) ** 2) * np.clip((fft_noise(n, 1.5, seed + 7) - 0.55) * 5, 0, 1)
+    blocktone = np.random.default_rng(seed + 8).uniform(-0.08, 0.08, blocks)[ID]
+    blockh = np.random.default_rng(seed + 9).uniform(-1, 1, blocks)[ID] * amp * 0.12
+    # эрозия: крупные вмятины, бугры, мелкая зернистость, выщелачивание
+    ero = (fft_noise(n, 1.6, seed + 10) - 0.5) * amp * 0.5 + (fft_noise(n, 1.1, seed + 11) - 0.5) * amp * 0.18 * rough_k
+    rid = 1 - np.abs(fft_noise(n, 1.0, seed + 12) * 2 - 1); grain = (fft_noise(n, 0.45, seed + 13) - 0.5)
+    H = H + ero + blockh * (0.4 + 0.6 * hd) + rid * amp * 0.06 * rough_k + grain * amp * 0.035 * rough_k
+    H = H - crack * amp * 0.45 - frac * amp * 0.55
+    # цвета
+    P = np.array(pal, float)
+    base = P[ci[lid]] * (1 + tone[lid])[..., None]
+    fine_band = aniso_noise(n, 1.2, seed + 14, 0.08, 1.0)          # тонкая слоистость внутри пласта
+    base *= (0.9 + 0.2 * fine_band)[..., None]
+    base *= (1 + blocktone)[..., None]
+    mott = fft_noise(n, 1.3, seed + 15); base *= (0.86 + 0.28 * mott)[..., None]
+    speck = fft_noise(n, 0.2, seed + 16); base *= (0.92 + 0.16 * speck)[..., None]
+    if streak > 0:                                                # вертикальные потёки (пустынный загар / вода)
+        st = aniso_noise(n, 1.4, seed + 17, 1.0, 0.07); st = np.clip((st - 0.45) * 2.2, 0, 1)
+        base *= (1 - streak * st)[..., None]
+    cav = H - blur_p(H, 6)                                        # полость: впадины темнее
+    ao = np.clip(0.5 + cav / (amp * 0.25), 0, 1)
+    base *= (0.55 + 0.45 * ao ** 0.8)[..., None]
+    dk = np.clip(crack + frac, 0, 1)
+    base *= (1 - dark_cracks * dk)[..., None]
+    gm = None
+    if cap is not None:                                           # налёт на верхних гранях уступов
+        gy = np.roll(H, -2, 0) - np.roll(H, 2, 0)                 # падение высоты вверх = грань смотрит вверх
+        up = np.clip(-gy / (amp * 0.03) - 0.3, 0, 1) * np.clip((fft_noise(n, 1.2, seed + 18) - 0.3) * 3, 0, 1)
+        up = np.maximum(up, np.clip((t - 0.9) / 0.1, 0, 1) * hd * 0.8 * (fft_noise(n, 1.0, seed + 19) > 0.45))
+        up = np.clip(up * capk, 0, 1)
+        C_ = np.array(cap[0]) * (0.9 + 0.2 * fft_noise(n, 0.6, seed + 20))[..., None]
+        base = base * (1 - up[..., None]) + C_ * up[..., None]
+        H = H + up * amp * 0.06 * cap[1]
+    if glow is not None:                                          # свечение в самых глубоких трещинах
+        gm = np.clip((dk - 0.55) * 3, 0, 1) * np.clip((fft_noise(n, 1.4, seed + 21) - 0.4) * 4, 0, 1)
+        G = np.array(glow)
+        base = base * (1 - gm[..., None]) + G * gm[..., None]
+        near = blur_p(gm, 5); base = base + (G - base) * np.clip(near * 1.2, 0, 0.45)[..., None]
+    if cave:
+        base *= 0.8
+    field_plane('rock', H, np.clip(base, 0, 1), glow=gm, rough=0.9, bump=0.4, gstr=gstr)
     render(sc, name)
 
 
@@ -570,13 +783,13 @@ LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
     'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0),
     # тёмная башня и светлая кладка стен и моста
-    'brick_keep': lambda: masonry('brick_keep', 21, 32, 18, (0.44, 0.42, 0.39), (0.66, 0.63, 0.58), (0.23, 0.21, 0.18), moss=0.55, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.2),
-    'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.46, 0.44, 0.41), (0.74, 0.71, 0.66), (0.23, 0.21, 0.18), moss=0.5, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.0),
+    'brick_keep': lambda: masonry('brick_keep', 21, 30, 0, (0.38, 0.37, 0.35), (0.78, 0.76, 0.72), (0.60, 0.58, 0.53), moss=0.95, moss_col=(0.33, 0.38, 0.17), jitter=1.5, hrange=(13, 21), wrange=(0.6, 1.5), depth=0.05, gap_px=2.2, tilt=0.03, detail=0.3, mortar_h=0.03),
+    'brick_light': lambda: masonry('brick_light', 22, 30, 0, (0.44, 0.42, 0.40), (0.82, 0.80, 0.75), (0.62, 0.60, 0.55), moss=0.8, moss_col=(0.33, 0.38, 0.17), jitter=1.4, hrange=(12, 20), wrange=(0.6, 1.5), depth=0.05, gap_px=2.0, tilt=0.03, detail=0.3, mortar_h=0.03),
     # замки на закате: тот же грунт и кладка при низком оранжевом солнце
     'dirt_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), dirt_stones('dirt_castle', 12, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
     'brick_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), masonry('brick_castle', 23, 30, 16, (0.50, 0.44, 0.38), (0.76, 0.68, 0.58), (0.24, 0.20, 0.16), moss=0.5, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
     # задняя стена пещер
-    'cave_wall': lambda: slab_wall('cave_wall', 31, (0.16, 0.16, 0.165), (0.36, 0.36, 0.37), (0.05, 0.05, 0.05)),
+    'cave_wall': lambda: rock_face('cave_wall', 31, [(0.36, 0.35, 0.34), (0.42, 0.41, 0.39), (0.30, 0.29, 0.28)], layer=(30, 90), blocks=40, streak=0.2, cave=True),
     # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
     'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.40, 0.54, 0.14), (0.52, 0.66, 0.18), (0.64, 0.76, 0.24), (0.76, 0.84, 0.32), (0.58, 0.68, 0.20)],
                                         [(0.85, 0.15, 0.12), (0.95, 0.80, 0.18), (0.95, 0.94, 0.88), (0.35, 0.45, 0.95), (0.95, 0.45, 0.65)]),
@@ -586,19 +799,19 @@ LIB = {
     'tree_birch1': lambda: tree_sprite('tree_birch1', 71, 'birch'),
     'bush1': lambda: tree_sprite('bush1', 81, 'bush', px=160), 'bush2': lambda: tree_sprite('bush2', 82, 'bush', px=160),
     # ---- каньон: пласты песчаника, песчаная земля, пещеры
-    'rock_canyon': lambda: masonry('rock_canyon', 101, 150, 0, (0.56, 0.31, 0.18), (0.86, 0.58, 0.38), (0.30, 0.16, 0.09), hrange=(14, 48), wrange=(0.8, 3.4), band=0.35, jitter=2.6, natural=True, gap_px=1.0, depth=0.06),
+    'rock_canyon': lambda: rock_face('rock_canyon', 101, [(0.74, 0.42, 0.26), (0.82, 0.52, 0.32), (0.66, 0.36, 0.22), (0.88, 0.62, 0.42), (0.58, 0.32, 0.20)], streak=0.3, cap=((0.86, 0.66, 0.44), 0.5), capk=0.6),
     'dirt_canyon': lambda: dirt_stones('dirt_canyon', 102, (0.78, 0.56, 0.34), (0.62, 0.40, 0.22), (0.45, 0.30, 0.20), (0.80, 0.62, 0.44), density=1.2),
-    'cave_canyon': lambda: slab_wall('cave_canyon', 103, (0.30, 0.17, 0.10), (0.52, 0.32, 0.20), (0.10, 0.05, 0.03)),
+    'cave_canyon': lambda: rock_face('cave_canyon', 103, [(0.50, 0.30, 0.19), (0.58, 0.36, 0.23), (0.44, 0.26, 0.16)], layer=(30, 90), blocks=40, streak=0.2, cave=True),
     # ---- ледяной перевал: сланец с инеем на уступах
-    'rock_arctic': lambda: masonry('rock_arctic', 111, 140, 0, (0.26, 0.31, 0.40), (0.52, 0.58, 0.68), (0.10, 0.12, 0.16), hrange=(16, 52), wrange=(0.8, 3.4), band=0.25, jitter=2.6, moss=0.6, moss_col=(0.92, 0.95, 1.0), natural=True, gap_px=1.0, depth=0.06),
-    'cave_arctic': lambda: slab_wall('cave_arctic', 113, (0.16, 0.19, 0.25), (0.34, 0.40, 0.50), (0.05, 0.06, 0.08)),
+    'rock_arctic': lambda: rock_face('rock_arctic', 111, [(0.46, 0.50, 0.56), (0.56, 0.60, 0.66), (0.38, 0.42, 0.48), (0.64, 0.67, 0.72)], layer=(20, 70), tilt=0.06, streak=0.15, cap=((0.93, 0.96, 1.0), 1.5), capk=1.4),
+    'cave_arctic': lambda: rock_face('cave_arctic', 113, [(0.34, 0.38, 0.46), (0.40, 0.45, 0.53), (0.28, 0.32, 0.40)], layer=(30, 90), blocks=40, cave=True),
     # ---- вулкан: базальт, в трещинах светится лава
-    'rock_volcano': lambda: masonry('rock_volcano', 121, 130, 0, (0.13, 0.10, 0.09), (0.32, 0.25, 0.22), (0.08, 0.06, 0.05), hrange=(16, 48), wrange=(0.8, 3.2), band=0.2, jitter=2.8, glow=((1.0, 0.42, 0.08), 4.0), gap_px=1.4, natural=True, depth=0.06),
-    'cave_volcano': lambda: slab_wall('cave_volcano', 123, (0.12, 0.09, 0.08), (0.26, 0.20, 0.17), (1.0, 0.40, 0.08), glow=((1.0, 0.38, 0.06), 2.5)),
+    'rock_volcano': lambda: rock_face('rock_volcano', 121, [(0.30, 0.26, 0.24), (0.38, 0.32, 0.29), (0.24, 0.21, 0.19), (0.44, 0.37, 0.32)], joints=2.0, blocks=90, streak=0.1, glow=(1.0, 0.42, 0.07), gstr=8.0, dark_cracks=0.6),
+    'cave_volcano': lambda: rock_face('cave_volcano', 123, [(0.24, 0.20, 0.18), (0.30, 0.25, 0.22), (0.19, 0.16, 0.14)], layer=(30, 90), blocks=50, joints=1.5, glow=(1.0, 0.40, 0.06), gstr=5.0, cave=True),
     # ---- кристальная планета: фиолетовая порода, светящиеся голубые жилы
-    'rock_alien': lambda: masonry('rock_alien', 131, 130, 0, (0.18, 0.12, 0.30), (0.40, 0.28, 0.56), (0.06, 0.04, 0.10), hrange=(16, 48), wrange=(0.8, 3.2), band=0.3, jitter=2.6, glow=((0.30, 0.90, 1.0), 2.5), gap_px=1.2, natural=True, depth=0.06),
+    'rock_alien': lambda: rock_face('rock_alien', 131, [(0.34, 0.24, 0.50), (0.42, 0.30, 0.58), (0.28, 0.20, 0.42), (0.50, 0.38, 0.64)], streak=0.15, glow=(0.35, 0.95, 1.0), gstr=5.0, tilt=-0.05),
     'dirt_alien': lambda: dirt_stones('dirt_alien', 132, (0.30, 0.20, 0.42), (0.18, 0.12, 0.28), (0.28, 0.20, 0.45), (0.56, 0.44, 0.78), density=1.5),
-    'cave_alien': lambda: slab_wall('cave_alien', 133, (0.12, 0.08, 0.20), (0.28, 0.20, 0.40), (0.30, 0.80, 1.0), glow=((0.30, 0.85, 1.0), 1.5)),
+    'cave_alien': lambda: rock_face('cave_alien', 133, [(0.24, 0.17, 0.36), (0.30, 0.22, 0.44), (0.20, 0.14, 0.30)], layer=(30, 90), blocks=40, glow=(0.35, 0.9, 1.0), gstr=3.5, cave=True),
     'grass_alien': lambda: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)],
                                        [(1.0, 0.45, 0.95), (0.55, 0.95, 1.0)], glow=((0.35, 1.0, 0.90), 2.0)),
     # ---- пиратская бухта: доски корабля, тропическая земля и трава

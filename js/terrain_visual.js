@@ -339,7 +339,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     const P = info.pal, prm = info.prm;
     switch (mt) {
       case 3: if (P.tex && TexLib.data[P.tex]) {
-        texAt(TexLib.data[P.tex], x - (prm ? prm.x0 : 0), y - (prm ? prm.y0 : 0), o); r = o.r; g = o.g; bl = o.b; o.tex = true; break;
+        texAt(TexLib.data[P.tex], x - (prm ? prm.x0 : 0), y - (prm ? prm.y0 : 0), o); const kb = P.texK || 1.22; r = o.r * kb; g = o.g * kb; bl = o.b * kb; o.tex = true; break;
       } else { // кладка: тёсаные блоки с объёмной фаской, сколами, пятнами, мхом; глубокий раствор
         const lx = x - (prm ? prm.x0 : 0), ly = y - (prm ? prm.y0 : 0);
         const bw = P.w || 20, bh = P.h || 10;
@@ -721,7 +721,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = back[i] === 3 ? 0.84 * (0.82 + 0.18 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
+        const k = back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
