@@ -313,6 +313,59 @@ def slab_wall(name, seed, dark, light, mortar):
     render(sc, name)
 
 
+def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80):
+    """трава сбоку: густые пучки изогнутых травинок разной высоты и оттенка, полевые цветы.
+    Прозрачный фон; по горизонтали бесшовно. Высота кадра H_PX px, низ кадра = корни"""
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_y = H_PX; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    cam = sc.camera; hgt = H_PX / 100.0
+    cam.location = (0, -6, hgt / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
+    mats = []
+    for c in cols:
+        m, nt, b = principled('blade', 0.55, 0.35)
+        b.inputs['Base Color'].default_value = (*lin(c), 1)
+        for key in ('Subsurface Weight', 'Subsurface'):
+            if key in b.inputs: b.inputs[key].default_value = 0.15; break
+        mats.append(m)
+    # травинки: узкие изогнутые ленты, сужающиеся к кончику
+    def blade(x, y, h, lean, w, mi):
+        segs = 6; verts = []; faces = []
+        for k in range(segs + 1):
+            t = k / segs; bend = lean * t * t
+            ww = w * (1 - t) ** 0.8
+            verts += [(x + bend - ww / 2, y, h * t), (x + bend + ww / 2, y, h * t)]
+        for k in range(segs):
+            faces.append((2 * k, 2 * k + 1, 2 * k + 3, 2 * k + 2))
+        me = bpy.data.meshes.new('b'); me.from_pydata(verts, [], faces); me.materials.append(mats[mi])
+        for p in me.polygons: p.use_smooth = True
+        return me
+    count = 2600
+    for i in range(count):
+        x = rng.uniform(-S / 2, S / 2); y = rng.uniform(-0.25, 0.25)
+        clump = 0.5 + 0.5 * math.sin(x * 3.1 + seed) * math.sin(x * 7.3 + 1)
+        h = height * rng.uniform(0.35, 1.0) * (0.7 + 0.6 * clump)
+        mi = min(len(mats) - 1, int(rng.random() * len(mats) * (0.6 + 0.4 * (y + 0.25) / 0.5)))
+        me = blade(0, 0, h, rng.uniform(-0.12, 0.12) * h / height, rng.uniform(0.006, 0.012), mi)
+        for dx in (-S, 0, S):
+            if abs(x + dx) - 0.2 > S / 2: continue
+            ob = bpy.data.objects.new('blade', me); ob.location = (x + dx, y, -0.03); ob.rotation_euler = (0, 0, rng.uniform(-0.6, 0.6))
+            sc.collection.objects.link(ob)
+    # цветы: стебель + головка
+    for i in range(70):
+        x = rng.uniform(-S / 2, S / 2); y = rng.uniform(-0.3, -0.05); h = height * rng.uniform(0.5, 1.05)
+        col = rng.choice(flowers)
+        m, nt, b = principled('fl', 0.5, 0.3); b.inputs['Base Color'].default_value = (*lin(col), 1)
+        bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=rng.uniform(0.012, 0.022))
+        me = bpy.data.meshes.new('fh'); bm.to_mesh(me); bm.free(); me.materials.append(m)
+        st = blade(0, 0, h, rng.uniform(-0.03, 0.03), 0.004, 0)
+        for dx in (-S, 0, S):
+            if abs(x + dx) - 0.1 > S / 2: continue
+            o1 = bpy.data.objects.new('stem', st); o1.location = (x + dx, y, -0.03); sc.collection.objects.link(o1)
+            o2 = bpy.data.objects.new('head', me); o2.location = (x + dx, y, h - 0.03); o2.scale = (1, 1, 0.7); sc.collection.objects.link(o2)
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
@@ -322,6 +375,9 @@ LIB = {
     'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.42, 0.40, 0.37), (0.74, 0.71, 0.66), (0.17, 0.16, 0.15), moss=0.45),
     # задняя стена пещер
     'cave_wall': lambda: slab_wall('cave_wall', 31, (0.16, 0.16, 0.165), (0.36, 0.36, 0.37), (0.05, 0.05, 0.05)),
+    # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
+    'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.30, 0.42, 0.12), (0.42, 0.56, 0.16), (0.55, 0.66, 0.22), (0.68, 0.76, 0.30), (0.50, 0.58, 0.20)],
+                                        [(0.85, 0.15, 0.12), (0.95, 0.80, 0.18), (0.95, 0.94, 0.88), (0.35, 0.45, 0.95), (0.95, 0.45, 0.65)]),
 }
 
 if __name__ == '__main__':
