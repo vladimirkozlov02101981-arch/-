@@ -162,7 +162,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   if (t < capT) {
     // шапка (трава/снег/песок): светлая кромка, сочная середина, тёмная «губа» снизу
     o.cap = true;
-    const k = t / capT; const cc = (S.beach && y - t > S.beachY) ? S.beach : S.capCols;
+    const k = t / capT; const cc = (S.beach && y - t > S.beachY) ? S.beach : S.rootCols || S.capCols;
     if (k < 0.45) { const q = k / 0.45; r = cc[0][0] + (cc[1][0] - cc[0][0]) * q; g = cc[0][1] + (cc[1][1] - cc[0][1]) * q; bl = cc[0][2] + (cc[1][2] - cc[0][2]) * q; }
     else { const q = (k - 0.45) / 0.55; r = cc[1][0] + (cc[2][0] - cc[1][0]) * q; g = cc[1][1] + (cc[2][1] - cc[1][1]) * q; bl = cc[1][2] + (cc[2][2] - cc[1][2]) * q; }
     // стебли: вертикальные прожилки разной яркости, чуть светлее кончики
@@ -188,7 +188,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
     if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
-    { const dk = Math.min(1, sd / 600); r *= 1 - 0.3 * dk; g *= 1 - 0.32 * dk; bl *= 1 - 0.3 * dk; }
+    { const dk = Math.min(1, sd / 900); r *= 1 - 0.12 * dk; g *= 1 - 0.13 * dk; bl *= 1 - 0.12 * dk; }
   } else if (mt === 1) {
     const sd = t - capT;
     // крупный масштаб: пятна тона, изгиб пластов и скопления камней (не равномерная сетка)
@@ -616,7 +616,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave] }, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[74, 98, 30], [52, 70, 22], [60, 44, 26]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave] }, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,

@@ -227,7 +227,7 @@ def dirt_stones(name, seed, dirt_a, dirt_b, stone_dark, stone_light, density=1.0
     count = int(190 * density)
     for i in range(count):
         q = rng.random()
-        r = 0.018 + 0.03 * q if q < 0.6 else (0.05 + 0.06 * rng.random() if q < 0.92 else 0.11 + 0.11 * rng.random())
+        r = 0.025 + 0.035 * q if q < 0.5 else (0.06 + 0.07 * rng.random() if q < 0.9 else 0.13 + 0.12 * rng.random())
         sz = rng.uniform(0.6, 0.95)
         me = rock_mesh('rock%d' % i, r, rng.uniform(0.9, 1.4), rng.uniform(0.75, 1.05), sz, rng.random() * 100, rough=0.22)
         place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.045 - r * sz * rng.uniform(0.1, 0.5),
@@ -340,7 +340,7 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80):
         me = bpy.data.meshes.new('b'); me.from_pydata(verts, [], faces); me.materials.append(mats[mi])
         for p in me.polygons: p.use_smooth = True
         return me
-    count = 2600
+    count = 4200
     for i in range(count):
         x = rng.uniform(-S / 2, S / 2); y = rng.uniform(-0.25, 0.25)
         clump = 0.5 + 0.5 * math.sin(x * 3.1 + seed) * math.sin(x * 7.3 + 1)
@@ -369,7 +369,7 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80):
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
-    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.40, 0.26, 0.16), (0.23, 0.145, 0.085), (0.20, 0.19, 0.18), (0.55, 0.53, 0.50)),
+    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.50, 0.34, 0.21), (0.33, 0.21, 0.12), (0.26, 0.25, 0.24), (0.62, 0.60, 0.57), density=2.0),
     # тёмная башня и светлая кладка стен и моста
     'brick_keep': lambda: masonry('brick_keep', 21, 32, 16, (0.22, 0.225, 0.235), (0.48, 0.48, 0.49), (0.10, 0.10, 0.10), moss=0.35),
     'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.42, 0.40, 0.37), (0.74, 0.71, 0.66), (0.17, 0.16, 0.15), moss=0.45),
