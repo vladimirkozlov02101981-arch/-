@@ -157,7 +157,7 @@ const THEMES = {
       strata: ['#8e6a4c', '#9a7658', '#806046', '#a07c5e'], band: 38, bandSharp: 0.4,
       rock: ['#8e8478', '#7a7266', '#9c9286'],
       pebbles: ['#86796c', '#7a6e62', '#928476', '#7e7064'], smoothStones: true,
-      outline: '#23170c', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_valley', cave: 'cave_wall', grass: 'grass_valley' },
+      outline: '#23170c', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_castle', cave: 'cave_wall', grass: 'grass_valley' },
     },
     scatter: ['bush', 'rock', 'flowers', 'tuft', 'bush'],
     weather: 'leaves', birds: true, ambient: '#ffe6d0', ambientSound: 'wind', glow: true,

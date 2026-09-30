@@ -24,6 +24,9 @@ S = PX / 100.0      # размер плитки в метрах (1 px = 1 см)
 
 
 # ---------------------------------------------------------------- сцена
+LIGHT = {'col': (1.0, 0.85, 0.66), 'elev': 25, 'energy': 5.0}     # единый свет для всех плиток; для заката меняется
+
+
 def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     sc = bpy.context.scene
@@ -47,8 +50,11 @@ def reset():
     sc.render.resolution_x = PX
     sc.render.resolution_y = PX
     sc.render.film_transparent = False
-    sc.view_settings.view_transform = 'Standard'
-    sc.view_settings.look = 'None'
+    try:
+        sc.view_settings.view_transform = 'AgX'
+        sc.view_settings.look = 'AgX - Medium High Contrast'
+    except Exception:
+        sc.view_settings.view_transform = 'Standard'
     sc.render.image_settings.file_format = 'PNG'
     sc.render.image_settings.color_mode = 'RGB'
     # камера: сверху, ортографическая, ровно одна плитка
@@ -58,11 +64,12 @@ def reset():
     cam_data.clip_end = 50
     # небо: мягкий рассеянный свет
     w = bpy.data.worlds.new('world'); sc.world = w; w.use_nodes = True
-    bg = w.node_tree.nodes['Background']; bg.inputs[0].default_value = (0.62, 0.7, 0.85, 1); bg.inputs[1].default_value = 0.45
+    bg = w.node_tree.nodes['Background']; bg.inputs[0].default_value = (0.55, 0.72, 1.0, 1); bg.inputs[1].default_value = 0.3
     # солнце сверху слева (в кадре верх = +Y), чуть со стороны зрителя
-    sd = bpy.data.lights.new('sun', 'SUN'); sd.energy = 3.3; sd.angle = math.radians(3); sd.color = (1.0, 0.94, 0.84)
+    sd = bpy.data.lights.new('sun', 'SUN'); sd.energy = LIGHT['energy']; sd.angle = math.radians(1.5); sd.color = LIGHT['col']
     sun = bpy.data.objects.new('sun', sd); sc.collection.objects.link(sun)
-    d = Vector((0.55, -0.8, -0.5)).normalized()        # низкое солнце — рельеф читается сильнее
+    e = math.radians(LIGHT['elev']); hz = Vector((0.55, -0.8, 0)).normalized()
+    d = Vector((hz.x * math.cos(e), hz.y * math.cos(e), -math.sin(e)))   # низкое солнце сверху слева — длинные тени
     sun.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     return sc
 
@@ -222,7 +229,7 @@ def dirt_stones(name, seed, dirt_a, dirt_b, stone_dark, stone_light, density=1.0
     height_plane('dirt', H, 0.09, np.clip(cols, 0, 1) ** 2.2)
     mdirt = mat_vertex_color('dirt', rough=0.97, spec=0.15)
     bpy.data.objects['dirt'].data.materials.append(mdirt)
-    mst = mat_stone('stone', stone_dark, stone_light, rough=0.38, spec=0.55, scale=5, bumpk=0.5)
+    mst = mat_stone('stone', stone_dark, stone_light, rough=0.75, spec=0.3, scale=5, bumpk=0.9, moss=0.25, moss_col=(0.62, 0.62, 0.46))
     # камни: много мелких и средних, немного крупных валунов; наполовину в земле
     count = int(190 * density)
     for i in range(count):
@@ -232,11 +239,18 @@ def dirt_stones(name, seed, dirt_a, dirt_b, stone_dark, stone_light, density=1.0
         me = rock_mesh('rock%d' % i, r, rng.uniform(0.9, 1.4), rng.uniform(0.75, 1.05), sz, rng.random() * 100, rough=0.22)
         place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.045 - r * sz * rng.uniform(0.1, 0.5),
               (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.3, 0.3), 'rock')
-    # крошка
-    for i in range(int(520 * density)):
-        r = rng.uniform(0.005, 0.014)
-        me = rock_mesh('pebble%d' % i, r, 1.2, 1, 0.7, rng.random() * 100, sub=2)
-        place(me, mst, rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.05, (0, 0, rng.uniform(0, 6.28)), rng.uniform(-0.4, 0.2), 'peb')
+    # крошка: сотни мелких камешков 0.5–3 см — одним мешем (плотность ~400 на м²)
+    bm = bmesh.new()
+    import mathutils
+    for i in range(int(S * S * 400 * density)):
+        r = rng.uniform(0.004, 0.016) * (1.8 if rng.random() < 0.15 else 1)
+        m = mathutils.Matrix.Translation((rng.uniform(-S / 2, S / 2), rng.uniform(-S / 2, S / 2), 0.03 + rng.uniform(0, 0.03))) @ \
+            mathutils.Matrix.Diagonal((r * rng.uniform(1.0, 1.5), r * rng.uniform(0.8, 1.1), r * 0.7, 1))
+        bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1, matrix=m)
+    pm = bpy.data.meshes.new('pebbles'); bm.to_mesh(pm); bm.free()
+    for p in pm.polygons: p.use_smooth = True
+    pm.materials.append(mat_stone('peb', stone_dark, stone_light, rough=0.75, spec=0.3, scale=40, bumpk=0.4))
+    po = bpy.data.objects.new('pebbles', pm); po['tone'] = 0.0; sc.collection.objects.link(po)
     render(sc, name)
 
 
@@ -373,7 +387,9 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80, glow=None):
         m, nt, b = principled('blade', 0.55, 0.35)
         b.inputs['Base Color'].default_value = (*lin(c), 1)
         for key in ('Subsurface Weight', 'Subsurface'):
-            if key in b.inputs: b.inputs[key].default_value = 0.15; break
+            if key in b.inputs: b.inputs[key].default_value = 0.3; break
+        for key in ('Transmission Weight', 'Transmission'):
+            if key in b.inputs: b.inputs[key].default_value = 0.25; break
         mats.append(m)
     if glow: mats[-1] = mat_glow('bladeglow', *glow)
     # травинки: узкие изогнутые ленты, сужающиеся к кончику
@@ -533,10 +549,13 @@ def tree_sprite(name, seed, kind, px=320):
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
-    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.50, 0.34, 0.21), (0.33, 0.21, 0.12), (0.26, 0.25, 0.24), (0.62, 0.60, 0.57), density=2.0),
+    'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0),
     # тёмная башня и светлая кладка стен и моста
-    'brick_keep': lambda: masonry('brick_keep', 21, 32, 16, (0.22, 0.225, 0.235), (0.48, 0.48, 0.49), (0.10, 0.10, 0.10), moss=0.35),
-    'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.42, 0.40, 0.37), (0.74, 0.71, 0.66), (0.17, 0.16, 0.15), moss=0.45),
+    'brick_keep': lambda: masonry('brick_keep', 21, 32, 18, (0.44, 0.42, 0.39), (0.66, 0.63, 0.58), (0.23, 0.21, 0.18), moss=0.55, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.2),
+    'brick_light': lambda: masonry('brick_light', 22, 32, 16, (0.46, 0.44, 0.41), (0.74, 0.71, 0.66), (0.23, 0.21, 0.18), moss=0.5, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.0),
+    # замки на закате: тот же грунт и кладка при низком оранжевом солнце
+    'dirt_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), dirt_stones('dirt_castle', 12, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
+    'brick_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), masonry('brick_castle', 23, 30, 16, (0.50, 0.44, 0.38), (0.76, 0.68, 0.58), (0.24, 0.20, 0.16), moss=0.5, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
     # задняя стена пещер
     'cave_wall': lambda: slab_wall('cave_wall', 31, (0.16, 0.16, 0.165), (0.36, 0.36, 0.37), (0.05, 0.05, 0.05)),
     # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
