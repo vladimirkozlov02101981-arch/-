@@ -498,23 +498,27 @@ const DECOR = {
     c.beginPath(); c.moveTo(x - 14 * s, y + 2); c.lineTo(x, y - 30 * s); c.lineTo(x + 14 * s, y + 2); c.stroke();
   },
   billboard(c, g, x, y, s) {
-    c.fillStyle = '#2a2e36'; c.fillRect(x - 40 * s, y - 22 * s, 4 * s, 24 * s); c.fillRect(x + 36 * s, y - 22 * s, 4 * s, 24 * s);
+    // вывеска на крыше: стальная решётчатая рама на стойках, на ней — неоновые трубки (контур куска пиццы и рамки)
     const bx = x - 58 * s, by = y - 66 * s, bw = 116 * s, bh = 46 * s;
-    c.fillStyle = vgrad(c, by, by + bh, ['#2a1040', '#160a26']); rrect(c, bx, by, bw, bh, 4 * s); c.fill();
-    c.strokeStyle = '#3a3e4a'; c.lineWidth = 2 * s; c.stroke();
-    // неоновая реклама: кусок пиццы, лучи и рамка
-    c.save(); c.beginPath(); rrect(c, bx, by, bw, bh, 4 * s); c.clip();
-    c.strokeStyle = 'rgba(255,90,200,0.25)'; c.lineWidth = 3 * s;
-    for (let i = 0; i < 7; i++) { const a = -0.9 + i * 0.3; c.beginPath(); c.moveTo(x - 26 * s, by + bh * 0.55); c.lineTo(x - 26 * s + Math.cos(a) * 90 * s, by + bh * 0.55 + Math.sin(a) * 90 * s); c.stroke(); }
-    const px = x - 26 * s, py = by + 8 * s;
-    c.fillStyle = '#ffcf4a'; c.beginPath(); c.moveTo(px - 16 * s, py); c.lineTo(px + 16 * s, py); c.lineTo(px, py + 32 * s); c.closePath(); c.fill();
-    c.fillStyle = '#c8741e'; c.fillRect(px - 17 * s, py - 3 * s, 34 * s, 5 * s);
-    c.fillStyle = '#e03a2a'; for (const [ox, oy] of [[-6, 7], [5, 9], [0, 18], [-2, 27]]) circ(c, px + ox * s, py + oy * s, 3 * s);
-    c.fillStyle = '#ff7ae0'; c.font = `bold ${14 * s}px ${typeof FONT_TITLE !== 'undefined' ? FONT_TITLE : 'sans-serif'}`; c.textAlign = 'left'; c.textBaseline = 'middle';
-    c.fillText('24/7', x + 2 * s, by + bh * 0.38); c.fillStyle = '#6ae8ff'; c.font = `bold ${9 * s}px sans-serif`; c.fillText('ГОРЯЧАЯ', x + 2 * s, by + bh * 0.72);
-    c.restore();
-    c.strokeStyle = '#ff5ad8'; c.lineWidth = 1.6 * s; rrect(c, bx + 3 * s, by + 3 * s, bw - 6 * s, bh - 6 * s, 3 * s); c.stroke();
-    if (g) { g.strokeStyle = 'rgba(255,90,216,0.8)'; g.lineWidth = 6 * s; rrect(g, bx + 3 * s, by + 3 * s, bw - 6 * s, bh - 6 * s, 3 * s); g.stroke(); g.fillStyle = 'rgba(255,200,80,0.35)'; circ(g, x - 26 * s, by + 22 * s, 20 * s); }
+    c.fillStyle = '#2a2e36'; for (const ox of [-40, 36]) c.fillRect(x + ox * s, y - 22 * s, 4 * s, 24 * s);
+    c.strokeStyle = '#3c414c'; c.lineWidth = 1.2 * s;
+    for (const ox of [-40, 36]) { c.beginPath(); c.moveTo(x + ox * s, y - 2 * s); c.lineTo(x + (ox + 4) * s, y - 20 * s); c.moveTo(x + (ox + 4) * s, y - 2 * s); c.lineTo(x + ox * s, y - 20 * s); c.stroke(); }
+    // решётка рамы (сквозь неё видно небо)
+    c.strokeStyle = '#4a4f5a'; c.lineWidth = 2.2 * s; c.strokeRect(bx, by, bw, bh);
+    c.lineWidth = 1 * s; c.strokeStyle = 'rgba(80,86,98,0.95)';
+    for (let k = 1; k < 8; k++) { const xx = bx + bw * k / 8; c.beginPath(); c.moveTo(xx, by); c.lineTo(xx, by + bh); c.stroke(); }
+    for (let k = 1; k < 3; k++) { const yy = by + bh * k / 3; c.beginPath(); c.moveTo(bx, yy); c.lineTo(bx + bw, yy); c.stroke(); }
+    c.strokeStyle = 'rgba(70,76,88,0.8)'; for (let k = 0; k < 8; k++) { const x0 = bx + bw * k / 8; c.beginPath(); c.moveTo(x0, by); c.lineTo(x0 + bw / 8, by + bh); c.stroke(); }
+    // неоновые трубки: тёмная трубка днём + свечение
+    const tube = (draw, col) => {
+      c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+      c.strokeStyle = col; c.lineWidth = 2.4 * s; draw(c); c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 0.9 * s; draw(c); c.restore();
+      if (g) { g.save(); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = col; g.lineWidth = 9 * s; g.globalAlpha = 0.75; draw(g); g.restore(); }
+    };
+    const px = x - 6 * s, py = by + 7 * s;
+    tube((k) => { k.beginPath(); k.moveTo(px - 17 * s, py); k.quadraticCurveTo(px, py - 5 * s, px + 17 * s, py); k.lineTo(px, py + 32 * s); k.closePath(); k.stroke(); }, '#ffd23a');   // кусок пиццы
+    tube((k) => { k.beginPath(); for (const [ox, oy] of [[-6, 7], [5, 9], [0, 18]]) { k.moveTo(px + (ox + 3) * s, py + oy * s); k.arc(px + ox * s, py + oy * s, 3 * s, 0, TAU); } k.stroke(); }, '#ff4a3a');   // колбаса
+    tube((k) => { k.beginPath(); k.rect(bx + 3 * s, by + 3 * s, bw - 6 * s, bh - 6 * s); k.stroke(); }, '#ff3ad0');   // контур рамки
   },
   bench(c, g, x, y, s) {
     c.fillStyle = '#7a4a2a'; c.fillRect(x - 16 * s, y - 10 * s, 32 * s, 3 * s); c.fillRect(x - 16 * s, y - 17 * s, 32 * s, 3 * s);
