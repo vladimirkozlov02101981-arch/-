@@ -494,6 +494,7 @@ const DECOR = {
   },
   /* ---------- мелочь ---------- */
   bush(c, g, x, y, s, r) {
+    if (DECOR_THEME !== 'castle' && treeSprite(c, ['bush1', 'bush2'], x, y, s, r, 42)) return;
     const blobs = []; const n = r.int(5, 8); for (let i = 0; i < n; i++) blobs.push({ x: x + r.range(-13, 13) * s, y: y - r.range(4, 12) * s, r: r.range(6, 10) * s });
     foliage(c, blobs, DECOR_THEME === 'castle' ? ['#26401a', '#4a7a26', '#8fb840', '#d8e670'] : ['#1c3410', '#3c6a1c', '#7aa42c', '#cce060']);
   },

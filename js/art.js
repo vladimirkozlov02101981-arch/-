@@ -41,7 +41,7 @@ const MapArt = {
 /** фотореалистичные бесшовные текстуры карт (рендер Blender, dev/blender/make_textures.py).
     Загружаются сразу при старте; если файла нет — карта рисуется процедурно, как раньше */
 const TexLib = {
-  names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall', 'grass_valley', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1'],
+  names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall', 'grass_valley', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'bush1', 'bush2'],
   data: {},
   ready: null,
   load() {

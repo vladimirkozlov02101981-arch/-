@@ -441,6 +441,12 @@ def tree_sprite(name, seed, kind, px=320):
             tips.append(p); _cone(bm, Vector((0, 0, h - 0.15)), p, 0.025, 0.01, 6)
         shades = [lin(c) for c in ((0.42, 0.58, 0.18), (0.55, 0.70, 0.24), (0.68, 0.78, 0.32), (0.48, 0.62, 0.20))]
         leaf = dict(R=0.24, n=260, size=0.045, flat=0.9)
+    elif kind == 'bush':
+        H = 1.6; cam.data.ortho_scale = H; cam.location = (0, -10, H / 2 - 0.05)
+        top = Vector((0, 0, 0.05))
+        dome(0, 0.45, 0.7, 0.42, 26, top, 0.03)
+        shades = [lin(c) for c in ((0.24, 0.38, 0.10), (0.34, 0.50, 0.14), (0.46, 0.62, 0.18), (0.58, 0.70, 0.24), (0.30, 0.44, 0.12))]
+        leaf = dict(R=0.22, n=260, size=0.04, flat=0.85)
     else:  # pine
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.6)), 0.12, 0.02, 12)
         shades = [lin(c) for c in ((0.12, 0.26, 0.14), (0.18, 0.34, 0.18), (0.26, 0.44, 0.22), (0.14, 0.30, 0.15))]
@@ -492,6 +498,7 @@ LIB = {
     'tree_oak1': lambda: tree_sprite('tree_oak1', 51, 'oak'), 'tree_oak2': lambda: tree_sprite('tree_oak2', 52, 'oak'), 'tree_oak3': lambda: tree_sprite('tree_oak3', 53, 'oak'),
     'tree_pine1': lambda: tree_sprite('tree_pine1', 61, 'pine'), 'tree_pine2': lambda: tree_sprite('tree_pine2', 62, 'pine'),
     'tree_birch1': lambda: tree_sprite('tree_birch1', 71, 'birch'),
+    'bush1': lambda: tree_sprite('bush1', 81, 'bush', px=160), 'bush2': lambda: tree_sprite('bush2', 82, 'bush', px=160),
 }
 
 if __name__ == '__main__':

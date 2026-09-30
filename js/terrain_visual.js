@@ -795,7 +795,9 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       const blobs = [];
       for (let j = 0; j < n; j++) blobs.push({ x: x + (j / (n - 1) - 0.5) * R * 1.8 + (rng() - 0.5) * 4, y: y - R * (0.45 + Math.sin(j / (n - 1) * Math.PI) * 0.55) + (rng() - 0.5) * 3, r: R * (0.5 + rng() * 0.3) });
       blobs.push({ x: x + (rng() - 0.5) * R * 0.5, y: y - R * 1.05, r: R * 0.55 });
-      foliage(c, blobs, G.cap.bushPal || ['#1c3410', '#3c6a1c', '#7aa42c', '#cce060']);
+      const bs = !G.cap.bushPal && ['bush1', 'bush2'].map((n) => TexLib.data[n]).filter(Boolean);
+      if (bs && bs.length) { const T = bs[(rng() * bs.length) | 0], D = R * 3.6; c.drawImage(T.canvas, x - D / 2, y + 3 - D, D, D); }
+      else foliage(c, blobs, G.cap.bushPal || ['#1c3410', '#3c6a1c', '#7aa42c', '#cce060']);
       if (G.cap.flowers && rng() < 0.6) { c.fillStyle = rng.pick(G.cap.flowers); for (let j = 0; j < 6; j++) { c.beginPath(); c.arc(x + (rng() - 0.5) * R * 1.8, y - R * (0.4 + rng() * 0.8), 1.4, 0, TAU); c.fill(); } }
     }
   }
