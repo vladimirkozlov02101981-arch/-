@@ -614,15 +614,17 @@ def field_plane(name, H, C, glow=None, rough=0.92, bump=0.35, gstr=0.0):
     return ob
 
 
-def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=60, streak=0.25, cap=None, capk=1.0,
-              glow=None, gstr=6.0, dark_cracks=0.55, n=512, tilt=0.0, rough_k=1.0, cave=False):
+def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=200, streak=0.25, cap=None, capk=1.0,
+              glow=None, gstr=6.0, dark_cracks=0.55, n=1024, tilt=0.0, rough_k=1.0, cave=False):
     """скальная стена в разрезе: осадочные пласты разной твёрдости (твёрдые выступают карнизами, мягкие выветрены),
     вертикальные трещины внутри пласта, крупные глыбовые разломы, эрозия, потёки, налёт (cap: снег/песок/мох на
     уступах сверху), свечение в глубоких трещинах (glow = цвет). pal — цвета пластов sRGB"""
+    global PX, S
+    PX0 = PX; PX = n; S = PX / 100.0                               # крупная плитка — меньше заметен повтор
     sc = reset(); rng = np.random.default_rng(seed)
     yy, xx = np.mgrid[0:n, 0:n].astype(np.float64)
     # изгиб пластов: плавный крупный + мелкая рябь
-    wy = (aniso_noise(n, 1.8, seed + 1, 1, 1) - 0.5) * 34 + (fft_noise(n, 1.2, seed + 2) - 0.5) * 6 + tilt * xx
+    wy = (aniso_noise(n, 1.8, seed + 1, 1, 1) - 0.5) * 34 + (fft_noise(n, 1.2, seed + 2) - 0.5) * 6 + tilt * n / 6.283 * np.sin(xx / n * 6.283)   # наклон — периодический, без шва на краю плитки
     Y = (yy + wy) % n
     # пласты
     th = []; tot = 0
@@ -697,6 +699,7 @@ def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=60, 
         base *= 0.8
     field_plane('rock', H, np.clip(base, 0, 1), glow=gm, rough=0.9, bump=0.4, gstr=gstr)
     render(sc, name)
+    PX = PX0; S = PX / 100.0
 
 
 def wood_planks(name, seed, ph, pw, dark, light, n=512, nails=True, weather=0.3, gap=1.6):
@@ -853,8 +856,8 @@ def tree_sprite(name, seed, kind, px=320):
         leaf = dict(R=0.18, n=220, size=0.035, flat=0.85)
     else:  # pine
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.6)), 0.12, 0.02, 12)
-        shades = [lin(c) for c in ((0.12, 0.26, 0.14), (0.18, 0.34, 0.18), (0.26, 0.44, 0.22), (0.14, 0.30, 0.15))]
-        leaf = dict(R=0.17, n=150, size=0.05, flat=0.45, needle=True)
+        shades = [lin(c) for c in ((0.15, 0.27, 0.15), (0.21, 0.35, 0.19), (0.30, 0.44, 0.24), (0.40, 0.50, 0.28), (0.18, 0.30, 0.17))]
+        leaf = dict(R=0.15, n=110, size=0.05, flat=0.4, needle=True)
         for i in range(20):
             h = 0.55 + i * 0.15; wdt = 1.15 * (1 - i / 21) ** 1.1 + 0.12
             for a in range(7):
@@ -897,9 +900,9 @@ LIB = {
     'dirt_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), dirt_stones('dirt_castle', 12, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
     'brick_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), masonry('brick_castle', 23, 30, 16, (0.50, 0.44, 0.38), (0.76, 0.68, 0.58), (0.24, 0.20, 0.16), moss=0.5, moss_col=(0.31, 0.35, 0.16), jitter=1.5, depth=0.05, gap_px=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
     # задняя стена пещер
-    'cave_wall': lambda: rock_face('cave_wall', 31, [(0.36, 0.35, 0.34), (0.42, 0.41, 0.39), (0.30, 0.29, 0.28)], layer=(30, 90), blocks=40, streak=0.2, cave=True),
+    'cave_wall': lambda: rock_face('cave_wall', 31, [(0.36, 0.35, 0.34), (0.42, 0.41, 0.39), (0.30, 0.29, 0.28)], layer=(30, 90), blocks=130, streak=0.2, cave=True),
     # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
-    'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.40, 0.54, 0.14), (0.52, 0.66, 0.18), (0.64, 0.76, 0.24), (0.76, 0.84, 0.32), (0.58, 0.68, 0.20)],
+    'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.26, 0.36, 0.10), (0.36, 0.46, 0.13), (0.46, 0.55, 0.17), (0.60, 0.62, 0.28), (0.79, 0.72, 0.44)],
                                         [(0.85, 0.15, 0.12), (0.95, 0.80, 0.18), (0.95, 0.94, 0.88), (0.35, 0.45, 0.95), (0.95, 0.45, 0.65)]),
     # деревья-спрайты: 3 дуба, 2 сосны, берёза
     'tree_oak1': lambda: tree_sprite('tree_oak1', 51, 'oak'), 'tree_oak2': lambda: tree_sprite('tree_oak2', 52, 'oak'), 'tree_oak3': lambda: tree_sprite('tree_oak3', 53, 'oak'),
@@ -909,17 +912,17 @@ LIB = {
     # ---- каньон: пласты песчаника, песчаная земля, пещеры
     'rock_canyon': lambda: rock_face('rock_canyon', 101, [(0.74, 0.42, 0.26), (0.82, 0.52, 0.32), (0.66, 0.36, 0.22), (0.88, 0.62, 0.42), (0.58, 0.32, 0.20)], streak=0.3, cap=((0.86, 0.66, 0.44), 0.5), capk=0.6),
     'dirt_canyon': lambda: dirt_stones('dirt_canyon', 102, (0.78, 0.56, 0.34), (0.62, 0.40, 0.22), (0.45, 0.30, 0.20), (0.80, 0.62, 0.44), density=1.2),
-    'cave_canyon': lambda: rock_face('cave_canyon', 103, [(0.50, 0.30, 0.19), (0.58, 0.36, 0.23), (0.44, 0.26, 0.16)], layer=(30, 90), blocks=40, streak=0.2, cave=True),
+    'cave_canyon': lambda: rock_face('cave_canyon', 103, [(0.50, 0.30, 0.19), (0.58, 0.36, 0.23), (0.44, 0.26, 0.16)], layer=(30, 90), blocks=130, streak=0.2, cave=True),
     # ---- ледяной перевал: сланец с инеем на уступах
     'rock_arctic': lambda: rock_face('rock_arctic', 111, [(0.46, 0.50, 0.56), (0.56, 0.60, 0.66), (0.38, 0.42, 0.48), (0.64, 0.67, 0.72)], layer=(20, 70), tilt=0.06, streak=0.15, cap=((0.93, 0.96, 1.0), 1.5), capk=1.4),
-    'cave_arctic': lambda: rock_face('cave_arctic', 113, [(0.34, 0.38, 0.46), (0.40, 0.45, 0.53), (0.28, 0.32, 0.40)], layer=(30, 90), blocks=40, cave=True),
+    'cave_arctic': lambda: rock_face('cave_arctic', 113, [(0.34, 0.38, 0.46), (0.40, 0.45, 0.53), (0.28, 0.32, 0.40)], layer=(30, 90), blocks=130, cave=True),
     # ---- вулкан: базальт, в трещинах светится лава
-    'rock_volcano': lambda: rock_face('rock_volcano', 121, [(0.30, 0.26, 0.24), (0.38, 0.32, 0.29), (0.24, 0.21, 0.19), (0.44, 0.37, 0.32)], joints=2.0, blocks=90, streak=0.1, glow=(1.0, 0.42, 0.07), gstr=8.0, dark_cracks=0.6),
-    'cave_volcano': lambda: rock_face('cave_volcano', 123, [(0.24, 0.20, 0.18), (0.30, 0.25, 0.22), (0.19, 0.16, 0.14)], layer=(30, 90), blocks=50, joints=1.5, glow=(1.0, 0.40, 0.06), gstr=5.0, cave=True),
+    'rock_volcano': lambda: rock_face('rock_volcano', 121, [(0.36, 0.29, 0.25), (0.44, 0.35, 0.30), (0.30, 0.24, 0.21), (0.50, 0.40, 0.33)], joints=2.0, blocks=280, streak=0.1, glow=(1.0, 0.42, 0.07), gstr=8.0, dark_cracks=0.6),
+    'cave_volcano': lambda: rock_face('cave_volcano', 123, [(0.24, 0.20, 0.18), (0.30, 0.25, 0.22), (0.19, 0.16, 0.14)], layer=(30, 90), blocks=160, joints=1.5, glow=(1.0, 0.40, 0.06), gstr=5.0, cave=True),
     # ---- кристальная планета: фиолетовая порода, светящиеся голубые жилы
     'rock_alien': lambda: rock_face('rock_alien', 131, [(0.34, 0.24, 0.50), (0.42, 0.30, 0.58), (0.28, 0.20, 0.42), (0.50, 0.38, 0.64)], streak=0.15, glow=(0.35, 0.95, 1.0), gstr=5.0, tilt=-0.05),
     'dirt_alien': lambda: dirt_stones('dirt_alien', 132, (0.30, 0.20, 0.42), (0.18, 0.12, 0.28), (0.28, 0.20, 0.45), (0.56, 0.44, 0.78), density=1.5),
-    'cave_alien': lambda: rock_face('cave_alien', 133, [(0.24, 0.17, 0.36), (0.30, 0.22, 0.44), (0.20, 0.14, 0.30)], layer=(30, 90), blocks=40, glow=(0.35, 0.9, 1.0), gstr=3.5, cave=True),
+    'cave_alien': lambda: rock_face('cave_alien', 133, [(0.24, 0.17, 0.36), (0.30, 0.22, 0.44), (0.20, 0.14, 0.30)], layer=(30, 90), blocks=130, glow=(0.35, 0.9, 1.0), gstr=3.5, cave=True),
     'grass_alien': lambda: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)],
                                        [(1.0, 0.45, 0.95), (0.55, 0.95, 1.0)], glow=((0.35, 1.0, 0.90), 2.0)),
     # ---- пиратская бухта: доски корабля, тропическая земля и трава
