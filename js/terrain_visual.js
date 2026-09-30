@@ -146,11 +146,13 @@ function veinDist(tl, x, y, n2) {
   const gl = Math.abs(gx) + Math.abs(gy); if (gl < 0.01) return 1;
   return Math.abs(v0 - 0.5) * 1.5 * Math.min(3, 0.03 / gl + 0.6);
 }
-/** глубокая тень под потолком пещеры: до 70 px вниз от свода стена заметно темнее */
-function caveAO(m, i, W, y, bk) {
+/** глубокая тень под потолком пещеры (до 70 px вниз от свода) и отсвет от пола (до 40 px вверх от пола) */
+function caveAO(m, i, W, y, bk, H) {
   if (bk > 2) return 1;
-  for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; return 0.52 + 0.48 * t * (2 - t); }
-  return 1;
+  let k = 1;
+  for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; k = 0.52 + 0.48 * t * (2 - t); break; }
+  for (let q = 1; q < 40; q++) if (y + q < H && m[i + q * W]) { k *= 1 + 0.22 * (1 - q / 40) * (1 - q / 40); break; }
+  return k;
 }
 /** нерезкое маскирование 3×3 (только внутри непрозрачных областей, без ореолов по краю) */
 function sharpen(d, W, H, k) {
@@ -343,8 +345,12 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : 0.56) ? 1 : veinDist(tl, x, y, n2);   // рваные трещины, не везде
       if (dv < S.veinW) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / S.veinW; r += (vc[0] - r) * k; g += (vc[1] - g) * k; bl += (vc[2] - bl) * k; if (S.veinGlow && !isBack) { o.ga = 255 * k; o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; } } else if (S.veinGlow && dv < S.veinW * 5) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, q = 1 - dv / (S.veinW * 5), k = q * q * 0.32; r += (vc[0] - r) * k; g += (vc[1] - g) * k * 0.7; bl += (vc[2] - bl) * k * 0.5; }
     }
-  } else if (mt === 12 && S.tx.cave) {
-    texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; o.tex = true;
+  } else if (mt === 12 && (S.tx.rock || S.tx.dirt || S.tx.cave)) {
+    // задняя стена: та же порода, что и скала вокруг (в скальных картах), иначе — плиты пещеры
+    if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); const k = 1.05 * S.texGain; r = o.r * k; g = o.g * k; bl = o.b * k; o.ga = 0; }
+    else if (S.tx.dirt) { texAt(S.tx.dirt, x + 257, y + 131, o); r = o.r * 0.58; g = o.g * 0.56; bl = o.b * 0.62; }   // земляная пещера: стена из того же грунта с камнями
+    else { texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; }
+    o.tex = true;
   } else if (mt === 12) {
     // задняя стена земляной пещеры: неровные скруглённые плиты разного размера с глубокими швами
     const V = S.vl, vi = ((y & 511) << 9) | (x & 511), id = V.id[vi];
@@ -748,7 +754,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
-        const k = back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)) * caveAO(m, i, W, y, back[i]); const j = i * 4;
+        const k = back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)) * caveAO(m, i, W, y, back[i], H) * (back[i] <= 2 ? 1.3 : 1); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
