@@ -43,7 +43,7 @@ const MapArt = {
 const TexLib = {
   names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall', 'grass_valley', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'bush1', 'bush2',
     'rock_canyon', 'dirt_canyon', 'cave_canyon', 'rock_arctic', 'cave_arctic', 'rock_volcano', 'cave_volcano', 'rock_alien', 'dirt_alien', 'cave_alien', 'grass_alien',
-    'wood_ship', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash'],
+    'wood_ship', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash', 'soldier_free', 'soldier_aim'],
   data: {},
   ready: null,
   load() {
@@ -64,3 +64,27 @@ const TexLib = {
   },
 };
 TexLib.load();
+/* Боец из 3D-модели (кадры отрендерены в Blender, dev/blender/make_soldier.py).
+   Лист free: строки — стойка, шаг, бег, лазание; лист aim: строка — угол прицела (−90°…+90° через 15°),
+   столбец 0 — стойка, 1…12 — шаг. Светлые пластины брони перекрашиваются в цвет команды. */
+const SoldierArt = {
+  CELL: 144, FOOT: [72, 126], MPP: 2.3 / 144, SHOULDER: [72.8, 38.5], K: 0.373,
+  FREE: { idle: [0, 8], walk: [1, 12], run: [2, 10], climb: [3, 8] },
+  cache: new Map(),
+  ok() { return !!(TexLib.data.soldier_free && TexLib.data.soldier_aim); },
+  sheet(name, color) {
+    const key = name + color; let cv = this.cache.get(key); if (cv) return cv;
+    const T = TexLib.data['soldier_' + name]; cv = makeCanvas(T.w, T.h); const c = cv.getContext('2d');
+    const img = c.createImageData(T.w, T.h), d = img.data, s = T.d; d.set(s);
+    const [tr, tg, tb] = hex2rgb(color), tl = (tr * 0.3 + tg * 0.59 + tb * 0.11) || 1;
+    for (let j = 0; j < d.length; j += 4) {
+      if (s[j + 3] < 8) continue;
+      const r = s[j], g = s[j + 1], b = s[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx < 45 || r < g || g < b || (mx - mn) / mx < 0.16) continue;              // только тёплые светлые пластины брони
+      const L = r * 0.3 + g * 0.59 + b * 0.11, k = Math.min(1, ((mx - mn) / mx - 0.16) * 5) * 0.55, f = L / tl * 0.95;   // оттенок команды, фактура брони сохраняется
+      d[j] = r + (tr * f - r) * k; d[j + 1] = g + (tg * f - g) * k; d[j + 2] = b + (tb * f - b) * k;
+    }
+    c.putImageData(img, 0, 0); this.cache.set(key, cv); return cv;
+  },
+};
+

@@ -102,7 +102,41 @@ function drawHat(c, hat, col, hx, hy, face) {
 
 /** боец: s — вид (x, y, aim, face, st, rot, wpn, alive, hurt, thrust), an — кэш анимации.
     Собственный дизайн: коренастый мультяшный солдатик с большой головой и каской цвета команды */
+/** боец из 3D-кадров: кадр по состоянию, фазе шага и углу прицела; оружие — у плеча модели */
+function drawSoldierSprite(c, s, team, t, an) {
+  const SA = SoldierArt, face = s.face || 1, dead = !s.alive, col = team ? team.color : '#888', K = SA.K, C = SA.CELL;
+  c.save(); c.translate(s.x, s.y);
+  if ((s.st === 'stand' || s.st === 'walk' || s.st === 'climb') && !dead) { c.fillStyle = 'rgba(10,6,4,0.4)'; c.beginPath(); c.ellipse(0, 0.4, 11, 2.6, 0, 0, TAU); c.fill(); }
+  if (s.st === 'fly') { c.translate(0, -18); c.rotate(s.rot); c.translate(0, 18); }
+  else if (s.st === 'dead') { c.translate(0, -2); c.rotate(face * 1.45); c.translate(0, 2); }
+  const holding = s.wpn && !dead && s.st !== 'fly' && s.st !== 'climb' && s.wpn !== 'jetpack';
+  const wf = ((Math.floor(an.walk / 12.2 * 12) % 12) + 12) % 12;
+  let sheet = 'free', row = 0, fr = 0;
+  if (holding) {
+    let al = angNorm(face > 0 ? s.aim : Math.PI - s.aim); al = clamp(al, -Math.PI / 2, Math.PI / 2);
+    sheet = 'aim'; row = Math.round((al * 180 / Math.PI + 90) / 15); fr = s.st === 'walk' ? 1 + wf : 0;
+  } else if (s.st === 'walk') { row = 1; fr = wf; }
+  else if (s.st === 'climb') { row = 3; fr = ((Math.floor(s.y * 0.12) % 8) + 8) % 8; }
+  else if (s.st === 'air' || s.st === 'jet') { row = 2; fr = 3; }
+  else if (s.st === 'stand' && !dead) { row = 0; fr = Math.floor(t * 5 + s.id) % 8; }
+  // ранец джетпака за спиной
+  if (s.wpn === 'jetpack' || s.st === 'jet') {
+    c.fillStyle = '#3a4048'; rrect(c, -face * 7 - 3.5, -30, 7, 14, 2.4); c.fill(); c.fillStyle = '#c0402f'; c.fillRect(-face * 7 - 3, -25, 6, 2);
+    if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 7 - 6.5, -17, 13, 18 + Math.random() * 7); c.restore(); }
+  }
+  c.save(); if (face < 0) c.scale(-1, 1);
+  if (s.hurt > 0 && !dead) c.filter = 'brightness(1.3) sepia(0.6) saturate(4) hue-rotate(-30deg)';
+  c.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K, C * K, C * K);
+  c.restore();
+  if (holding) {
+    const sx = (SA.SHOULDER[0] - SA.FOOT[0]) * K * face, sy = (SA.SHOULDER[1] - SA.FOOT[1]) * K;
+    const a = s.aim, dx = Math.cos(a), dy = Math.sin(a), g = 0.3 / SA.MPP * K;
+    c.save(); c.translate(sx + dx * g, sy + dy * g + 1.5); c.rotate(a); if (face < 0) c.scale(1, -1); drawHeld(c, s.wpn, t); c.restore();
+  }
+  c.restore();
+}
 function drawSoldier(c, s, team, t, an) {
+  if (typeof SoldierArt !== 'undefined' && SoldierArt.ok()) return drawSoldierSprite(c, s, team, t, an);
   const face = s.face || 1; const col = team ? team.color : '#888';
   const colD = css(shadec(col, 0.66));
   const dead = !s.alive;
