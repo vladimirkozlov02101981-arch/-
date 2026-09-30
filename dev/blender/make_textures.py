@@ -964,6 +964,82 @@ def haystack_sprite(name, seed, px=200):
     render(sc, name)
 
 
+def alien_mushroom(name, seed, px=280):
+    """инопланетное грибное дерево сбоку: изогнутая мясистая ножка, шляпка с чешуйками и подсвеченной изнутри
+    мякотью (подповерхностное рассеяние), светящиеся пятна и нити-щупальца с огоньками"""
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    sc.world.node_tree.nodes['Background'].inputs[0].default_value = (0.35, 0.3, 0.6, 1)
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.8
+    H = 3.0; cam = sc.camera; cam.data.ortho_scale = H
+    cam.location = (0, -10, H / 2 - 0.08); cam.rotation_euler = (math.radians(90), 0, 0)
+    def fleshy(nm, col, sss, emit=None, es=0.0):
+        m, nt, b = principled(nm, 0.45, 0.4); b.inputs['Base Color'].default_value = (*lin(col), 1)
+        for key in ('Subsurface Weight', 'Subsurface'):
+            if key in b.inputs: b.inputs[key].default_value = sss; break
+        if 'Subsurface Radius' in b.inputs: b.inputs['Subsurface Radius'].default_value = (0.3, 0.1, 0.4)
+        if emit:
+            for key in ('Emission Color', 'Emission'):
+                if key in b.inputs: b.inputs[key].default_value = (*lin(emit), 1); break
+            if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = es
+        nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 40; nz.inputs['Detail'].default_value = 8
+        bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.35
+        nt.links.new(nz.outputs['Fac'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], b.inputs['Normal'])
+        return m
+    # ножка: изогнутая, сужается кверху, с кольцами
+    bm = bmesh.new(); bend = rng.uniform(-0.25, 0.25); hgt = rng.uniform(1.5, 1.8)
+    pts = [Vector((bend * 2 * t * (1 - t) + bend * t * t, 0, t * hgt)) for t in [i / 10 for i in range(11)]]
+    bm.free()
+    # гладкая трубка вдоль изогнутой оси: кольца вершин, радиус плавно убывает, у основания — утолщение
+    N, SEG = 40, 20; verts = []; faces = []
+    for i in range(N + 1):
+        t = i / N; c0 = Vector((bend * 2 * t * (1 - t) + bend * t * t, 0, t * hgt))
+        rad = 0.12 - 0.045 * t + 0.07 * max(0.0, 0.15 - t) / 0.15 + 0.006 * math.sin(t * 40)
+        for k in range(SEG):
+            a = k / SEG * math.tau; verts.append((c0.x + math.cos(a) * rad, c0.y + math.sin(a) * rad * 0.9, c0.z))
+    for i in range(N):
+        for k in range(SEG):
+            a0 = i * SEG + k; a1 = i * SEG + (k + 1) % SEG; faces.append((a0, a1, a1 + SEG, a0 + SEG))
+    st = bpy.data.meshes.new('stalk'); st.from_pydata(verts, [], faces); st.update()
+    for pl in st.polygons: pl.use_smooth = True
+    st.materials.append(fleshy('stalk', (0.62, 0.50, 0.78), 0.5)); so = bpy.data.objects.new('stalk', st); sc.collection.objects.link(so)
+    top = pts[-1]
+    # шляпка
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=1.0)
+    off = Vector((seed, 3, 7)); R = rng.uniform(0.62, 0.72)
+    for v in bm.verts:
+        p = v.co.copy(); z = p.z
+        zz = z * 0.55 if z > 0 else z * 0.12
+        d = 1 + 0.035 * noise.noise(p * 5 + off) + 0.012 * noise.noise(p * 18 + off)
+        v.co = Vector((p.x * R * d, p.y * R * 0.9 * d, zz * R * d)) + top + Vector((0, 0, 0.02))
+    cap = bpy.data.meshes.new('cap'); bm.to_mesh(cap); bm.free()
+    for pl in cap.polygons: pl.use_smooth = True
+    cap.materials.append(fleshy('cap', (0.78, 0.26, 0.66), 0.6, (0.9, 0.3, 0.8), 0.25))
+    co = bpy.data.objects.new('cap', cap); sc.collection.objects.link(co)
+    # светящиеся пятна на шляпке
+    spot = fleshy('spot', (1.0, 0.95, 0.6), 0.2, (1.0, 0.92, 0.5), 6.0)
+    for i in range(16):
+        a = rng.uniform(0, math.tau); u = rng.uniform(0.2, 0.85)
+        pz = math.sqrt(max(0, 1 - u * u)) * 0.55 * R
+        p = top + Vector((math.cos(a) * u * R, math.sin(a) * u * R * 0.9, pz + 0.02))
+        bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=rng.uniform(0.04, 0.075))
+        me = bpy.data.meshes.new('sp'); bm.to_mesh(me); bm.free(); me.materials.append(spot)
+        o = bpy.data.objects.new('sp', me); o.location = p; o.scale = (1, 1, 0.5); sc.collection.objects.link(o)
+    # нити-щупальца снизу с огоньками на концах
+    thread = fleshy('thread', (0.85, 0.5, 0.9), 0.4, (0.9, 0.5, 1.0), 0.8)
+    bm = bmesh.new()
+    for i in range(14):
+        a = rng.uniform(0, math.tau); u = rng.uniform(0.35, 0.95)
+        p0 = top + Vector((math.cos(a) * u * R, math.sin(a) * u * R * 0.9, -0.02)); L = rng.uniform(0.15, 0.45)
+        p1 = p0 + Vector((rng.uniform(-0.05, 0.05), 0, -L))
+        _cone(bm, p0, p1, 0.008, 0.004, 6)
+        bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.018, matrix=__import__('mathutils').Matrix.Translation(p1))
+    th = bpy.data.meshes.new('thr'); bm.to_mesh(th); bm.free(); th.materials.append(thread)
+    to = bpy.data.objects.new('thr', th); sc.collection.objects.link(to)
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
@@ -1007,6 +1083,7 @@ LIB = {
     'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
                                           [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
     'haystack1': lambda: haystack_sprite('haystack1', 91),
+    'alien_tree1': lambda: alien_mushroom('alien_tree1', 301), 'alien_tree2': lambda: alien_mushroom('alien_tree2', 302),
     # ---- сыпучие шапки поверхности: снег, песок, пепел
     'cap_snow': lambda: granular('cap_snow', 201, [(0.80, 0.86, 0.94), (0.90, 0.94, 0.99), (0.97, 0.98, 1.0)], amp=0.014, sparkle=1.0),
     'cap_sand': lambda: granular('cap_sand', 202, [(0.78, 0.60, 0.38), (0.88, 0.72, 0.48), (0.95, 0.82, 0.58)], amp=0.01, ripples=0.6, pebbles=0.5),

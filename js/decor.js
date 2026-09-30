@@ -391,6 +391,7 @@ const DECOR = {
   },
   /* ---------- чужая планета ---------- */
   alientree(c, g, x, y, s, r) {
+    if (treeSprite(c, ['alien_tree1', 'alien_tree2'], x, y, s, r, 150)) { if (g) { g.fillStyle = 'rgba(255,120,230,0.25)'; circ(g, x, y - 95 * s, 38 * s); } return; }   // гриб из Blender
     const h = r.range(70, 90) * s; const bend = r.range(-12, 12) * s;
     c.strokeStyle = hgrad(c, x - 8 * s, x + 8 * s, ['#b28ae0', '#6a3fa0', '#3a1f66']); c.lineWidth = 9 * s; c.lineCap = 'round';
     c.beginPath(); c.moveTo(x, y + 4); c.quadraticCurveTo(x + bend * 2, y - h * 0.5, x + bend, y - h); c.stroke();
