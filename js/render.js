@@ -385,7 +385,7 @@ class Renderer {
   /** оверлей бинокля: две линзы, шкала и затемнение по краям */
   /** оптический прицел снайперки: линза ×3 на линии ствола в точке курсора, сетка с дальномерными метками */
   drawScope(c, sc, cam, ctl, sw, sh) {
-    const T = sc.turn; if (T.weapon !== 'sniper' || T.phase !== 'aim' || !ctl || !ctl.mine || cam.binocK > 0.5) return;
+    const T = sc.turn; if (T.weapon !== 'sniper' || T.phase !== 'aim' || !ctl || !ctl.mine || !ctl.scopeOn || cam.binocK > 0.5) return;
     const s = sc.soldiers.find(o => o.id === T.sid); if (!s || !s.alive) return;
     const [gx, gy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh), [mx, my] = cam.toScreen(ctl.mouseW.x, ctl.mouseW.y, sw, sh);
     const dist = Math.max(90, Math.hypot(mx - gx, my - gy)), cx = gx + Math.cos(ctl.aim) * dist, cy = gy + Math.sin(ctl.aim) * dist;

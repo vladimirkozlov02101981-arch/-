@@ -663,7 +663,7 @@ def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=200,
     # эрозия: крупные вмятины, бугры, мелкая зернистость, выщелачивание
     ero = (fft_noise(n, 1.6, seed + 10) - 0.5) * amp * 0.5 + (fft_noise(n, 1.1, seed + 11) - 0.5) * amp * 0.18 * rough_k
     rid = 1 - np.abs(fft_noise(n, 1.0, seed + 12) * 2 - 1); grain = (fft_noise(n, 0.45, seed + 13) - 0.5)
-    H = H + ero + blockh * (0.4 + 0.6 * hd) + rid * amp * 0.06 * rough_k + grain * amp * 0.035 * rough_k
+    H = H + ero + blockh * (0.4 + 0.6 * hd) + rid * amp * 0.06 * rough_k + grain * amp * 0.09 * rough_k
     H = H - crack * amp * 0.45 - frac * amp * 0.55
     # цвета
     P = np.array(pal, float)
@@ -672,7 +672,7 @@ def rock_face(name, seed, pal, layer=(14, 60), amp=0.10, joints=1.0, blocks=200,
     base *= (0.9 + 0.2 * fine_band)[..., None]
     base *= (1 + blocktone)[..., None]
     mott = fft_noise(n, 1.3, seed + 15); base *= (0.86 + 0.28 * mott)[..., None]
-    speck = fft_noise(n, 0.2, seed + 16); base *= (0.92 + 0.16 * speck)[..., None]
+    speck = fft_noise(n, 0.2, seed + 16); base *= (0.84 + 0.32 * speck)[..., None]   # зерно: песчинки, крапинка, поры
     if streak > 0:                                                # вертикальные потёки (пустынный загар / вода)
         st = aniso_noise(n, 1.4, seed + 17, 1.0, 0.07); st = np.clip((st - 0.45) * 2.2, 0, 1)
         base *= (1 - streak * st)[..., None]
@@ -1148,7 +1148,7 @@ LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
     'dirt_valley': lambda: dirt_stones('dirt_valley', 11, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0),
     # тёмная башня и светлая кладка стен и моста
-    'brick_keep': lambda: masonry('brick_keep', 21, 30, 0, (0.38, 0.37, 0.35), (0.78, 0.76, 0.72), (0.60, 0.58, 0.53), moss=0.95, moss_col=(0.33, 0.38, 0.17), jitter=1.5, hrange=(13, 21), wrange=(0.6, 1.5), depth=0.05, gap_px=2.2, tilt=0.03, detail=0.3, mortar_h=0.03),
+    'brick_keep': lambda: masonry('brick_keep', 21, 30, 0, (0.50, 0.49, 0.47), (0.76, 0.74, 0.70), (0.52, 0.50, 0.46), moss=0.95, moss_col=(0.33, 0.38, 0.17), jitter=1.5, hrange=(13, 21), wrange=(0.6, 1.5), depth=0.05, gap_px=2.2, tilt=0.03, detail=0.6, mortar_h=0.03),
     'brick_light': lambda: masonry('brick_light', 22, 30, 0, (0.44, 0.42, 0.40), (0.82, 0.80, 0.75), (0.62, 0.60, 0.55), moss=0.8, moss_col=(0.33, 0.38, 0.17), jitter=1.4, hrange=(12, 20), wrange=(0.6, 1.5), depth=0.05, gap_px=2.0, tilt=0.03, detail=0.3, mortar_h=0.03),
     # замки на закате: тот же грунт и кладка при низком оранжевом солнце
     'dirt_castle': lambda: (LIGHT.update(col=(1.0, 0.60, 0.31), elev=12, energy=5.5), dirt_stones('dirt_castle', 12, (0.42, 0.29, 0.19), (0.29, 0.19, 0.125), (0.40, 0.38, 0.35), (0.62, 0.60, 0.56), density=2.0), LIGHT.update(col=(1.0, 0.85, 0.66), elev=25, energy=5.0)),
@@ -1169,25 +1169,25 @@ LIB = {
     'dirt_canyon': lambda: dirt_stones('dirt_canyon', 102, (0.78, 0.56, 0.34), (0.62, 0.40, 0.22), (0.45, 0.30, 0.20), (0.80, 0.62, 0.44), density=1.2),
     'cave_canyon': lambda: rock_face('cave_canyon', 103, [(0.50, 0.30, 0.19), (0.58, 0.36, 0.23), (0.44, 0.26, 0.16)], layer=(30, 90), blocks=130, streak=0.2, cave=True),
     # ---- ледяной перевал: сланец с инеем на уступах
-    'rock_arctic': lambda: rock_face('rock_arctic', 111, [(0.46, 0.50, 0.56), (0.56, 0.60, 0.66), (0.38, 0.42, 0.48), (0.64, 0.67, 0.72)], layer=(20, 70), tilt=0.06, streak=0.15, cap=((0.93, 0.96, 1.0), 1.5), capk=1.4),
+    'rock_arctic': lambda: rock_face('rock_arctic', 111, [(0.18, 0.20, 0.24), (0.24, 0.26, 0.30), (0.15, 0.17, 0.21), (0.30, 0.32, 0.36)], layer=(20, 70), tilt=0.06, streak=0.1, cap=((0.94, 0.97, 1.0), 2.0), capk=2.4),
     'cave_arctic': lambda: rock_face('cave_arctic', 113, [(0.34, 0.38, 0.46), (0.40, 0.45, 0.53), (0.28, 0.32, 0.40)], layer=(30, 90), blocks=130, cave=True),
     # ---- вулкан: базальт, в трещинах светится лава
-    'rock_volcano': lambda: rock_face('rock_volcano', 121, [(0.36, 0.29, 0.25), (0.44, 0.35, 0.30), (0.30, 0.24, 0.21), (0.50, 0.40, 0.33)], joints=2.0, blocks=280, streak=0.1, glow=(1.0, 0.42, 0.07), gstr=8.0, dark_cracks=0.6),
+    'rock_volcano': lambda: rock_face('rock_volcano', 121, [(0.17, 0.14, 0.13), (0.21, 0.17, 0.15), (0.14, 0.12, 0.11), (0.25, 0.20, 0.17)], joints=2.2, blocks=280, streak=0.05, glow=(1.0, 0.45, 0.10), gstr=12.0, dark_cracks=0.75, cap=((0.95, 0.42, 0.12), 0.2), capk=0.35),
     'cave_volcano': lambda: rock_face('cave_volcano', 123, [(0.24, 0.20, 0.18), (0.30, 0.25, 0.22), (0.19, 0.16, 0.14)], layer=(30, 90), blocks=160, joints=1.5, glow=(1.0, 0.40, 0.06), gstr=5.0, cave=True),
     # ---- кристальная планета: фиолетовая порода, светящиеся голубые жилы
-    'rock_alien': lambda: rock_face('rock_alien', 131, [(0.34, 0.24, 0.50), (0.42, 0.30, 0.58), (0.28, 0.20, 0.42), (0.50, 0.38, 0.64)], streak=0.15, glow=(0.35, 0.95, 1.0), gstr=5.0, tilt=-0.05),
-    'dirt_alien': lambda: dirt_stones('dirt_alien', 132, (0.30, 0.20, 0.42), (0.18, 0.12, 0.28), (0.28, 0.20, 0.45), (0.56, 0.44, 0.78), density=1.5),
+    'rock_alien': lambda: rock_face('rock_alien', 131, [(0.22, 0.21, 0.21), (0.28, 0.27, 0.27), (0.18, 0.17, 0.18), (0.34, 0.32, 0.33)], streak=0.1, glow=(0.40, 0.95, 1.0), gstr=6.0, tilt=-0.05, cap=((0.30, 0.40, 0.18), 0.6), capk=0.8),
+    'dirt_alien': lambda: dirt_stones('dirt_alien', 132, (0.24, 0.22, 0.22), (0.15, 0.14, 0.14), (0.24, 0.22, 0.22), (0.48, 0.46, 0.46), density=2.0),
     'cave_alien': lambda: rock_face('cave_alien', 133, [(0.24, 0.17, 0.36), (0.30, 0.22, 0.44), (0.20, 0.14, 0.30)], layer=(30, 90), blocks=130, glow=(0.35, 0.9, 1.0), gstr=3.5, cave=True),
     'grass_alien': lambda: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)],
                                        [(1.0, 0.45, 0.95), (0.55, 0.95, 1.0)], glow=((0.35, 1.0, 0.90), 2.0)),
     # ---- пиратская бухта: доски корабля, тропическая земля и трава
-    'wood_ship': lambda: wood_planks('wood_ship', 141, 20, 170, (0.24, 0.13, 0.07), (0.56, 0.36, 0.20)),
+    'wood_ship': lambda: wood_planks('wood_ship', 141, 20, 170, (0.13, 0.09, 0.06), (0.36, 0.28, 0.20), weather=0.8),
     'wood_light': lambda: wood_planks('wood_light', 142, 17, 140, (0.46, 0.32, 0.20), (0.80, 0.63, 0.43), weather=0.5),
     'dirt_tropical': lambda: dirt_stones('dirt_tropical', 143, (0.56, 0.40, 0.26), (0.40, 0.27, 0.16), (0.40, 0.36, 0.30), (0.74, 0.70, 0.62), density=1.4),
     'grass_tropical': lambda: grass_strip('grass_tropical', 144, [(0.28, 0.52, 0.12), (0.40, 0.66, 0.16), (0.54, 0.78, 0.22), (0.66, 0.86, 0.30)],
                                           [(0.95, 0.30, 0.45), (1.0, 0.82, 0.25), (1.0, 0.55, 0.20), (1.0, 1.0, 1.0)]),
     'haystack1': lambda: haystack_sprite('haystack1', 91),
-    'facade_city': lambda: facade('facade_city', 161),
+    'facade_city': lambda: facade('facade_city', 161, wall=(0.30, 0.30, 0.30)),
     'alien_tree1': lambda: alien_mushroom('alien_tree1', 301), 'alien_tree2': lambda: alien_mushroom('alien_tree2', 302),
     # ---- сыпучие шапки поверхности: снег, песок, пепел
     'cap_snow': lambda: granular('cap_snow', 201, [(0.80, 0.86, 0.94), (0.90, 0.94, 0.99), (0.97, 0.98, 1.0)], amp=0.014, sparkle=1.0),

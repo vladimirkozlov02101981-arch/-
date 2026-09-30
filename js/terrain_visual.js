@@ -468,7 +468,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           texAt(S.tx.facade, x - prm.x0, y - prm.y0, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) { o.emit = true; o.ga = isBack ? 150 : 230; o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
-          else { r *= 1.45; g *= 1.45; bl *= 1.42; }                                                   // стены под ночным светом города
+          else { r *= 2.0; g *= 2.0; bl *= 1.95; }                                                   // стены под ночным светом города
         } else if (P.win && prm) {
           const lx = x - prm.x0, ly = y - prm.y0;
           const cw = 26, fh = 34, mx = 12, my = 16;

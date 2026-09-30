@@ -89,7 +89,7 @@ const THEMES = {
       strata: ['#4b3c39', '#5b4944', '#3e3130', '#655149', '#4e3e3a'], band: 26, bandSharp: 0.3,
       rock: ['#6a5244', '#7e6250', '#5a4438', '#8a6c56', '#725a4a'], rockDirt: true, rockBand: 48, backK: 1.5,
       pebbles: ['#6a5a54', '#7a6862', '#5a4a44'], smoothStones: true,
-      outline: '#0d0606', veins: { color: '#ff7a20', w: 0.026, glow: true, hot: true }, ceiling: 'stalactites', capMats: [1, 9], tex: { rock: 'rock_volcano', cave: 'cave_volcano', cap: 'cap_ash', gain: 1.1, glowTex: [255, 110, 30] },
+      outline: '#0d0606', veins: { color: '#ff7a20', w: 0.026, glow: true, hot: true }, ceiling: 'stalactites', capMats: [1, 9], tex: { rock: 'rock_volcano', cave: 'cave_volcano', cap: 'cap_ash', gain: 1.3, glowTex: [255, 110, 30] },
     },
     scatter: ['obsidian', 'lavarock', 'bones', 'obsidian', 'lavarock'],
     weather: 'embers', birds: false, ambient: '#a47a6c', ambientSound: 'lava', glow: true,

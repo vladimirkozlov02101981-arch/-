@@ -17,6 +17,7 @@ const UI = {
     $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
     for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai']) $(id).addEventListener('change', () => this.onSettingsChanged());
     $('o-turnTime').addEventListener('input', () => this.onSettingsChanged());
+    $('o-hp').addEventListener('input', () => this.onSettingsChanged());
     $('o-arsenal').addEventListener('change', () => { this.fillAmmo(makeAmmo($('o-arsenal').value)); this.onSettingsChanged(); });
     $('ammo-all').addEventListener('click', () => { const m = {}; for (const w of WEAPONS) m[w.id] = w.ammo; this.fillAmmo(m); this.onSettingsChanged(); });
     $('ammo-none').addEventListener('click', () => { this.fillAmmo({}); this.onSettingsChanged(); });
@@ -90,7 +91,7 @@ const UI = {
   setPeerStatus(ok, txt) { const s = $('peer-status'); s.textContent = txt || (ok ? '● друг подключился' : '○ ждём друга…'); s.classList.toggle('ok', !!ok); },
   readSettings() {
     const S = this.settings;
-    S.perTeam = +$('o-perTeam').value; S.hp = +$('o-hp').value; S.wind = $('o-wind').value === '1';
+    S.perTeam = +$('o-perTeam').value; { const hp = Math.round(+$('o-hp').value); if (Number.isFinite(hp) && hp >= 1) S.hp = Math.min(1000, hp); } S.wind = $('o-wind').value === '1';
     const tt = Math.round(+$('o-turnTime').value); if (Number.isFinite(tt) && tt >= 5) S.turnTime = Math.min(600, tt);
     S.crates = false; S.sd = 0; S.arsenal = $('o-arsenal').value; S.ai = $('o-ai').value;
     S.ammo = this.readAmmo();
