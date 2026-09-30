@@ -366,6 +366,103 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80):
     render(sc, name)
 
 
+# ---------------------------------------------------------------- деревья (спрайты с прозрачным фоном)
+def _cone(bm, p0, p1, r0, r1, seg=10):
+    """сужающийся цилиндр ветки от p0 до p1"""
+    d = (p1 - p0); L = d.length
+    q = d.normalized().to_track_quat('Z', 'Y')
+    ret = bmesh.ops.create_cone(bm, cap_ends=True, segments=seg, radius1=r0, radius2=r1, depth=L)
+    for v in ret['verts']:
+        v.co = q @ v.co + p0 + d / 2
+
+
+def _leaf_cluster(bm, col_layer, c, R, n, rng, shades, flat=0.75, size=0.06, needle=False):
+    """облако листьев: n маленьких листьев-четырёхугольников внутри эллипсоида радиуса R"""
+    for _ in range(n):
+        while True:
+            v = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))
+            if v.length <= 1: break
+        pos = c + Vector((v.x * R, v.y * R, v.z * R * flat))
+        ax = Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1))).normalized()
+        up = ax.cross(Vector((0.3, 0.2, 1))).normalized()
+        w = size * (0.25 if needle else 0.55) * rng.uniform(0.7, 1.2); h = size * rng.uniform(0.8, 1.3)
+        vs = [bm.verts.new(pos + ax * (sx * w) + up * (sy * h)) for sx, sy in ((-1, -1), (1, -1), (0.3, 1), (-0.3, 1))] if not needle else \
+             [bm.verts.new(pos + ax * (sx * w) + up * (sy * h)) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        f = bm.faces.new(vs)
+        col = rng.choice(shades); k = rng.uniform(0.8, 1.15)
+        for loop in f.loops: loop[col_layer] = (col[0] * k, col[1] * k, col[2] * k, 1)
+
+
+def _branches(bm, p, d, L, r, depth, rng, tips, spread=0.7, taper=0.62):
+    """рекурсивные ветви; концы веток собираются в tips (куда сажать листву)"""
+    end = p + d * L
+    _cone(bm, p, end, r, r * taper)
+    if depth == 0:
+        tips.append(end); return
+    for _ in range(rng.randint(2, 3)):
+        nd = (d + Vector((rng.uniform(-spread, spread), rng.uniform(-spread, spread), rng.uniform(-0.1, 0.5)))).normalized()
+        _branches(bm, end, nd, L * rng.uniform(0.6, 0.78), r * taper, depth - 1, rng, tips, spread, taper)
+    if depth >= 2 and rng.random() < 0.6: tips.append(end)
+
+
+def tree_sprite(name, seed, kind, px=320):
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    H = 4.0                                                    # высота кадра в метрах (дерево ~3.5 м)
+    cam = sc.camera; cam.data.ortho_scale = H
+    cam.location = (0, -10, H / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
+    bm = bmesh.new(); tips = []
+    bark_dark, bark_light = ((0.32, 0.25, 0.18), (0.55, 0.45, 0.34)) if kind != 'birch' else ((0.55, 0.53, 0.50), (0.93, 0.92, 0.88))
+    if kind == 'oak':
+        _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 1.35)), 0.2, 0.14, 14)
+        for _ in range(4):
+            d = Vector((rng.uniform(-0.9, 0.9), rng.uniform(-0.5, 0.5), rng.uniform(0.6, 1.0))).normalized()
+            _branches(bm, Vector((0, 0, rng.uniform(1.0, 1.35))), d, rng.uniform(0.55, 0.8), 0.1, 3, rng, tips, 0.75)
+        shades = [lin(c) for c in ((0.22, 0.36, 0.10), (0.33, 0.48, 0.14), (0.45, 0.58, 0.18), (0.56, 0.66, 0.24), (0.28, 0.40, 0.12))]
+        leaf = dict(R=0.42, n=520, size=0.07, flat=0.8)
+    elif kind == 'birch':
+        _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 2.6)), 0.09, 0.04, 12)
+        for i in range(7):
+            h = 1.2 + i * 0.22; d = Vector((rng.choice((-1, 1)) * rng.uniform(0.5, 0.9), rng.uniform(-0.4, 0.4), rng.uniform(0.5, 1.0))).normalized()
+            _branches(bm, Vector((0, 0, h)), d, rng.uniform(0.35, 0.55), 0.035, 2, rng, tips, 0.6)
+        shades = [lin(c) for c in ((0.35, 0.50, 0.16), (0.50, 0.64, 0.22), (0.62, 0.72, 0.30), (0.42, 0.56, 0.18))]
+        leaf = dict(R=0.26, n=300, size=0.05, flat=0.9)
+    else:  # pine
+        _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.5)), 0.12, 0.02, 12)
+        shades = [lin(c) for c in ((0.10, 0.22, 0.12), (0.15, 0.30, 0.16), (0.22, 0.38, 0.20), (0.12, 0.26, 0.13))]
+        leaf = dict(R=0.2, n=160, size=0.05, flat=0.35, needle=True)
+        for i in range(16):
+            h = 0.6 + i * 0.18; wdt = 1.1 * (1 - i / 17) + 0.15
+            for a in range(6):
+                ang = a / 6 * math.tau + rng.uniform(-0.3, 0.3)
+                d = Vector((math.cos(ang) * wdt, math.sin(ang) * wdt * 0.6, -0.12 * wdt))
+                _cone(bm, Vector((0, 0, h)), Vector((0, 0, h)) + d, 0.02, 0.006, 6)
+                for t in (0.45, 0.8):
+                    tips.append(Vector((0, 0, h)) + d * t + Vector((0, 0, 0.03)))
+    trunk = bpy.data.meshes.new('trunk'); bm.to_mesh(trunk); bm.free()
+    mb = mat_stone('bark', bark_dark, bark_light, rough=0.85, spec=0.2, scale=9 if kind != 'birch' else 3, bumpk=1.0)
+    trunk.materials.append(mb)
+    for p in trunk.polygons: p.use_smooth = True
+    ob = bpy.data.objects.new('trunk', trunk); ob['tone'] = 0.0; sc.collection.objects.link(ob)
+    # листва: одним мешем, цвет листа — в атрибуте углов
+    bm = bmesh.new(); cl = bm.loops.layers.float_color.new('Col')
+    for t in tips:
+        _leaf_cluster(bm, cl, t, leaf['R'] * rng.uniform(0.8, 1.25), leaf['n'], rng, shades, leaf['flat'], leaf['size'], leaf.get('needle', False))
+    lm = bpy.data.meshes.new('leaves'); bm.to_mesh(lm); bm.free()
+    m, nt, b = principled('leaf', 0.55, 0.35)
+    at = nt.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'Col'
+    nt.links.new(at.outputs['Color'], b.inputs['Base Color'])
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.25; break
+    for key in ('Transmission Weight', 'Transmission'):
+        if key in b.inputs: b.inputs[key].default_value = 0.15; break
+    lm.materials.append(m)
+    lo = bpy.data.objects.new('leaves', lm); sc.collection.objects.link(lo)
+    # тень от кроны на землю не нужна (прозрачный фон) — только свет
+    render(sc, name)
+
+
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {
     # долина и замки: тёмная бурая земля (как в эталоне), серо-бурые обкатанные камни
@@ -378,6 +475,10 @@ LIB = {
     # трава долины: от тёмной у корней до жёлто-зелёной на солнце, полевые цветы
     'grass_valley': lambda: grass_strip('grass_valley', 41, [(0.30, 0.42, 0.12), (0.42, 0.56, 0.16), (0.55, 0.66, 0.22), (0.68, 0.76, 0.30), (0.50, 0.58, 0.20)],
                                         [(0.85, 0.15, 0.12), (0.95, 0.80, 0.18), (0.95, 0.94, 0.88), (0.35, 0.45, 0.95), (0.95, 0.45, 0.65)]),
+    # деревья-спрайты: 3 дуба, 2 сосны, берёза
+    'tree_oak1': lambda: tree_sprite('tree_oak1', 51, 'oak'), 'tree_oak2': lambda: tree_sprite('tree_oak2', 52, 'oak'), 'tree_oak3': lambda: tree_sprite('tree_oak3', 53, 'oak'),
+    'tree_pine1': lambda: tree_sprite('tree_pine1', 61, 'pine'), 'tree_pine2': lambda: tree_sprite('tree_pine2', 62, 'pine'),
+    'tree_birch1': lambda: tree_sprite('tree_birch1', 71, 'birch'),
 }
 
 if __name__ == '__main__':

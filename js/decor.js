@@ -58,9 +58,20 @@ function foliage(c, blobs, pal) {
 function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 
+/** дерево-спрайт из Blender (прозрачный фон, основание ствола — низ кадра). Нет файла — false, рисуем процедурно */
+function treeSprite(c, names, x, y, s, r, size) {
+  const have = names.filter((n) => TexLib.data[n]); if (!have.length) return false;
+  const T = TexLib.data[have[(r() * have.length) | 0]], D = size * s * r.range(0.9, 1.1);
+  c.fillStyle = 'rgba(0,0,0,0.28)'; c.beginPath(); c.ellipse(x + D * 0.06, y + 2, D * 0.26, D * 0.035, 0, 0, TAU); c.fill();   // тень кроны на земле
+  c.save(); c.translate(x, y + 3); if (r() < 0.5) c.scale(-1, 1);
+  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(T.canvas, -D / 2, -D, D, D); c.restore();
+  return true;
+}
+
 const DECOR = {
   /* ---------- деревья ---------- */
   oak(c, g, x, y, s, r) {
+    if (treeSprite(c, ['tree_oak1', 'tree_oak2', 'tree_oak3'], x, y, s, r, 165)) return;
     const h = r.range(58, 76) * s, tw = r.range(7, 9.5) * s, lean = r.range(-0.1, 0.1);
     const tx = x + lean * h, ty = y - h;
     c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(x + 10 * s, y + 2, 34 * s, 5 * s, 0, 0, TAU); c.fill();   // тень кроны на земле
@@ -86,6 +97,7 @@ const DECOR = {
     foliage(c, blobs, DECOR_THEME === 'castle' ? r.pick(CASTLE_PALS) : r.pick(OAK_PALS));
   },
   birch(c, g, x, y, s, r) {
+    if (treeSprite(c, ['tree_birch1'], x, y, s, r, 150)) return;
     const h = r.range(80, 100) * s, tw = 5 * s;
     c.fillStyle = hgrad(c, x - tw, x + tw, ['#ffffff', '#e8e6de', '#b8b4a8']);
     c.beginPath(); c.moveTo(x - tw, y + 4); c.lineTo(x - tw * 0.5, y - h); c.lineTo(x + tw * 0.5, y - h); c.lineTo(x + tw, y + 4); c.closePath(); c.fill();
@@ -95,6 +107,7 @@ const DECOR = {
     foliage(c, blobs, ['#1f3f1c', '#3f7a2e', '#86b84a', '#d6ec80']);
   },
   pine(c, g, x, y, s, r, snowy = false) {
+    if (!snowy && treeSprite(c, ['tree_pine1', 'tree_pine2'], x, y, s, r, 175)) return;
     const h = r.range(78, 108) * s, w = h * r.range(0.3, 0.36);
     c.fillStyle = hgrad(c, x - 3 * s, x + 3 * s, ['#6b4a30', '#4a3020', '#2a1a10']); c.fillRect(x - 3 * s, y - h * 0.24, 6 * s, h * 0.24 + 5);
     const tiers = 6, cols = snowy ? ['#4f8a7c', '#2f5e54', '#173a32'] : ['#5aa85a', '#2f7440', '#123a22'];
