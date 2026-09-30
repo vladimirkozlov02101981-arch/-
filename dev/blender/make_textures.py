@@ -1049,7 +1049,7 @@ def haystack_sprite(name, seed, px=200):
     render(sc, name)
 
 
-def alien_mushroom(name, seed, px=280):
+def alien_mushroom(name, seed, px=560):
     """инопланетное грибное дерево сбоку: изогнутая мясистая ножка, шляпка с чешуйками и подсвеченной изнутри
     мякотью (подповерхностное рассеяние), светящиеся пятна и нити-щупальца с огоньками"""
     sc = reset(); rng = random.Random(seed)
@@ -1071,6 +1071,24 @@ def alien_mushroom(name, seed, px=280):
         nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 40; nz.inputs['Detail'].default_value = 8
         bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.35
         nt.links.new(nz.outputs['Fac'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], b.inputs['Normal'])
+        # пятнистость и прожилки: цвет смешивается с тёмным и светлым вариантом по шуму и по «волокнам»
+        N = nt.nodes; Lk = nt.links
+        tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (1, 1, 8)
+        Lk.new(tc.outputs['Object'], mp.inputs['Vector'])
+        vn = N.new('ShaderNodeTexNoise'); vn.inputs['Scale'].default_value = 6; vn.inputs['Detail'].default_value = 10
+        Lk.new(mp.outputs['Vector'], vn.inputs['Vector'])
+        ramp = N.new('ShaderNodeValToRGB')
+        ramp.color_ramp.elements[0].position = 0.3; ramp.color_ramp.elements[0].color = (*lin(tuple(c * 0.45 for c in col)), 1)
+        ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (*lin(tuple(min(1, c * 1.25) for c in col)), 1)
+        Lk.new(vn.outputs['Fac'], ramp.inputs['Fac'])
+        geo = N.new('ShaderNodeNewGeometry'); sep = N.new('ShaderNodeSeparateXYZ'); Lk.new(geo.outputs['Normal'], sep.inputs[0])
+        mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.6; mr.inputs['From Max'].default_value = 0.1
+        mr.inputs['To Min'].default_value = 0.25; mr.inputs['To Max'].default_value = 1.0; Lk.new(sep.outputs['Z'], mr.inputs['Value'])
+        mx = N.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; sock(mx.inputs, 'Factor_Float').default_value = 1
+        Lk.new(ramp.outputs['Color'], sock(mx.inputs, 'A_Color'))
+        cmb = N.new('ShaderNodeCombineXYZ'); [Lk.new(mr.outputs['Result'], cmb.inputs[i]) for i in range(3)]
+        Lk.new(cmb.outputs[0], sock(mx.inputs, 'B_Color'))                  # нижняя сторона (пластинки) темнее
+        Lk.new(sock(mx.outputs, 'Result_Color'), b.inputs['Base Color'])
         return m
     # ножка: изогнутая, сужается кверху, с кольцами
     bm = bmesh.new(); bend = rng.uniform(-0.25, 0.25); hgt = rng.uniform(1.5, 1.8)
