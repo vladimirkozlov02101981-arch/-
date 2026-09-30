@@ -35,9 +35,17 @@ class FX {
       case 'boom': this.explosion(ev.x, ev.y, ev.r, ev.k, sc); if (ev.w > ev.r * 2.7) P.ring(ev.x, ev.y, ev.r, ev.w, 0.55, 'rgba(255,230,190,0.55)', 1.5); break;
       case 'frags':
         // осколки: короткие раскалённые трассы и искры там, где осколок ударился
-        for (const [x2, y2] of ev.e || []) {
-          const f = 0.35 + Math.random() * 0.4; this.traces.push({ x1: ev.x + (x2 - ev.x) * f * 0.5, y1: ev.y + (y2 - ev.y) * f * 0.5, x2: ev.x + (x2 - ev.x) * f, y2: ev.y + (y2 - ev.y) * f, k: 3, life: 0.12, max: 0.12 });
-          if (Math.random() < 0.5) P.spark(x2, y2, rand(-60, 60), rand(-90, -10), 0.25, '#ffd08a');
+        // у каждого осколка — ломаная траектория: рикошеты, пробитие преград; искры и пыль там, где он ударил или застрял
+        for (const e of ev.e || []) {
+          const path = Array.isArray(e[0]) ? e : [[ev.x, ev.y], e];
+          for (let k = 1; k < path.length; k++) {
+            const [x1, y1] = path[k - 1], [x2, y2] = path[k];
+            const f = k === 1 ? 0.35 + Math.random() * 0.4 : 1;
+            this.traces.push({ x1: x1 + (x2 - x1) * (k === 1 ? f * 0.5 : 0), y1: y1 + (y2 - y1) * (k === 1 ? f * 0.5 : 0), x2: x1 + (x2 - x1) * f, y2: y1 + (y2 - y1) * f, k: 3, life: 0.12 + k * 0.03, max: 0.12 + k * 0.03 });
+            if (k < path.length - 1 && Math.random() < 0.7) P.spark(x2, y2, rand(-80, 80), rand(-110, -10), 0.3, '#ffe0a0');   // рикошет / пробитие
+          }
+          const [xe, ye] = path[path.length - 1];
+          if (Math.random() < 0.5) P.spark(xe, ye, rand(-60, 60), rand(-90, -10), 0.25, '#ffd08a');
         }
         break;
       case 'nuke': this.nukeFx(ev.x, ev.y, sc); break;

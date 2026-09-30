@@ -348,7 +348,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   } else if (mt === 12 && (S.tx.rock || S.tx.dirt || S.tx.cave)) {
     // задняя стена: та же порода, что и скала вокруг (в скальных картах), иначе — плиты пещеры
     if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); const k = 1.05 * S.texGain; r = o.r * k; g = o.g * k; bl = o.b * k; o.ga = 0; }
-    else if (S.tx.dirt) { texAt(S.tx.dirt, x + 257, y + 131, o); r = o.r * 0.58; g = o.g * 0.56; bl = o.b * 0.62; }   // земляная пещера: стена из того же грунта с камнями
+    else if (S.tx.dirt) { texAt(S.tx.dirt, x + 257, y + 131, o); r = o.r * 0.7; g = o.g * 0.68; bl = o.b * 0.72; }   // земляная пещера: стена из того же грунта с камнями
     else { texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; }
     o.tex = true;
   } else if (mt === 12) {
@@ -468,7 +468,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           texAt(S.tx.facade, x - prm.x0, y - prm.y0, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) { o.emit = true; o.ga = isBack ? 150 : 230; o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
-          else { r *= 1.7; g *= 1.7; bl *= 1.75; }                                                   // стены под ночным светом города
+          else { r *= 1.45; g *= 1.45; bl *= 1.42; }                                                   // стены под ночным светом города
         } else if (P.win && prm) {
           const lx = x - prm.x0, ly = y - prm.y0;
           const cw = 26, fh = 34, mx = 12, my = 16;

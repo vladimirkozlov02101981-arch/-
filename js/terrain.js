@@ -127,9 +127,25 @@ class Terrain {
     for (let y = 0; y < h; y++) { const row = (y0 + y) * W + x0; for (let x = 0; x < w; x++) if (!m[row + x]) { const dx = x0 + x - cx, dy = y0 + y - cy; if (dx * dx + dy * dy <= (r + 1.5) * (r + 1.5)) d[(y * w + x) * 4 + 3] = 0; } }
     ctx.putImageData(img, x0, y0);
   }
+  /** воронка с учётом прочности: каждый пиксель выбивается, только если он ближе к центру, чем позволяет его материал.
+      Земля и дерево вылетают широко, камень и кирпич — меньше, бетон и металл держатся; край рваный (детерминированный шум — одинаково у всех игроков) */
+  maskBlast(cx, cy, r) {
+    const W = this.W, H = this.H, m = this.mask, mt = this.materials;
+    const K = [1, 1.12, 0.78, 0.74, 1.15, 0.62, 0.42, 0.9, 0.72, 0.7];
+    const y0 = Math.max(0, cy - r), y1 = Math.min(H - 1, cy + r), x0 = Math.max(0, cx - r), x1 = Math.min(W - 1, cx + r);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const i = y * W + x; if (!m[i]) continue;
+      const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy; if (d2 > r * r) continue;
+      const k = mt ? K[mt[i] || 1] || 1 : 1;
+      if (k >= 1) { m[i] = 0; continue; }
+      let h = (Math.imul(x >> 2, 73856093) ^ Math.imul(y >> 2, 19349663)) >>> 0; h = ((h ^ (h >>> 13)) * 1274126177) >>> 0;
+      const lim = r * (k * (0.88 + 0.24 * ((h & 1023) / 1023)));
+      if (d2 <= lim * lim) m[i] = 0;
+    }
+  }
   carve(cx, cy, r, scorch = true) {
     cx = Math.round(cx); cy = Math.round(cy); r = Math.round(r); if (r <= 0) return;
-    this.maskCircle(cx, cy, r);
+    this.maskBlast(cx, cy, r);
     const c = this.ctx; c.save();
     // воронка вырезается целиком (без полупрозрачной каймы): маска и картинка совпадают пиксель в пиксель
     this.clearMasked(c, cx, cy, r + 1);

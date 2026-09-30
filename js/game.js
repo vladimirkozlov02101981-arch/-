@@ -89,7 +89,7 @@ class Game {
       }
     }
     const material = this.terrain.materialAt(x,y) || this.terrain.materialAt(x,y+3);
-    const craterScale = {2:.75,3:.7,4:1.1,5:.6,6:.4,7:.85,8:.7,9:.65}[material] || 1;
+    const craterScale = 1;   // прочность учитывается попиксельно в terrain.carve
     this.carve(x, y, Math.max(3,R*craterScale), true);
     // радиус поражения: ударная волна дотягивается до места, где падают осколки
     const FR = o.frag && FRAGS[o.frag], RD = Math.max((R + 12) * 1.6, FR ? FR.L : 0);
@@ -124,22 +124,53 @@ class Game {
   }
   /** осколки: лучи во все стороны, останавливаются о камень; попавший осколок ранит тем слабее, чем дальше пролетел.
       Урон от всех осколков по бойцу суммируется — чем ближе к взрыву, тем больше осколков в него попадает */
+  /** осколки: у каждого своя энергия. В воздухе она падает с дистанцией; в преграде тормозит по плотности материала
+      (земля и дерево пробиваются, металл и бетон почти сразу останавливают); от твёрдых поверхностей под острым углом —
+      рикошет; в мягком материале осколок сбивается с курса. Урон — по оставшейся энергии и по той части тела, куда попал */
   fragments(x, y, F, owner) {
-    const hits = new Map(), ends = [];
+    const hits = new Map(), ends = [], T = this.terrain;
+    // потеря энергии на 3 px пути в материале и шанс рикошета: 1 земля, 2 скала, 3 кирпич, 4 дерево, 5 бетон, 6 металл, 7 лёд, 8 кристалл, 9 базальт
+    const ABS = [0, 0.08, 0.2, 0.18, 0.04, 0.28, 0.6, 0.1, 0.15, 0.22], RIC = [0, 0.05, 0.35, 0.25, 0.04, 0.4, 0.7, 0.3, 0.45, 0.35];
     for (let i = 0; i < F.n; i++) {
-      const a = (i + Math.random()) / F.n * TAU, cx = Math.cos(a), cy = Math.sin(a), L = F.L * (0.75 + Math.random() * 0.5);
-      let ex = x + cx * L, ey = y + cy * L, done = false;
-      for (let t = 2; t <= L && !done; t += 3) {
-        const px = x + cx * t, py = y + cy * t;
-        if (px < 0 || px >= this.W || py < 0 || py >= this.H || (t > 6 && this.terrain.isSolid(px, py))) { ex = px; ey = py; break; }
+      const a = (i + Math.random()) / F.n * TAU; let cx = Math.cos(a), cy = Math.sin(a);
+      const L = F.L * (0.75 + Math.random() * 0.5);
+      let px = x, py = y, e = 1, t = 0, inside = false, bounces = 0; const path = [[Math.round(x), Math.round(y)]]; const hitSet = new Set();
+      while (e > 0.04 && t < L * 1.6) {
+        px += cx * 3; py += cy * 3; t += 3;
+        cy += 0.004;                                                      // осколок проседает под своим весом
+        e -= 3 / L * 0.9;                                                  // сопротивление воздуха
+        if (px < 0 || px >= this.W || py < 0 || py >= this.H) break;
+        const solid = t > 6 && T.isSolid(px, py);
+        if (solid) {
+          const m = T.materialAt(px, py) || 2;
+          if (!inside) {
+            // вход в преграду: у твёрдой поверхности под острым углом — рикошет
+            const nx = (T.isSolid(px - 3, py) ? 1 : 0) - (T.isSolid(px + 3, py) ? 1 : 0), ny = (T.isSolid(px, py - 3) ? 1 : 0) - (T.isSolid(px, py + 3) ? 1 : 0);
+            const nl = Math.hypot(nx, ny);
+            if (nl > 0 && bounces < 2) {
+              const ux = nx / nl, uy = ny / nl, dot = cx * ux + cy * uy;   // нормаль смотрит из материала наружу
+              if (dot < 0 && -dot < 0.55 && Math.random() < RIC[m] * 1.6) {
+                cx -= 2 * dot * ux; cy -= 2 * dot * uy; const cl = Math.hypot(cx, cy); cx /= cl; cy /= cl;
+                px += cx * 3; py += cy * 3; e *= 0.55; bounces++; path.push([Math.round(px), Math.round(py)]); continue;
+              }
+            }
+            inside = true; path.push([Math.round(px), Math.round(py)]);
+          }
+          e -= ABS[m];
+          if (ABS[m] < 0.25) { const d = (Math.random() - 0.5) * 0.25; const c0 = cx; cx = cx * Math.cos(d) - cy * Math.sin(d); cy = c0 * Math.sin(d) + cy * Math.cos(d); }   // в мягком материале уводит в сторону
+          continue;
+        }
+        if (inside) { inside = false; path.push([Math.round(px), Math.round(py)]); }   // пробил насквозь — летит дальше ослабленным
         for (const s of this.soldiers) {
-          if (!s.alive || s.gone || px < s.x - 7 || px > s.x + 7 || py < s.y - 36 || py > s.y + 1) continue;
-          const dmg = F.d * (1 - t / L);
-          const h = hits.get(s) || { d: 0, vx: 0, vy: 0, parts: [0, 0, 0, 0, 0, 0] }; h.d += dmg; h.vx += cx * 14; h.vy += cy * 14; h.parts[s.partAt(px, py)] += dmg; hits.set(s, h);
-          ex = px; ey = py; done = true; break;
+          if (!s.alive || s.gone || hitSet.has(s) || px < s.x - 7 || px > s.x + 7 || py < s.y - 36 || py > s.y + 1) continue;
+          const dmg = F.d * e * 1.15;
+          const h = hits.get(s) || { d: 0, vx: 0, vy: 0, parts: [0, 0, 0, 0, 0, 0] }; h.d += dmg; h.vx += cx * 16 * e; h.vy += cy * 16 * e; h.parts[s.partAt(px, py)] += dmg; hits.set(s, h);
+          hitSet.add(s); e *= 0.25;                                        // застрял в теле или прошёл навылет сильно ослабленным
+          break;
         }
       }
-      ends.push([Math.round(ex), Math.round(ey)]);
+      path.push([Math.round(px), Math.round(py)]);
+      ends.push(path.length > 2 ? path : path[path.length - 1]);
     }
     this.emit({ t: 'frags', x: R1(x), y: R1(y), e: ends });
     for (const [s, h] of hits) {
