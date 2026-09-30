@@ -107,7 +107,7 @@ const DECOR = {
     foliage(c, blobs, ['#1f3f1c', '#3f7a2e', '#86b84a', '#d6ec80']);
   },
   pine(c, g, x, y, s, r, snowy = false) {
-    if (!snowy && treeSprite(c, ['tree_pine1', 'tree_pine2'], x, y, s, r, 175)) return;
+    if (treeSprite(c, snowy ? ['tree_pine_snow1', 'tree_pine_snow2'] : ['tree_pine1', 'tree_pine2'], x, y, s, r, 175)) return;
     const h = r.range(78, 108) * s, w = h * r.range(0.3, 0.36);
     c.fillStyle = hgrad(c, x - 3 * s, x + 3 * s, ['#6b4a30', '#4a3020', '#2a1a10']); c.fillRect(x - 3 * s, y - h * 0.24, 6 * s, h * 0.24 + 5);
     const tiers = 6, cols = snowy ? ['#4f8a7c', '#2f5e54', '#173a32'] : ['#5aa85a', '#2f7440', '#123a22'];
@@ -391,7 +391,7 @@ const DECOR = {
   },
   /* ---------- чужая планета ---------- */
   alientree(c, g, x, y, s, r) {
-    if (treeSprite(c, ['alien_tree1', 'alien_tree2'], x, y, s, r, 150)) { if (g) { g.fillStyle = 'rgba(255,120,230,0.25)'; circ(g, x, y - 95 * s, 38 * s); } return; }   // гриб из Blender
+    if (treeSprite(c, ['alien_tree1', 'alien_tree2'], x, y, s, r, 150)) return;   // гриб из Blender
     const h = r.range(70, 90) * s; const bend = r.range(-12, 12) * s;
     c.strokeStyle = hgrad(c, x - 8 * s, x + 8 * s, ['#b28ae0', '#6a3fa0', '#3a1f66']); c.lineWidth = 9 * s; c.lineCap = 'round';
     c.beginPath(); c.moveTo(x, y + 4); c.quadraticCurveTo(x + bend * 2, y - h * 0.5, x + bend, y - h); c.stroke();

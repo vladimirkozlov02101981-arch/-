@@ -959,7 +959,7 @@ def tree_sprite(name, seed, kind, px=320):
         dome(0, 0.45, 0.7, 0.42, 26, top, 0.03)
         shades = [lin(c) for c in ((0.22, 0.32, 0.10), (0.30, 0.42, 0.13), (0.40, 0.52, 0.16), (0.50, 0.60, 0.21), (0.28, 0.38, 0.12))]
         leaf = dict(R=0.18, n=220, size=0.035, flat=0.85)
-    else:  # pine
+    else:  # pine (pine_snow — та же ель со снегом на ярусах)
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.6)), 0.12, 0.02, 12)
         shades = [lin(c) for c in ((0.15, 0.27, 0.15), (0.21, 0.35, 0.19), (0.30, 0.44, 0.24), (0.40, 0.50, 0.28), (0.18, 0.30, 0.17))]
         leaf = dict(R=0.15, n=110, size=0.05, flat=0.4, needle=True)
@@ -990,6 +990,19 @@ def tree_sprite(name, seed, kind, px=320):
         if key in b.inputs: b.inputs[key].default_value = 0.15; break
     lm.materials.append(m)
     lo = bpy.data.objects.new('leaves', lm); sc.collection.objects.link(lo)
+    if kind == 'pine_snow':                                        # снег лежит сверху на каждой лапе
+        bm = bmesh.new()
+        import mathutils
+        for t in tips:
+            if rng.random() < 0.8:
+                m_ = mathutils.Matrix.Translation(t + Vector((0, 0, 0.05))) @ mathutils.Matrix.Diagonal((rng.uniform(0.13, 0.2), 0.12, rng.uniform(0.035, 0.05), 1))
+                bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=1, matrix=m_)
+        snm = bpy.data.meshes.new('snow'); bm.to_mesh(snm); bm.free()
+        for pl in snm.polygons: pl.use_smooth = True
+        ms, nts, bs = principled('snow', 0.5, 0.4); bs.inputs['Base Color'].default_value = (0.92, 0.95, 1.0, 1)
+        for key in ('Subsurface Weight', 'Subsurface'):
+            if key in bs.inputs: bs.inputs[key].default_value = 0.4; break
+        snm.materials.append(ms); sno = bpy.data.objects.new('snow', snm); sc.collection.objects.link(sno)
     # тень от кроны на землю не нужна (прозрачный фон) — только свет
     render(sc, name)
 
@@ -1131,6 +1144,7 @@ LIB = {
     'tree_oak1': lambda: tree_sprite('tree_oak1', 51, 'oak'), 'tree_oak2': lambda: tree_sprite('tree_oak2', 52, 'oak'), 'tree_oak3': lambda: tree_sprite('tree_oak3', 53, 'oak'),
     'tree_pine1': lambda: tree_sprite('tree_pine1', 61, 'pine'), 'tree_pine2': lambda: tree_sprite('tree_pine2', 62, 'pine'),
     'tree_birch1': lambda: tree_sprite('tree_birch1', 71, 'birch'),
+    'tree_pine_snow1': lambda: tree_sprite('tree_pine_snow1', 63, 'pine_snow'), 'tree_pine_snow2': lambda: tree_sprite('tree_pine_snow2', 64, 'pine_snow'),
     'bush1': lambda: tree_sprite('bush1', 81, 'bush', px=160), 'bush2': lambda: tree_sprite('bush2', 82, 'bush', px=160),
     # ---- каньон: пласты песчаника, песчаная земля, пещеры
     'rock_canyon': lambda: rock_face('rock_canyon', 101, [(0.74, 0.42, 0.26), (0.82, 0.52, 0.32), (0.66, 0.36, 0.22), (0.88, 0.62, 0.42), (0.58, 0.32, 0.20)], streak=0.3, cap=((0.86, 0.66, 0.44), 0.5), capk=0.6),
