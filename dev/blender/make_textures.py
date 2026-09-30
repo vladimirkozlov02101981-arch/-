@@ -824,7 +824,7 @@ def tree_sprite(name, seed, kind, px=320):
         """крона-купол: n облаков листвы на поверхности и внутри эллипсоида, к каждому — ветка от ствола"""
         for i in range(n):
             u = rng.uniform(-1, 1); a = rng.uniform(0, math.tau)
-            ry = rng.uniform(0.35, 0.95)
+            ry = rng.uniform(0.55, 1.0) ** 0.5
             p = Vector((cx + math.cos(a) * rx * math.sqrt(1 - u * u) * ry, math.sin(a) * rx * 0.45 * ry, cz + u * rz * (0.7 if u < 0 else 1.0)))
             tips.append(p)
             if i % 2 == 0:
@@ -834,9 +834,9 @@ def tree_sprite(name, seed, kind, px=320):
         _cone(bm, Vector((0, 0, -0.1)), top, 0.22, 0.15, 14)
         for sgn in (-1, 1):                                      # развилка: две толстые ветви
             _cone(bm, top - Vector((0, 0, 0.15)), top + Vector((sgn * 0.55, rng.uniform(-0.1, 0.1), 0.6)), 0.12, 0.07, 10)
-        dome(0, 2.15, 1.35, 0.95, 46, top, 0.06)
-        shades = [lin(c) for c in ((0.30, 0.44, 0.12), (0.40, 0.56, 0.16), (0.52, 0.66, 0.20), (0.64, 0.74, 0.26), (0.34, 0.48, 0.13), (0.72, 0.78, 0.34))]
-        leaf = dict(R=0.36, n=460, size=0.055, flat=0.85)
+        dome(0, 2.15, 1.4, 0.95, 78, top, 0.05)
+        shades = [lin(c) for c in ((0.23, 0.33, 0.10), (0.31, 0.43, 0.13), (0.40, 0.52, 0.16), (0.50, 0.61, 0.21), (0.36, 0.45, 0.14), (0.62, 0.68, 0.28))]
+        leaf = dict(R=0.26, n=330, size=0.05, flat=0.8)
     elif kind == 'birch':
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.2)), 0.1, 0.035, 12)
         for i in range(26):
@@ -849,8 +849,8 @@ def tree_sprite(name, seed, kind, px=320):
         H = 1.6; cam.data.ortho_scale = H; cam.location = (0, -10, H / 2 - 0.05)
         top = Vector((0, 0, 0.05))
         dome(0, 0.45, 0.7, 0.42, 26, top, 0.03)
-        shades = [lin(c) for c in ((0.24, 0.38, 0.10), (0.34, 0.50, 0.14), (0.46, 0.62, 0.18), (0.58, 0.70, 0.24), (0.30, 0.44, 0.12))]
-        leaf = dict(R=0.22, n=260, size=0.04, flat=0.85)
+        shades = [lin(c) for c in ((0.22, 0.32, 0.10), (0.30, 0.42, 0.13), (0.40, 0.52, 0.16), (0.50, 0.60, 0.21), (0.28, 0.38, 0.12))]
+        leaf = dict(R=0.18, n=220, size=0.035, flat=0.85)
     else:  # pine
         _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, 3.6)), 0.12, 0.02, 12)
         shades = [lin(c) for c in ((0.12, 0.26, 0.14), (0.18, 0.34, 0.18), (0.26, 0.44, 0.22), (0.14, 0.30, 0.15))]
