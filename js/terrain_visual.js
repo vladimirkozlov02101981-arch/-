@@ -745,7 +745,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
   const beachY = G.cap.beach ? waterY - G.cap.beach.range : 1e9;
   const flatTop = (x, y) => T.isSolid(x - 2, y + 3) && T.isSolid(x + 2, y + 3);
   const matAt = (x, y) => mat[y * W + x];
-  if (G.cap.blades) {
+  const grassTex = G.tex && G.tex.grass && TexLib.data[G.tex.grass];
+  if (grassTex) {
+    // фотореалистичная трава из Blender: столбик полосы на каждый пиксель поверхности, корни уходят в землю
+    const gh = grassTex.h, gw = grassTex.w, img = grassTex.canvas;
+    for (let k = 0; k < tops.length; k += 2) {
+      const x = tops[k], y = tops[k + 1];
+      if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1) continue;
+      c.drawImage(img, ((x % gw) + gw) % gw, 0, 1, gh, x, y + 7 - gh, 1, gh);
+    }
+  }
+  if (G.cap.blades && !grassTex) {
     // пучки травы: три слоя (тёмный задний, средний, светлый передний), лезвия — сужающиеся листья
     const cols = G.cap.blades; const layers = [new Path2D(), new Path2D(), new Path2D()];
     for (let k = 0; k < tops.length; k += 2) {
@@ -801,6 +811,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       c.fillStyle = '#6a3a10'; c.beginPath(); c.arc(x, y - h, 1.3 * sc, 0, TAU); c.fill();
       c.fillStyle = '#ffd84a'; c.beginPath(); c.arc(x - 0.3, y - h - 0.3, 0.9 * sc, 0, TAU); c.fill();
     };
+    if (!grassTex)
     // россыпь мелких полевых цветов по всей траве: цветные точки-головки на коротких стеблях
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
