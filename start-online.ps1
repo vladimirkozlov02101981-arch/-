@@ -3,15 +3,24 @@ Set-Location -LiteralPath $PSScriptRoot
 try {
     & (Join-Path $PSScriptRoot 'start-game.ps1') -NoBrowser
     $sessionPath = Join-Path $PSScriptRoot 'dev/tunnel-session.json'
-    if (Test-Path -LiteralPath $sessionPath) {
-        try {
-            $previous = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            if ($previous.url -match '^https://[a-z0-9]+\.lhr\.life$') {
-                $health = Invoke-RestMethod -Uri ($previous.url + '/health') -TimeoutSec 5
-                if ($health.ok -and $health.transport -eq 'relay') { Start-Process $previous.url; exit 0 }
-            }
-        } catch { }
+    # хост играет с локального сервера (мгновенно), другу уходит публичная ссылка туннеля; адрес бесплатного туннеля
+    # иногда меняется — сервер (/public) всегда знает последний, его же показывает «Ссылка другу» в комнате
+    function Show-Link($url) {
+        try { Set-Clipboard -Value $url } catch { }
+        Write-Host ''
+        Write-Host ('Ссылка для друга (уже скопирована): ' + $url) -ForegroundColor Green
+        Write-Host 'Друг открывает её в браузере (первая загрузка через бесплатный туннель медленная)'
+        Write-Host 'или вставляет в свой файл Territory-War.html: «По сети» -> поле «Ссылка от друга».'
+        Write-Host 'В игре: «По сети» -> «Создать комнату» -> «Ссылка другу». Не закрывайте ПК, пока играете.'
+        Start-Process 'http://localhost:3000'
     }
+    try {
+        $current = (Invoke-RestMethod -Uri 'http://127.0.0.1:3000/public' -TimeoutSec 3).url
+        if ($current -match '^https://[a-z0-9]+\.lhr\.life$') {
+            $health = Invoke-RestMethod -Uri ($current + '/health') -TimeoutSec 8
+            if ($health.ok -and $health.transport -eq 'relay') { Show-Link $current; Start-Sleep -Seconds 8; exit 0 }
+        }
+    } catch { }
     $sshCommand = Get-Command ssh -ErrorAction Stop
     $outputPath = Join-Path $PSScriptRoot 'dev/tunnel-ssh-out.txt'
     $errorPath = Join-Path $PSScriptRoot 'dev/tunnel-ssh-error.txt'
@@ -25,8 +34,8 @@ try {
             if ($tunnelText -match 'https://[a-z0-9]+\.lhr\.life') {
                 $gameUrl = $Matches[0]
                 @{ url=$gameUrl; pid=$tunnelProcess.Id; created=(Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -LiteralPath $sessionPath
-                Write-Host $gameUrl
-                Start-Process $gameUrl
+                Show-Link $gameUrl
+                Start-Sleep -Seconds 8
                 exit 0
             }
         }

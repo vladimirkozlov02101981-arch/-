@@ -15,6 +15,8 @@ const UI = {
     $('dialog-ok').addEventListener('click', () => { $('dialog').classList.add('hidden'); if (this.dialogCb) { const f = this.dialogCb; this.dialogCb = null; f(); } });
     $('join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') this.act('join'); });
     $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+    // вставили в поле кода всю ссылку-приглашение — берём из неё код (а для файла игры и сервер)
+    $('join-code').addEventListener('paste', (e) => { const t = (e.clipboardData || window.clipboardData).getData('text') || ''; if (!/#join=/.test(t)) return; e.preventDefault(); const c = Net.useLink(t); if (c) e.target.value = c; if (Net.fromFile()) $('srv-link').value = t.trim(); });
     for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai', 'o-side']) $(id).addEventListener('change', () => this.onSettingsChanged());
     $('o-turnTime').addEventListener('input', () => this.onSettingsChanged());
     $('o-turnInf').addEventListener('change', () => { this.syncTurnInf(); this.onSettingsChanged(); });
@@ -34,16 +36,20 @@ const UI = {
   act(a, el) {
     const app = this.app;
     switch (a) {
-      case 'online': if (!Net.available()) { this.dialog('Игра с другом по сети работает через сервер: запустите «Играть онлайн.cmd» из папки игры. В этом файле доступны «Против компьютера» и «На одном экране».'); return; } this.show('s-online'); this.status(''); break;
+      case 'online': if (!Net.available()) { this.dialog('Игра с другом по сети работает через сервер: запустите «Играть онлайн.cmd» из папки игры. В этом файле доступны «Против компьютера» и «На одном экране».'); return; } this.show('s-online'); this.status(''); this.syncServerBox(); break;
       case 'map-prev': case 'map-next': { const i = MAPS.findIndex(m => m.id === app.prefs.settings.mapId); this.featureMap(MAPS[(i + (a === 'map-next' ? 1 : -1) + MAPS.length) % MAPS.length].id); break; }
-      case 'invite': { const link = `${location.origin}${location.pathname}#join=${Net.code}`; if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => this.setNote('Приглашение скопировано — отправьте другу'), () => this.setNote(link)); else this.setNote(link); break; }
+      case 'invite': { const link = Net.inviteLink(Net.code); if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => this.setNote('Приглашение скопировано — отправьте другу'), () => this.setNote(link)); else this.setNote(link); break; }
       case 'hotseat': this.openSetup('hotseat'); break;
       case 'cpu': this.openSetup('cpu'); break;
       case 'help': this.show('s-help'); break;
       case 'back': app.back(); break;
       case 'sound': case 'sound2': Sfx.toggle(); this.updateSoundIcon(); break;
-      case 'host': app.hostRoom(); break;
-      case 'join': { const code = $('join-code').value.trim(); if (code.length < 5) { this.status('Введите код из 5 символов', true); return; } app.joinRoom(code); break; }
+      case 'host': if (Net.fromFile() && this.takeServerLink() === null) return; app.hostRoom(); break;
+      case 'join': {
+        let code = $('join-code').value.trim();
+        if (Net.fromFile()) { const c = this.takeServerLink(); if (c === null) return; if (c) { code = c; $('join-code').value = c; } }
+        if (code.length < 5) { this.status('Введите код из 5 символов', true); return; } app.joinRoom(code); break;
+      }
       case 'copy': { const code = $('room-code').textContent; const done = () => this.setNote('Код скопирован — отправьте его другу'); if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, () => this.setNote('Скопируйте код вручную: ' + code)); else this.setNote('Код: ' + code); break; }
       case 'start': app.startFromSetup(); break;
       case 'resume': app.resume(); break;
@@ -52,6 +58,15 @@ const UI = {
       case 'rematch': app.rematch(); break;
       case 'tray': app.toggleTray(); break;
     }
+  },
+  /** файл игры: поле «Ссылка от друга» — сервер для игры по сети (запоминается) */
+  syncServerBox() { const f = Net.fromFile(); $('srv-box').classList.toggle('hidden', !f); if (f && !$('srv-link').value) $('srv-link').value = Net.serverBase() || ''; },
+  /** код комнаты из ссылки ('' — в ссылке кода нет), null — ссылки нет или она неверная */
+  takeServerLink() {
+    const v = $('srv-link').value.trim();
+    if (!v) { if (Net.serverBase()) return ''; this.status('Вставьте ссылку от друга (https://…)', true); return null; }
+    const c = Net.useLink(v); if (c === null) { this.status('Это не похоже на ссылку: нужна строка вида https://….lhr.life/#join=КОД', true); return null; }
+    return c;
   },
   show(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('show', s.id === id));

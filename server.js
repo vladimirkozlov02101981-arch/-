@@ -12,6 +12,8 @@ function createServer() {
     let url;
     try { url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
     if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"ok":true,"transport":"relay"}'); return; }
+    // публичный адрес туннеля «Играть онлайн.cmd» (бесплатный адрес иногда меняется — берём последний) — для приглашения другу
+    if (url === '/public') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ url: publicUrl() })); return; }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     if (url === '/') url = '/index.html';
     if (url !== '/index.html' && !/^\/(js|css|assets)\/[\w./-]+$/.test(url)) { res.writeHead(404).end(); return; }
@@ -19,14 +21,26 @@ function createServer() {
     if (!file.startsWith(root + path.sep) || !types[path.extname(file)]) { res.writeHead(404).end(); return; }
     fs.stat(file, (err, stat) => {
       if (err || !stat.isFile()) { res.writeHead(404).end(); return; }
-      res.writeHead(200, { 'Content-Type': types[path.extname(file)], 'Content-Length': stat.size, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' });
+      // no-cache + ETag: браузер каждый раз сверяется с сервером, но неизменённый файл не скачивает заново (304) —
+      // через туннель для игры с другом повторные загрузки идут мгновенно, а обновления видны сразу
+      const etag = `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+      const head = { 'Content-Type': types[path.extname(file)], 'Cache-Control': 'no-cache', ETag: etag, 'Last-Modified': stat.mtime.toUTCString(), 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, head).end(); return; }
+      res.writeHead(200, Object.assign(head, { 'Content-Length': stat.size }));
       if (req.method === 'HEAD') res.end(); else fs.createReadStream(file).pipe(res);
     });
   });
+  const publicUrl = () => {
+    try {
+      const pid = +fs.readFileSync(path.join(root, 'dev', 'tunnel.pid'), 'utf8').trim(); process.kill(pid, 0);   // туннель ещё работает
+      const found = fs.readFileSync(path.join(root, 'dev', 'tunnel-ssh-out.txt'), 'latin1').match(/https:\/\/[a-z0-9]+\.lhr\.life/g);
+      return found ? found[found.length - 1] : null;
+    } catch { return null; }
+  };
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
     let sameOrigin = false;
-    try { sameOrigin = new URL(req.headers.origin).host === req.headers.host; } catch { /* tests may omit Origin */ }
+    try { sameOrigin = req.headers.origin === 'null' || new URL(req.headers.origin).host === req.headers.host; } catch { /* tests may omit Origin */ }   // 'null' — файл игры, открытый с диска
     if (req.url !== '/room' || (req.headers.origin && !sameOrigin) || wss.clients.size >= 400) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws));
   });

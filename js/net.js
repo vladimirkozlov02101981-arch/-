@@ -1,17 +1,42 @@
 'use strict';
-/* Same-origin WebSocket relay. The host owns the simulation. */
+/* WebSocket relay. The host owns the simulation.
+   Страница с сервера соединяется со своим сервером; файл игры (Territory-War.html) — с сервером из ссылки-приглашения:
+   картинки грузятся из файла мгновенно, а через интернет идут только ходы. */
 const NET_VERSION = 6;
 const Net = {
   socket: null, role: null, code: null, h: {}, pingT: null, rtt: 0,
-  lastData: 0, chunks: new Map(), joinTimer: null, linked: false,
-  available() { return typeof WebSocket === 'function' && /^https?:$/.test(location.protocol); },
+  lastData: 0, chunks: new Map(), joinTimer: null, linked: false, server: null, publicBase: null,
+  /** страница открыта с сервера или это файл игры (сервер берётся из ссылки) */
+  available() { return typeof WebSocket === 'function' && (/^https?:$/.test(location.protocol) || location.protocol === 'file:'); },
+  fromFile() { return location.protocol === 'file:'; },
+  serverBase() {
+    if (/^https?:$/.test(location.protocol)) return location.origin;
+    if (this.server) return this.server;
+    try { return localStorage.getItem('tw_server') || null; } catch { return null; }
+  },
+  /** ссылка-приглашение (https://….lhr.life/#join=КОД) или адрес сервера: запоминает сервер, возвращает код комнаты ('' — кода нет, null — не ссылка) */
+  useLink(text) {
+    let u; try { u = new URL(String(text || '').trim()); } catch { return null; }
+    if (!/^https?:$/.test(u.protocol)) return null;
+    this.server = u.origin; try { localStorage.setItem('tw_server', u.origin); } catch { /* без запоминания */ }
+    const m = /#join=([A-Za-z0-9]{5})/.exec(u.hash || ''); return m ? m[1].toUpperCase() : '';
+  },
+  /** у хоста на localhost: публичный адрес туннеля «Играть онлайн.cmd» — для приглашения другу */
+  async fetchPublic() {
+    if (!/^https?:$/.test(location.protocol)) { this.publicBase = null; return null; }
+    try { const r = await fetch('/public', { cache: 'no-store' }); const j = await r.json(); this.publicBase = j && /^https:\/\/[\w.-]+$/.test(j.url) ? j.url : null; } catch { this.publicBase = null; }
+    return this.publicBase;
+  },
+  inviteLink(code) { return `${this.publicBase || this.serverBase() || location.origin}/#join=${code}`; },
   on(ev, fn) { this.h[ev] = fn; },
   emit(ev, ...args) { try { if (this.h[ev]) this.h[ev](...args); } catch (e) { console.error(e); } },
   host() { this.connect('host'); },
   join(code) { this.connect('guest', String(code).trim().toUpperCase()); },
   connect(role, code) {
-    this.close(); this.role = role; this.code = code || null;
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/room`);
+    this.close();
+    const base = this.serverBase(); if (!base) { this.emit('error', { type: 'noserver' }); return; }
+    this.role = role; this.code = code || null;
+    const b = new URL(base), ws = new WebSocket(`${b.protocol === 'https:' ? 'wss:' : 'ws:'}//${b.host}/room`);
     this.socket = ws;
     this.joinTimer = setTimeout(() => { if (this.socket === ws && !this.linked && !(role === 'host' && this.code)) { this.emit('error', { type: 'timeout' }); this.close(); } }, 15000);
     ws.onopen = () => { if (this.socket === ws) ws.send(JSON.stringify(role === 'host' ? { type: 'create' } : { type: 'join', code })); };
@@ -61,7 +86,8 @@ const Net = {
       full: 'В этой комнате уже играют двое. Создайте новую комнату.',
       busy: 'Сервер занят. Попробуйте подключиться чуть позже.',
       timeout: 'Время подключения истекло. Проверьте интернет и повторите попытку.',
-      network: 'Нет связи с игровым сервером. Откройте игру через запущенный сервер или общую ссылку.'
+      network: 'Нет связи с игровым сервером. Проверьте ссылку: у бесплатного туннеля адрес иногда меняется — попросите у друга свежую.',
+      noserver: 'Вставьте ссылку-приглашение от друга (https://…) в поле «Ссылка от друга».'
     };
     return messages[e && e.type] || 'Соединение прервалось. Попробуйте ещё раз.';
   }

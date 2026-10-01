@@ -116,7 +116,8 @@ const App = {
   bindNet() {
     Net.on('hosting', (code) => {
       UI.openSetup('host'); UI.setRoomCode(code); UI.setPeerStatus(false);
-      if (location.protocol.startsWith('http')) UI.setNote(`Код: ${code}. Или ссылка для друга: ${location.origin}${location.pathname}#join=${code}`);
+      // приглашение: на ПК хоста — публичный адрес туннеля «Играть онлайн.cmd», иначе адрес этого сервера
+      Net.fetchPublic().then(() => { if (Net.code === code) UI.setNote(`Код: ${code}. Ссылка для друга: ${Net.inviteLink(code)} — её можно открыть в браузере или вставить в файл игры.`); });
     });
     Net.on('connected', () => {
       if (Net.role === 'guest') { UI.status('Соединено! Ждём хоста…'); Net.send({ t: 'hello', v: NET_VERSION, team: this.prefs.teams[0] }); }
