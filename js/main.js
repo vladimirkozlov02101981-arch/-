@@ -116,8 +116,11 @@ const App = {
   bindNet() {
     Net.on('hosting', (code) => {
       UI.openSetup('host'); UI.setRoomCode(code); UI.setPeerStatus(false);
-      // приглашение: на ПК хоста — публичный адрес туннеля «Играть онлайн.cmd», иначе адрес этого сервера
-      Net.fetchPublic().then(() => { if (Net.code === code) UI.setNote(`Код: ${code}. Ссылка для друга: ${Net.inviteLink(code)} — её можно открыть в браузере или вставить в файл игры.`); });
+      // приглашение: на ПК хоста — публичный адрес туннеля «Играть онлайн.cmd», иначе адрес этого сервера;
+      // бесплатный адрес меняется примерно раз в 15 минут — пока друг не подключился, подсказка обновляется
+      clearInterval(this.inviteT);
+      const show = () => Net.fetchPublic().then(() => { if (Net.code === code && UI.mode === 'host' && UI.cur === 's-setup' && !Net.connected) UI.setNote(`Код: ${code}. Ссылка для друга: ${Net.inviteLink(code)} — её можно открыть в браузере или вставить в файл игры.`); });
+      show(); this.inviteT = setInterval(() => { if (Net.code !== code || UI.mode !== 'host') { clearInterval(this.inviteT); return; } show(); }, 20000);
     });
     Net.on('connected', () => {
       if (Net.role === 'guest') { UI.status('Соединено! Ждём хоста…'); Net.send({ t: 'hello', v: NET_VERSION, team: this.prefs.teams[0] }); }

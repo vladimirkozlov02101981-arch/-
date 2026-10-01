@@ -38,7 +38,8 @@ const UI = {
     switch (a) {
       case 'online': if (!Net.available()) { this.dialog('Игра с другом по сети работает через сервер: запустите «Играть онлайн.cmd» из папки игры. В этом файле доступны «Против компьютера» и «На одном экране».'); return; } this.show('s-online'); this.status(''); this.syncServerBox(); break;
       case 'map-prev': case 'map-next': { const i = MAPS.findIndex(m => m.id === app.prefs.settings.mapId); this.featureMap(MAPS[(i + (a === 'map-next' ? 1 : -1) + MAPS.length) % MAPS.length].id); break; }
-      case 'invite': { const link = Net.inviteLink(Net.code); if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => this.setNote('Приглашение скопировано — отправьте другу'), () => this.setNote(link)); else this.setNote(link); break; }
+      // адрес бесплатного туннеля меняется примерно раз в 15 минут (начатая партия при этом не рвётся) — ссылку берём свежую в момент нажатия
+      case 'invite': Net.fetchPublic().then(() => { const link = Net.inviteLink(Net.code); if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => this.setNote('Приглашение скопировано — отправьте другу: ' + link), () => this.setNote(link)); else this.setNote(link); }); break;
       case 'hotseat': this.openSetup('hotseat'); break;
       case 'cpu': this.openSetup('cpu'); break;
       case 'help': this.show('s-help'); break;
