@@ -187,11 +187,14 @@ const Sfx = (() => {
     splash: { f: ['splash1', 'splash2'], v: 0.8, r: [0.85, 1] },
     select: { f: ['switch'], v: 0.45, r: [0.95, 1.05], ui: true },
   };
-  const STEPS = { 1: 'stepGrass', 2: 'stepStone', 3: 'stepStone', 4: 'stepWood', 5: 'stepStone', 6: 'stepStone', 7: 'stepSnow', 8: 'stepStone', 9: 'stepStone' };
+  /* шаги — настоящие полевые записи (ботинок по песку/гравию, камню, снегу, металлу, доскам; см. assets/sfx/CREDITS.md) */
+  const SN = (p, k) => Array.from({ length: k }, (_, i) => p + i);
+  const STEP_SET = { dirt: SN('stepDirt', 3), rock: SN('stepRock', 3), snow: SN('stepSnowR', 5), metal: SN('stepMetal', 3), wood: SN('stepBoard', 3) };
+  const STEPS = { 1: 'dirt', 2: 'rock', 3: 'rock', 4: 'wood', 5: 'rock', 6: 'metal', 7: 'snow', 8: 'rock', 9: 'rock' };
   const buffers = {};
   function loadSamples() {
     const names = new Set(Object.values(REAL).flatMap(e => e.f).concat(['boom1', 'boom2', 'boom3', 'boom4']));
-    for (const k of ['stepGrass', 'stepStone', 'stepSnow', 'stepWood']) for (const n of R4(k)) names.add(n);
+    for (const k in STEP_SET) for (const n of STEP_SET[k]) names.add(n);
     for (const n of names) fetch(`assets/sfx/${n}.ogg`).then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => ac.decodeAudioData(b)).then(buf => { let pk = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i += 2) pk = Math.max(pk, Math.abs(d[i])); } buffers[n] = { buf, norm: clamp(0.9 / (pk || 1), 0.4, 6) }; }).catch(() => { /* останется синтез */ });
   }
   function sample(n, pos, vol, rate = 1, offset = 0) {
@@ -214,11 +217,11 @@ const Sfx = (() => {
       return true;
     }
     if (name === 'footstep') {
-      // шаг: левая и правая нога звучат чуть по-разному + тихий шорох снаряжения
-      const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1; footSide = -footSide;
-      const ok = sample(pick(R4(STEPS[mat] || 'stepStone')), pos, mat === 1 ? 0.6 : 0.45, rr([0.92, 1.08]) * (1 + footSide * 0.035));
-      if (ok) { const t = ac.currentTime, d = out(pos, 0.25); noise(d, t + 0.02, 0.07, { type: 'bandpass', f0: 2600 + Math.random() * 800, q: 1.6, gain: 0.07, attack: 0.01 }); }
-      return ok;
+      // без искусственной подстройки высоты: запись звучит как есть, меняются только громкость и сам дубль
+      const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1, snowy = !!scene?.theme?.ground?.cap?.snow;
+      let set = STEPS[mat] || 'rock'; if (set === 'dirt' && snowy) set = 'snow';
+      const list = STEP_SET[set]; let n = pick(list); if (n === lastStep && list.length > 1) n = list[(list.indexOf(n) + 1) % list.length]; lastStep = n;
+      return sample(n, pos, (set === 'dirt' ? 0.5 : set === 'snow' ? 0.55 : 0.45) * rr([0.85, 1.05]), rr([0.985, 1.015]));
     }
     const e = REAL[name]; if (!e) return false;
     const ok = sample(pick(e.f), e.ui ? null : pos, e.v, rr(e.r), e.o || 0);
@@ -226,7 +229,7 @@ const Sfx = (() => {
     if (ok && pos && CASINGS.has(name)) setTimeout(() => { if (ac) sample(pick(R4('metal')), { x: pos.x - 10, y: pos.y + 20 }, 0.09, rr([2.1, 2.7])); }, 240 + Math.random() * 220);
     return ok;
   }
-  let footSide = 1;
+  let lastStep = '';
   const CASINGS = new Set(['shot', 'revolver', 'sniper', 'shotgun', 'autocannon']);
   let silent = false;
   function setSilent(v) { silent = !!v; if (silent) chargeStop(); }

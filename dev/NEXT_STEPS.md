@@ -4,6 +4,10 @@
 Готовы 13 моделей и подключены в игру (`HELD_SPRITE` в `js/weapons.js`, имена в `TexLib.names` в `js/art.js`):
 bazooka, rpg, assault, sniper, shotgun, revolver, magnum, uzi, minigun, flamer, autocannon, mortar, homing.
 
+Сделано 01.10: автообновление при запуске «Играть.cmd»/«Играть онлайн.cmd» (start-game.ps1: git fetch + ff, перезапуск сервера),
+версия в меню (index.html, id="game-version" — повышать при каждой выдаче), чёткая карта при приближении (js/hires.js:
+плитки ×4 в фоновых потоках, сглаживание ступенек вдоль краёв + мелкое зерно материала), шаги — настоящие записи (stepDirt/Rock/SnowR/Metal/Board).
+
 ## Что делать дальше (по порядку)
 1. Оружие: остальные модели (acid, drill, salvo, railgun/plasma/tesla/repulsor — фантастика, можно с подсветкой),
    иконки панели оружия из тех же спрайтов (`weaponIcon`, учесть кэш до загрузки TexLib),

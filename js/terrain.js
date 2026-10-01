@@ -63,7 +63,7 @@ class Terrain {
     this.decor = makeCanvas(W, H); this.dctx = this.decor.getContext('2d');
     this.glow = null; this.gctx = null;
     this.scorch = [20, 10, 5];
-    this.version = 0;
+    this.version = 0; this.touches = [];   // изменённые области (для кэша чёткой карты)
   }
   isSolid(x, y) {
     x = Math.floor(x); y = Math.floor(y);
@@ -186,7 +186,7 @@ class Terrain {
     this.applyBlast(this.ctx, B, scorch, this.scorch);
     this.applyBlast(this.dctx, B, false);   // задняя стена и декор — только там, куда дошла волна (за целым перекрытием всё остаётся)
     this.applyBlast(this.gctx, B, false);
-    this.version++;
+    this.touches.push([cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8]); this.version++;
   }
   carveLine(x1, y1, x2, y2, r) {
     x1 = Math.round(x1); y1 = Math.round(y1); x2 = Math.round(x2); y2 = Math.round(y2); r = Math.round(r);
@@ -204,7 +204,7 @@ class Terrain {
       if (!cx) continue; cx.save(); cx.globalCompositeOperation = 'destination-out'; cx.lineCap = 'round'; cx.lineWidth = r * 2 + 4;
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke(); cx.restore();
     }
-    this.version++;
+    this.touches.push([Math.min(x1, x2) - r - 10, Math.min(y1, y2) - r - 10, Math.max(x1, x2) + r + 10, Math.max(y1, y2) + r + 10]); this.version++;
   }
   /** балка строителя: ai — индекс угла 0..7 (шаг 22.5°) */
   addGirder(cx, cy, ai, len = 96, thick = 12) {
@@ -218,7 +218,7 @@ class Terrain {
       }
     }
     drawGirder(this.ctx, cx, cy, Math.atan2(sa, ca), len, thick);
-    this.version++;
+    this.touches.push([cx - ex - 4, cy - ey - 4, cx + ex + 4, cy + ey + 4]); this.version++;
   }
   encodeMask() {
     const W = this.W, H = this.H, m = this.mask; const rows = new Array(H);

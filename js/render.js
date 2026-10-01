@@ -175,8 +175,8 @@ class Renderer {
     c.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     const v = cam.view(sw, sh, 30);
     this.drawLiquid(c, sc, v, t, true);
-    this.blit(c, sc.terrain.decor, v, sc);
-    this.blit(c, sc.terrain.canvas, v, sc);
+    if (!this.hires) this.hires = new HiResTerrain();
+    if (!this.hires.draw(c, sc, v, z * dpr)) { this.blit(c, sc.terrain.decor, v, sc); this.blit(c, sc.terrain.canvas, v, sc); }
     drawTacticalRoutes(c, sc.map);
     if (window.NAV_DEBUG && typeof NavCheck !== 'undefined' && NAV_DEBUG.map === sc.map.id) NavCheck.draw(c, NAV_DEBUG.res);
     if (sc.terrain.glow) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.5 + 0.22 * Math.sin(t * 1.6); this.blit(c, sc.terrain.glow, v, sc); c.restore(); }
@@ -198,6 +198,38 @@ class Renderer {
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     this.drawGrade(c, sc, sw, sh);
     this.drawVignette(c, sw, sh);
+  }
+  /** детальная текстура: карта хранится 1 пиксель на единицу, и при приближении она мылилась. Поверх земли и камня
+      накладывается мелкий рельеф материала (высокочастотная часть фото-текстуры, 4 текселя на единицу) в режиме
+      «перекрытие» — он меняет только светотень, цвет карты остаётся прежним; на дальнем плане эффекта нет */
+  detailPattern(sc) {
+    const id = sc.theme.id; if (this.detKey === id) return this.detPat;
+    const tx = (sc.theme.ground && sc.theme.ground.tex) || {}, T = TexLib.data[tx.rock || tx.dirt || tx.concrete || tx.cave];
+    if (!T) return null;
+    this.detKey = id; this.detPat = null;
+    const W = T.w, H = T.h, d = T.d, n = W * H, g = new Float32Array(n);
+    for (let i = 0; i < n; i++) g[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
+    // размытие окном 9×9 (по строкам, затем по столбцам, с заворотом — текстура бесшовная)
+    const R = 4, tmp = new Float32Array(n), bl = new Float32Array(n);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let a = 0; for (let k = -R; k <= R; k++) a += g[y * W + ((x + k + W) % W)]; tmp[y * W + x] = a / (2 * R + 1); }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let a = 0; for (let k = -R; k <= R; k++) a += tmp[((y + k + H) % H) * W + x]; bl[y * W + x] = a / (2 * R + 1); }
+    let v2 = 0; for (let i = 0; i < n; i++) { const h = g[i] - bl[i]; v2 += h * h; }
+    const amp = 34 / Math.max(4, Math.sqrt(v2 / n));   // одинаковая сила рельефа для всех тем
+    const cv = makeCanvas(W, H), x = cv.getContext('2d'), im = x.createImageData(W, H);
+    for (let i = 0; i < n; i++) { const vv = Math.max(0, Math.min(255, 128 + (g[i] - bl[i]) * amp)); im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = vv; im.data[i * 4 + 3] = 255; }
+    x.putImageData(im, 0, 0);
+    const pat = this.c.createPattern(cv, 'repeat'); if (pat.setTransform) pat.setTransform(new DOMMatrix().scale(0.25));
+    this.detPat = pat; return pat;
+  }
+  drawDetail(c, sc, v, z) {
+    if (window.__noDet) return; const zp = z * this.dpr, k = clamp((zp - 1.25) / 1.6, 0, 1); if (k <= 0) return;
+    const pat = this.detailPattern(sc); if (!pat) return;
+    const cv = c.canvas; if (!this.detCv || this.detCv.width !== cv.width || this.detCv.height !== cv.height) this.detCv = makeCanvas(cv.width, cv.height);
+    const d = this.detCv.getContext('2d'); d.setTransform(1, 0, 0, 1, 0, 0); d.globalCompositeOperation = 'source-over'; d.clearRect(0, 0, cv.width, cv.height);
+    d.setTransform(c.getTransform()); d.imageSmoothingEnabled = true;
+    this.blit(d, sc.terrain.decor, v, sc); this.blit(d, sc.terrain.canvas, v, sc);
+    d.globalCompositeOperation = 'source-in'; d.fillStyle = pat; d.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0);
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'overlay'; c.globalAlpha = 0.55 * k; c.drawImage(this.detCv, 0, 0); c.restore();
   }
   /** кинематографичная цветокоррекция: тёплый свет сверху, прохладные тени снизу */
   drawGrade(c, sc, sw, sh) {
