@@ -36,22 +36,24 @@ def min_cut_v(err):
 
 def quilt(srcs, size, B, O, seed=1, cands=500):
     rng = np.random.default_rng(seed); S = B - O; n = size // S; size = n * S
-    out = np.zeros((size, size, 3), np.float32); filled = np.zeros((size, size), bool)
+    out = np.zeros((size, size, 3), np.float32); filled = np.zeros((size, size), bool); used = []
     def idx(y, x): return (np.arange(y, y + B) % size)[:, None], (np.arange(x, x + B) % size)[None, :]
     for gy in range(n):
         for gx in range(n):
             y, x = gy * S, gx * S; iy, ix = idx(y, x)
             tgt = out[iy, ix]; m = filled[iy, ix]
-            best = [];
+            best = []
             for _ in range(cands):
-                s = srcs[rng.integers(len(srcs))]; H, W = s.shape[:2]
+                si = rng.integers(len(srcs)); s = srcs[si]; H, W = s.shape[:2]
                 if H < B or W < B: continue
                 sy, sx = rng.integers(0, H - B + 1), rng.integers(0, W - B + 1)
                 p = s[sy:sy + B, sx:sx + B]
                 e = ((p - tgt) ** 2).sum(2)[m].mean() if m.any() else rng.random()
-                best.append((e, p))
+                # штраф за повтор: лоскут рядом с уже взятым местом источника заметен как «обои»
+                near = sum(1 for (ui, uy, ux) in used if ui == si and abs(uy - sy) < B * 0.6 and abs(ux - sx) < B * 0.6)
+                best.append((e * (1 + 0.6 * near) + near * 40, p, (si, sy, sx)))
             best.sort(key=lambda t: t[0]); lim = best[0][0] * 1.1 + 1e-6
-            ok = [p for e, p in best if e <= lim]; p = ok[rng.integers(len(ok))]
+            ok = [(p, u) for e, p, u in best if e <= lim]; p, u = ok[rng.integers(len(ok))]; used.append(u)
             # маска: где класть новый лоскут (шов по линии наименьшей разницы в перекрытиях)
             mask = np.ones((B, B), bool)
             if m.any():
@@ -82,6 +84,7 @@ if __name__ == '__main__':
     ref, dst, scale, size = sys.argv[1], sys.argv[2], float(sys.argv[3]), int(sys.argv[4])
     boxes = [tuple(int(v) for v in a.split(',')) for a in sys.argv[5:]]
     srcs = load_sources(ref, boxes, scale)
+    srcs = srcs + [s[:, ::-1].copy() for s in srcs]   # зеркальные копии — вдвое больше вариантов, меньше повторов
     B = int(np.clip(min(min(s.shape[:2]) for s in srcs) * 0.6, 40, 110)); O = B // 4
     img = quilt(srcs, size, B, O)
     Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((size, size), Image.LANCZOS).save(dst)
