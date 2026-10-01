@@ -9,47 +9,141 @@ from mathutils import Vector, Matrix
 
 HERE = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
 OUT = os.environ.get('WPN_OUT') or os.path.normpath(os.path.join(HERE, '..', '..', 'assets', 'tex'))
-U = 0.01; PXU = 8; X0, X1, Y0, Y1 = -16, 32, -12, 12
+U = 0.01; PXU = int(os.environ.get('WPN_PXU', 16)); X0, X1, Y0, Y1 = -16, 32, -12, 12
+
+def use_gpu(sc):
+    """видеокарта, если есть (на ПК пользователя рендер в десятки раз быстрее)"""
+    try:
+        pr = bpy.context.preferences.addons['cycles'].preferences
+        for kind in ('OPTIX', 'CUDA', 'HIP', 'ONEAPI'):
+            try:
+                pr.compute_device_type = kind; pr.get_devices()
+                ds = [d for d in pr.devices if d.type == kind]
+                if ds:
+                    for d in pr.devices: d.use = d.type == kind
+                    sc.cycles.device = 'GPU'; print('GPU', kind, [d.name for d in ds]); return True
+            except Exception: pass
+    except Exception: pass
+    return False
 
 def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    sc = bpy.context.scene; sc.render.engine = 'CYCLES'; sc.cycles.samples = 48; sc.cycles.use_denoising = True
+    sc = bpy.context.scene; sc.render.engine = 'CYCLES'; gpu = use_gpu(sc)
+    sc.cycles.samples = int(os.environ.get('WPN_SAMPLES', 256 if gpu else 96)); sc.cycles.use_denoising = True
     sc.render.resolution_x = (X1 - X0) * PXU; sc.render.resolution_y = (Y1 - Y0) * PXU; sc.render.film_transparent = True
     sc.render.image_settings.file_format = 'PNG'; sc.render.image_settings.color_mode = 'RGBA'
-    sc.view_settings.view_transform = 'Standard'
-    try: sc.view_settings.look = 'AgX - Medium High Contrast'
+    sc.view_settings.view_transform = 'AgX'
+    try: sc.view_settings.look = 'AgX - Punchy'
     except Exception: pass
     cd = bpy.data.cameras.new('cam'); cd.type = 'ORTHO'; cd.ortho_scale = (X1 - X0) * U
     cam = bpy.data.objects.new('cam', cd); sc.collection.objects.link(cam); sc.camera = cam
     cam.location = ((X0 + X1) / 2 * U, -5, 0); cam.rotation_euler = (math.radians(90), 0, 0)
-    w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True
-    w.node_tree.nodes['Background'].inputs[0].default_value = (0.6, 0.72, 0.95, 1); w.node_tree.nodes['Background'].inputs[1].default_value = 0.6
-    for en, col, el, az in ((4.0, (1.0, 0.9, 0.74), 45, 70), (1.6, (0.7, 0.8, 1.0), 15, 120), (2.5, (1.0, 0.95, 0.9), -30, 60)):
-        d = bpy.data.lights.new('s', 'SUN'); d.energy = en; d.color = col; d.angle = math.radians(4)
-        o = bpy.data.objects.new('s', d); sc.collection.objects.link(o)
-        e, a = math.radians(el), math.radians(az)
-        o.rotation_euler = Vector((math.cos(e) * math.cos(a), math.cos(e) * math.sin(a), -math.sin(e))).to_track_quat('-Z', 'Y').to_euler()
+    # небо как на улице (физическое небо Нишиты): мягкий заполняющий свет и отражения на металле
+    w = bpy.data.worlds.new('w'); sc.world = w; w.use_nodes = True; N = w.node_tree.nodes; L = w.node_tree.links
+    sky = N.new('ShaderNodeTexSky')
+    try: sky.sky_type = 'NISHITA'; sky.sun_elevation = math.radians(35); sky.sun_rotation = math.radians(200); sky.sun_disc = False
+    except Exception: pass
+    L.new(sky.outputs['Color'], N['Background'].inputs[0]); N['Background'].inputs[1].default_value = 0.35
+    # ключевой мягкий свет сверху-спереди, контровой сзади (обводит силуэт), заполняющий снизу
+    for en, col, loc, size in ((28.0, (1.0, 0.92, 0.8), (-0.25, -0.9, 0.7), 0.9), (16.0, (0.75, 0.85, 1.0), (0.5, 0.8, 0.35), 0.6), (5.0, (1.0, 0.9, 0.8), (0.1, -0.8, -0.6), 0.8)):
+        d = bpy.data.lights.new('a', 'AREA'); d.energy = en; d.color = col; d.size = size
+        o = bpy.data.objects.new('a', d); sc.collection.objects.link(o); o.location = loc
+        o.rotation_euler = (Vector((0.08, 0, 0)) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
     return sc
 
-def mat(name, col, metal=0.0, rough=0.5, bump=0.0, scale=40):
-    m = bpy.data.materials.new(name); m.use_nodes = True; b = m.node_tree.nodes['Principled BSDF']
-    b.inputs['Base Color'].default_value = (*[c ** 2.2 for c in col], 1); b.inputs['Metallic'].default_value = metal; b.inputs['Roughness'].default_value = rough
-    if bump:
-        N = m.node_tree.nodes; L = m.node_tree.links
-        nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = scale; nz.inputs['Detail'].default_value = 8
-        bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = bump
-        L.new(nz.outputs['Fac'], bp.inputs['Height']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
+def _n(m, kind, **kw):
+    n = m.node_tree.nodes.new(kind)
+    for k, v in kw.items():
+        if k in n.inputs: n.inputs[k].default_value = v
+        else: setattr(n, k, v)
+    return n
+
+def mat(name, col, metal=0.0, rough=0.5, bump=0.0, scale=40, wear=0.0, bare=(0.62, 0.62, 0.64), dirt=0.35, coat=0.0, scratches=0.0):
+    """PBR: неровная шероховатость, микрорельеф, грязь во впадинах, потёртости на рёбрах (под краской — голый металл), царапины"""
+    m = bpy.data.materials.new(name); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links; b = N['Principled BSDF']
+    lin = lambda c: (*[x ** 2.2 for x in c], 1)
+    tc = _n(m, 'ShaderNodeTexCoord')
+    # пятна шероховатости
+    nz = _n(m, 'ShaderNodeTexNoise', Scale=scale * 0.25, Detail=6.0, Roughness=0.6); L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    rr = _n(m, 'ShaderNodeMapRange'); rr.inputs['To Min'].default_value = rough * 0.75; rr.inputs['To Max'].default_value = min(1, rough * 1.3)
+    L.new(nz.outputs['Fac'], rr.inputs['Value'])
+    rough_out = rr.outputs['Result']
+    # царапины: вытянутый шум — тонкие светлые штрихи с меньшей шероховатостью
+    if scratches:
+        mp = _n(m, 'ShaderNodeMapping'); mp.inputs['Scale'].default_value = (scale * 4, scale * 0.25, scale * 0.25)
+        L.new(tc.outputs['Object'], mp.inputs['Vector'])
+        sn = _n(m, 'ShaderNodeTexNoise', Scale=3.0, Detail=2.0); L.new(mp.outputs['Vector'], sn.inputs['Vector'])
+        sr = _n(m, 'ShaderNodeMapRange'); sr.inputs['From Min'].default_value = 0.62; sr.inputs['From Max'].default_value = 0.7
+        L.new(sn.outputs['Fac'], sr.inputs['Value'])
+        sc_mul = _n(m, 'ShaderNodeMath', operation='MULTIPLY'); sc_mul.inputs[1].default_value = scratches; L.new(sr.outputs['Result'], sc_mul.inputs[0])
+        rmix = _n(m, 'ShaderNodeMix'); rmix.data_type = 'FLOAT'; L.new(sc_mul.outputs[0], rmix.inputs['Factor']); L.new(rough_out, rmix.inputs['A']); rmix.inputs['B'].default_value = 0.18
+        rough_out = rmix.outputs['Result']
+    # рёбра: «изнутри» AO даёт выпуклости — там краска стёрта
+    color_out = None
+    base = _n(m, 'ShaderNodeRGB'); base.outputs[0].default_value = lin(col)
+    cv = _n(m, 'ShaderNodeTexNoise', Scale=scale * 0.6, Detail=8.0, Roughness=0.62); L.new(tc.outputs['Object'], cv.inputs['Vector'])
+    cvr = _n(m, 'ShaderNodeMapRange'); cvr.inputs['To Min'].default_value = 0.72; cvr.inputs['To Max'].default_value = 1.28; L.new(cv.outputs['Fac'], cvr.inputs['Value'])
+    cvm = _n(m, 'ShaderNodeVectorMath', operation='SCALE'); L.new(base.outputs[0], cvm.inputs[0]); L.new(cvr.outputs['Result'], cvm.inputs['Scale'])
+    color_out = cvm.outputs['Vector']
+    metal_out = None
+    if wear:
+        ao = _n(m, 'ShaderNodeAmbientOcclusion', inside=True, only_local=True); ao.inputs['Distance'].default_value = 0.0025
+        inv = _n(m, 'ShaderNodeMath', operation='SUBTRACT'); inv.inputs[0].default_value = 1.0; L.new(ao.outputs['AO'], inv.inputs[1])
+        en = _n(m, 'ShaderNodeTexNoise', Scale=scale * 2, Detail=10.0, Roughness=0.7); L.new(tc.outputs['Object'], en.inputs['Vector'])
+        em = _n(m, 'ShaderNodeMath', operation='MULTIPLY'); L.new(inv.outputs[0], em.inputs[0]); L.new(en.outputs['Fac'], em.inputs[1])
+        ew = _n(m, 'ShaderNodeMapRange'); ew.inputs['From Min'].default_value = 0.30 - wear * 0.2; ew.inputs['From Max'].default_value = 0.34 - wear * 0.2
+        L.new(em.outputs[0], ew.inputs['Value'])
+        cm = _n(m, 'ShaderNodeMix'); cm.data_type = 'RGBA'; L.new(ew.outputs['Result'], cm.inputs['Factor']); L.new(color_out, cm.inputs[6]); cm.inputs[7].default_value = lin(bare)
+        color_out = cm.outputs[2]
+        mm = _n(m, 'ShaderNodeMix'); mm.data_type = 'FLOAT'; L.new(ew.outputs['Result'], mm.inputs['Factor']); mm.inputs['A'].default_value = metal; mm.inputs['B'].default_value = 1.0
+        metal_out = mm.outputs['Result']
+        rm2 = _n(m, 'ShaderNodeMix'); rm2.data_type = 'FLOAT'; L.new(ew.outputs['Result'], rm2.inputs['Factor']); L.new(rough_out, rm2.inputs['A']); rm2.inputs['B'].default_value = 0.28
+        rough_out = rm2.outputs['Result']
+    # грязь во впадинах
+    if dirt:
+        ao2 = _n(m, 'ShaderNodeAmbientOcclusion', only_local=True); ao2.inputs['Distance'].default_value = 0.01
+        dm = _n(m, 'ShaderNodeMix'); dm.data_type = 'RGBA'; dm.blend_type = 'MULTIPLY'
+        dr = _n(m, 'ShaderNodeMapRange'); dr.inputs['To Min'].default_value = 1.0; dr.inputs['To Max'].default_value = 0.0
+        L.new(ao2.outputs['AO'], dr.inputs['Value'])
+        dk = _n(m, 'ShaderNodeMath', operation='MULTIPLY'); dk.inputs[1].default_value = dirt; L.new(dr.outputs['Result'], dk.inputs[0])
+        L.new(dk.outputs[0], dm.inputs['Factor']); L.new(color_out, dm.inputs[6]); dm.inputs[7].default_value = (0.08, 0.06, 0.045, 1)
+        color_out = dm.outputs[2]
+    L.new(color_out, b.inputs['Base Color']); L.new(rough_out, b.inputs['Roughness'])
+    if metal_out: L.new(metal_out, b.inputs['Metallic'])
+    else: b.inputs['Metallic'].default_value = metal
+    if coat:
+        for k in ('Coat Weight', 'Clearcoat'):
+            if k in b.inputs: b.inputs[k].default_value = coat; break
+    # микрорельеф + скруглённые кромки (узел Bevel)
+    bev = _n(m, 'ShaderNodeBevel', samples=8); bev.inputs['Radius'].default_value = 0.0012
+    bp = _n(m, 'ShaderNodeBump'); bp.inputs['Strength'].default_value = bump or 0.08; bp.inputs['Distance'].default_value = 0.0004
+    fz = _n(m, 'ShaderNodeTexNoise', Scale=scale * 6, Detail=12.0, Roughness=0.65); L.new(tc.outputs['Object'], fz.inputs['Vector'])
+    L.new(fz.outputs['Fac'], bp.inputs['Height']); L.new(bev.outputs['Normal'], bp.inputs['Normal']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
     return m
 
 def wood_mat():
+    """орех под лаком: годовые кольца, поры, лаковое покрытие, потёртый лак на рёбрах"""
     m = bpy.data.materials.new('wood'); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links; b = N['Principled BSDF']
-    tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (0.03 / U, 0.5 / U, 0.5 / U)
-    w = N.new('ShaderNodeTexWave'); w.wave_type = 'BANDS'; w.bands_direction = 'Z'; w.inputs['Scale'].default_value = 2.5; w.inputs['Distortion'].default_value = 5; w.inputs['Detail Scale'].default_value = 1.5; w.inputs['Detail'].default_value = 6
-    L.new(tc.outputs['Generated'] if False else tc.outputs['Object'], mp.inputs['Vector']); L.new(mp.outputs['Vector'], w.inputs['Vector'])
-    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].color = (0.035, 0.012, 0.004, 1); ramp.color_ramp.elements[1].color = (0.17, 0.065, 0.02, 1)
-    L.new(w.outputs['Fac'], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
-    b.inputs['Roughness'].default_value = 0.42
-    bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.15; L.new(w.outputs['Fac'], bp.inputs['Height']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
+    tc = _n(m, 'ShaderNodeTexCoord'); mp = _n(m, 'ShaderNodeMapping'); mp.inputs['Scale'].default_value = (6.0, 110.0, 110.0)
+    L.new(tc.outputs['Object'], mp.inputs['Vector'])
+    dn = _n(m, 'ShaderNodeTexNoise', Scale=2.0, Detail=4.0); L.new(mp.outputs['Vector'], dn.inputs['Vector'])
+    add = _n(m, 'ShaderNodeVectorMath', operation='ADD'); L.new(mp.outputs['Vector'], add.inputs[0]); L.new(dn.outputs['Color'], add.inputs[1])
+    w = _n(m, 'ShaderNodeTexWave', wave_type='RINGS', rings_direction='X'); w.inputs['Scale'].default_value = 0.35; w.inputs['Distortion'].default_value = 4.0; w.inputs['Detail'].default_value = 3.0
+    L.new(add.outputs['Vector'], w.inputs['Vector'])
+    ramp = _n(m, 'ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+    E[0].position = 0.2; E[0].color = (0.025, 0.009, 0.003, 1); E[1].position = 0.9; E[1].color = (0.15, 0.058, 0.02, 1)
+    L.new(w.outputs['Fac'], ramp.inputs['Fac'])
+    pores = _n(m, 'ShaderNodeTexNoise', Scale=60.0, Detail=2.0); L.new(mp.outputs['Vector'], pores.inputs['Vector'])
+    pm = _n(m, 'ShaderNodeMix'); pm.data_type = 'RGBA'; pm.blend_type = 'MULTIPLY'; pm.inputs['Factor'].default_value = 0.35
+    L.new(ramp.outputs['Color'], pm.inputs[6]); L.new(pores.outputs['Color'], pm.inputs[7])
+    L.new(pm.outputs[2], b.inputs['Base Color']); b.inputs['Roughness'].default_value = 0.38
+    for k in ('Coat Weight', 'Clearcoat'):
+        if k in b.inputs: b.inputs[k].default_value = 0.5; break
+    for k in ('Coat Roughness', 'Clearcoat Roughness'):
+        if k in b.inputs: b.inputs[k].default_value = 0.12; break
+    bev = _n(m, 'ShaderNodeBevel', samples=8); bev.inputs['Radius'].default_value = 0.0015
+    bp = _n(m, 'ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.12; bp.inputs['Distance'].default_value = 0.0003
+    L.new(w.outputs['Fac'], bp.inputs['Height']); L.new(bev.outputs['Normal'], bp.inputs['Normal']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
     return m
 
 def obj(me, m, name='p'):
@@ -93,11 +187,11 @@ def render(sc, name):
         SHOW['n'] += 1; print('ADDED', name); return
     os.makedirs(OUT, exist_ok=True); sc.render.filepath = os.path.join(OUT, 'wpn_' + name + '.png'); bpy.ops.render.render(write_still=True); print('WROTE', name)
 
-STEEL = lambda: mat('steel', (0.42, 0.43, 0.45), 1.0, 0.32, 0.15, 60)
-BLACK = lambda: mat('black', (0.13, 0.135, 0.14), 0.7, 0.42, 0.2, 80)
+STEEL = lambda: mat('steel', (0.55, 0.56, 0.58), 1.0, 0.32, 0.06, 60, scratches=0.6, dirt=0.25)
+BLACK = lambda: mat('black', (0.07, 0.072, 0.075), 0.85, 0.42, 0.06, 80, wear=0.7, bare=(0.55, 0.55, 0.57), scratches=0.4)
 WOOD = wood_mat
-OLIVE = lambda: mat('olive', (0.25, 0.29, 0.16), 0.1, 0.5, 0.25, 50)
-RUBBER = lambda: mat('rubber', (0.16, 0.16, 0.15), 0.0, 0.7, 0.3, 90)
+OLIVE = lambda: mat('olive', (0.28, 0.32, 0.18), 0.0, 0.62, 0.08, 50, wear=0.8, bare=(0.45, 0.45, 0.46), dirt=0.45)
+RUBBER = lambda: mat('rubber', (0.06, 0.06, 0.058), 0.0, 0.78, 0.25, 140, dirt=0.2)
 
 def bazooka():
     sc = reset(); ol, st, bl, rb = OLIVE(), STEEL(), BLACK(), RUBBER()
