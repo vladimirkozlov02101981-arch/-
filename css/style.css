@@ -193,6 +193,9 @@ kbd { font-family: var(--ui); font-size: 12px; background: rgba(255, 255, 255, 0
 .logo{line-height:1.08}
 .tray-cat{margin:3px 0 1px}.tray-item{height:42px}.tray-item canvas{width:36px;height:36px}.tray-info{margin-top:6px}
 .opts input[type=number]{font-family:var(--ui);font-size:12px;padding:7px 8px;border-radius:4px;border:1px solid #a5b6a32e;background:#162629;color:#fff;outline:none;width:100%;box-sizing:border-box}
+.opts .opt-cell{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted)}
+.opts .tt-row{display:flex;align-items:center;gap:8px}.opts .tt-row input[type=number]{flex:1;min-width:0}.opts input[type=number]:disabled{opacity:.45}
+.opts .tt-inf{flex-direction:row;align-items:center;gap:5px;white-space:nowrap;cursor:pointer;color:#d8e2d8}.opts .tt-inf input{accent-color:var(--accent);margin:0}
 .ammo-box{margin-top:14px;border:1px solid #a5b6a32e;border-radius:6px;padding:8px 12px;background:#0f1d1f99}
 .ammo-box summary{cursor:pointer;font:500 13px var(--ui);color:#dfedab}
 .ammo-tools{display:flex;gap:8px;margin:10px 0}

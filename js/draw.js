@@ -140,6 +140,8 @@ function drawSoldierSprite(c, s, team, t, an) {
     if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 7 - 6.5, -17, 13, 18 + Math.random() * 7); c.restore(); }
   }
   const wl = s.wl || NO_WOUNDS;
+  // шапка команды: каска — встроенная в модель (в цвет команды), остальные рисуются поверх головы
+  const hat = team && HATS[team.hat] ? team.hat : 'helmet', bare = hat !== 'helmet';
   // хромота: с раненой ногой шаг проваливается на больную сторону
   const legW = Math.max(wl[4], wl[5]);
   if (legW && s.st === 'walk' && !dead) c.translate(0, Math.max(0, Math.sin(an.walk * 0.5)) * (legW >= 3 ? 3.2 : legW * 0.9));
@@ -151,11 +153,16 @@ function drawSoldierSprite(c, s, team, t, an) {
   if (lostLeg.length) {
     // потерянная нога: голень стирается, на её месте — окровавленная культя
     const cv = SA.tmp || (SA.tmp = makeCanvas(C, C)), tc = cv.getContext('2d');
-    tc.globalCompositeOperation = 'copy'; tc.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, 0, 0, C, C); tc.globalCompositeOperation = 'destination-out';
+    tc.globalCompositeOperation = 'copy'; tc.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, 0, 0, C, C); tc.globalCompositeOperation = 'destination-out';
     for (const i of lostLeg) { const isFar = (i - 4) === far; tc.fillRect(isFar ? SA.FOOT[0] - 22 : SA.FOOT[0] - 2, SA.FOOT[1] - 22, 26, 30); }
     tc.globalCompositeOperation = 'source-over';
     c.drawImage(cv, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);
-  } else c.drawImage(SA.sheet(sheet, col), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
+  } else c.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
+  if (bare) {
+    // размер и посадка — по голове модели: она в 0.6 раза меньше нарисованной, шапка сидит на макушке
+    const hd = SA.head(sheet, row, fr);
+    c.save(); c.translate((hd.x - SA.FOOT[0]) * K, (hd.y - SA.FOOT[1]) * K + 1.5 + SA.HAT_DY); c.scale(SA.HAT_S, SA.HAT_S); drawHat(c, hat, col, 0, -1.8, 1); c.restore();
+  }
   c.filter = 'none';
   drawWounds(c, wl, far, t, s.id);
   c.restore();

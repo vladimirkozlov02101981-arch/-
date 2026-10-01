@@ -18,7 +18,7 @@ function sanitizeSettings(S) {
   const D = DEFAULT_PREFS.settings; S = S && typeof S === 'object' ? S : {};
   return {
     mapId: MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 20),
-    hp: Number.isFinite(+S.hp) && +S.hp >= 1 ? clamp(Math.round(+S.hp), 1, 1000) : D.hp, turnTime: Number.isFinite(+S.turnTime) && +S.turnTime >= 5 ? clamp(Math.round(+S.turnTime), 5, 600) : D.turnTime,
+    hp: Number.isFinite(+S.hp) && +S.hp >= 1 ? clamp(Math.round(+S.hp), 1, 1000) : D.hp, turnTime: S.turnTime === 0 ? 0 : Number.isFinite(+S.turnTime) && +S.turnTime >= 5 ? clamp(Math.round(+S.turnTime), 5, 600) : D.turnTime,   // 0 — без ограничения
     wind: S.wind !== false, crates: false, sd: 0,   // ящиков с припасами и внезапной смерти в игре нет
     arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal', side: ['left', 'right', 'random'].includes(S.side) ? S.side : 'random', swap: !!S.swap, ammo: sanitizeAmmo(S.ammo),
   };
@@ -292,11 +292,11 @@ const App = {
     if (P.KeyM) { Sfx.toggle(); UI.updateSoundIcon(); }
     if (!this.sc || this.demo) return;
     if (P.KeyB) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }
-    if (P.KeyC) { this.cam.binoc = false; this.cam.free = 0; this.cam.userZ = null; }
+    if (P.KeyC) { this.cam.binoc = false; this.cam.free = 0; this.cam.userZ = null; this.cam.hold = false; }
     if (P.KeyT && (this.mode === 'host' || this.mode === 'guest') && !UI.chatOpen) UI.openChat();
   },
   timerTick(turn) {
-    if (!this.ctl || !this.ctl.mine || turn.phase !== 'aim') { this.lastTick = -1; return; }
+    if (!this.ctl || !this.ctl.mine || turn.phase !== 'aim' || !(this.sc.settings || this.sc.cfg.settings).turnTime) { this.lastTick = -1; return; }
     const s = Math.ceil(turn.time);
     if (s <= 5 && s > 0 && s !== this.lastTick) { this.lastTick = s; Sfx.play('tick'); }
   },
@@ -350,6 +350,8 @@ const App = {
       if (o.px === undefined || Math.abs(o.x - o.px) > 60 || Math.abs(o.y - o.py) > 60) continue;
       moved.push(o, o.x, o.y); o.x = o.px + (o.x - o.px) * lerpK; o.y = o.py + (o.y - o.py) * lerpK;
     }
+    // прокрутка обзора курсором у края — только в свой ход с оружием, которому выбирают точку на карте
+    this.cam.edge = !!(this.ctl && this.ctl.mine && this.ctl.edgePan && !this.demo && !this.paused && !UI.cur && !UI.chatOpen && !UI.trayOpen && !document.hidden);
     this.cam.update(dt, sc, this.fx, sw, sh, Input.mouse);
     sc.bg.update(dt, sc.turn.wind, sw);
     Sfx.setListener(this.cam.x, this.cam.y, this.cam.z, sw);

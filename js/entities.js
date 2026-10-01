@@ -135,6 +135,7 @@ class Proj extends Ent {
     }
     if (this.k === 'drill' && this.s === 1) return this.drillUpdate(g, dt);
     if (this.o.spiral) this.spiralStep(dt);
+    if (this.o.dragX) this.vx *= Math.exp(-this.o.dragX * dt);   // бомба: горизонтальная скорость самолёта гаснет в воздухе
     const hit = flyStep(g, this, dt, this.grav, this.wind, this.r, this.age < 0.3 ? this.owner : null);
     this.a = Math.atan2(this.vy, this.vx);
     if (!hit) { if (this.age > 16) this.boom(g); return; }
@@ -389,13 +390,28 @@ class Tomb extends Ent {
 }
 
 /* ---------- самолёт авиаудара ----------
-   Клик задаёт только курс и район. Бомбы сбрасывает сам игрок (ЛКМ/Enter),
-   пока самолёт летит: нужно взять упреждение с учётом скорости и ветра. */
+   Клик задаёт курс: самолёт проходит над выбранной точкой, обзор держит район цели (render.js).
+   Сброс — вручную и на глаз (ЛКМ, F или Enter): бомба уходит со скоростью самолёта (инерция)
+   и тормозит в воздухе, поэтому ложится на 200–270 px дальше точки сброса — нужно упреждение.
+   Не сбросили — бомбы уходят сами, когда самолёт долетает до края экрана управляющего игрока
+   (input.js); на крайний случай — далеко за целью. */
 function groundTop(g, x) { return Math.min(g.waterY, g.terrain.findTop(clamp(Math.round(x), 0, g.W - 1), 0)); }
+const JET_SPEED = 600;               // скорость самолёта постоянна: одинаково у хоста и гостя, успеть сбросить на глаз
+const BOMB_VY = 48, BOMB_WIND = 0.3;  // бомба уходит вниз и чуть сносится ветром
+const BOMB_DRAG = 2.2;               // торможение бомбы по горизонтали, 1/с: скорость самолёта гаснет за ~0.45 с, вылет вперёд ≈ 270 px
+const BOMB_LEAD = 14;   // средняя бомба отделяется чуть ниже соседей и падает первой: воронки соседей не сбивают её с прицела
+/** куда упадёт средняя бомба, отпущенная самолётом в точке (x, y) с курсом dir. Та же физика, что у снаряда-бомбы
+    (инерция самолёта, торможение, ветер, рельеф, вода), без бойцов — для расчёта ИИ и проверок */
+function bombImpact(sc, x, y, dir) {
+  const w = { turn: sc.turn, gravity: sc.gravity, terrain: sc.terrain, waterY: sc.waterY, W: sc.W, H: sc.H, soldierAt: () => null };
+  const e = { x, y: y + 14 + BOMB_LEAD, vx: dir * JET_SPEED, vy: BOMB_VY }, dt = 1 / 60, k = Math.exp(-BOMB_DRAG * dt);
+  for (let i = 0; i < 900; i++) { e.vx *= k; const hit = flyStep(w, e, dt, 1, BOMB_WIND, 3, null); if (hit) return hit.type === 'out' ? null : { x: e.x, y: Math.min(e.y, sc.waterY) }; }
+  return null;
+}
 class Jet extends Ent {
   constructor(g, tx, dir, owner) {
-    super(g, 'jet', tx - dir * 1650, 0); this.dir = dir; this.vx = dir * rand(700, 820); this.a = dir > 0 ? 0 : Math.PI;
-    this.owner = owner; this.team = owner.team; this.pushable = false; this.tx = tx; this.dropped = false;
+    super(g, 'jet', tx - dir * 1650, 0); this.dir = dir; this.vx = dir * JET_SPEED; this.a = dir > 0 ? 0 : Math.PI;
+    this.owner = owner; this.team = owner.team; this.pushable = false; this.tx = tx; this.f = tx; this.dropped = false;   // f — точка курса (для обзора у гостя)
     let top = groundTop(g, tx);
     for (let x = tx - 1700; x <= tx + 1700; x += 40) top = Math.min(top, groundTop(g, x));
     this.gy = groundTop(g, tx);
@@ -403,17 +419,23 @@ class Jet extends Ent {
     this.v = Math.round(this.gy);
     g.emit({ t: 'plane' });
   }
-  release(g) {
+  /** сброс серии. x — где игрок видел самолёт в момент нажатия: у гостя картинка запаздывает на время сети,
+      поэтому серия уходит из той точки, если самолёт пролетел её недавно */
+  release(g, x) {
     if (this.dropped) return; this.dropped = true; this.s = 1;
-    for (let i = 0; i < 5; i++) {
-      const off = (i - 2) * 24 * this.dir + rand(-7, 7);
-      g.spawn(new Proj(g, 'bomb', this.x - off, this.y + 14 + rand(-3, 3), this.vx * rand(0.34, 0.44), rand(25, 70), this.owner, { wind: 0.45, r: 3 }));
+    const back = isNum(x) ? this.dir * (this.x - x) : -1, rx = back >= 0 && back <= 400 ? x : this.x;
+    // пять бомб вдоль курса со скоростью самолёта: средняя — точно по расчёту и первой, соседние — через 24 px с лёгким разбросом
+    g.spawn(new Proj(g, 'bomb', rx, this.y + 14 + BOMB_LEAD, this.vx, BOMB_VY, this.owner, { wind: BOMB_WIND, r: 3, dragX: BOMB_DRAG }));
+    for (const i of [1, 3, 0, 4]) {
+      const off = (i - 2) * 24 * this.dir + rand(-2, 2);
+      g.spawn(new Proj(g, 'bomb', rx - off, this.y + 14, this.vx * rand(0.99, 1.01), BOMB_VY + rand(-2, 2), this.owner, { wind: BOMB_WIND, r: 3, dragX: BOMB_DRAG }));
     }
-    g.emit({ t: 'bombs', x: R1(this.x), y: R1(this.y) });
+    g.emit({ t: 'bombs', x: R1(rx), y: R1(this.y) });
   }
   update(g, dt) {
     this.age += dt; this.x += this.vx * dt;
-    if (!this.dropped && (this.dir > 0 ? this.x > this.tx + 900 : this.x < this.tx - 900)) this.release(g);
+    // запасной сброс: игрок не нажал, а его экран не сработал (окно свёрнуто, связь пропала)
+    if (!this.dropped && (this.dir > 0 ? this.x > this.tx + 1400 : this.x < this.tx - 1400)) this.release(g);
     if (this.dropped && (this.age > 9 || this.x < -1800 || this.x > g.W + 1800)) this.dead = true;
     this.busy = !this.dropped;
   }
@@ -424,11 +446,11 @@ class Jet extends Ent {
 class Storm extends Ent {
   constructor(g, tx, owner) {
     super(g, 'storm', tx, groundTop(g, tx) - 390); this.owner = owner; this.team = owner.team; this.pushable = false;
-    this.f = 1.7; this.vx = g.turn.wind * 0.6 + rand(-30, 30);
+    this.f = 1.7; this.vx = g.turn.wind * 0.6 + rand(-30, 30); this.v = this.y + 390;   // v — земля под тучей: камера держит в кадре и тучу, и место удара
     g.emit({ t: 'storm', x: R1(this.x), y: R1(this.y) });
   }
   update(g, dt) {
-    this.age += dt; this.f -= dt; this.x += this.vx * dt;
+    this.age += dt; this.f -= dt; this.x += this.vx * dt; this.v = groundTop(g, this.x);
     if (this.f <= 0) { this.dead = true; lightningStrike(g, this.x + gaussRand() * 16, this.owner); }
   }
 }
@@ -442,7 +464,7 @@ function lightningStrike(g, cx, owner) {
     if (!best || score < best.score) best = { x, y, score };
   }
   const tx = best.x, y = best.y;
-  g.emit({ t: 'bolt', pts: boltPath(tx + rand(-50, 50), y - 420, tx, y, 0.35) });
+  g.emit({ t: 'bolt', pts: boltPath(tx + rand(-50, 50), y - 420, tx, y, 0.35), m: 1 });   // m — главный удар: камера задерживается на нём
   g.carve(tx, y, 16, true); g.emit({ t: 'boom', x: tx, y, r: 18, k: 5 });
   const hit = new Set();
   for (const o of g.soldiers) if (o.alive && Math.hypot(o.x - tx, o.y - 13 - y) < 30) { hit.add(o); o.vy -= 180; o.vx += (o.x < tx ? -1 : 1) * 80; o.fly(); g.damage(o, 38, owner); }
@@ -452,6 +474,7 @@ function lightningStrike(g, cx, owner) {
 }
 
 /* ---------- орбитальный лазер ---------- */
+const ORBITAL_DMG = 15;   // урон луча за 0.1 с (было 5 — втрое слабее)
 class Orbital extends Ent {
   constructor(g, tx, owner) {
     super(g, 'orbital', tx, 0); this.owner = owner; this.team = owner.team; this.s = 0; this.f = 1.0; this.pushable = false;
@@ -473,16 +496,16 @@ class Orbital extends Ent {
     if (Math.abs(px - this.x) > 3) { g.carveLine(px, this.v - 30, this.x, this.v, 16); this.cutY = this.v; }
     this.v = Math.min(g.waterY + 10, this.v + 330 * dt); this.y = this.v;
     if (this.v - this.cutY >= 14 || this.f <= 0) { g.carveLine(this.x, this.cutY - 20, this.x, this.v, 16); this.cutY = this.v; }
+    // луч жжёт втрое сильнее прежнего (15 урона каждые 0.1 с) и никого не отталкивает: боец остаётся в луче или падает в прожжённую шахту
     this.dmgT -= dt;
     if (this.dmgT <= 0) {
       this.dmgT = 0.1;
       for (const s of g.soldiers) {
-        if (s.gone || Math.abs(s.x - this.x) > 24 || s.y - 30 > this.v) continue;
-        if (s.alive) g.damage(s, 5, this.owner);
-        s.vx += (s.x < this.x ? -1 : 1) * 60; s.vy -= 40; s.fly();
+        if (s.gone || !s.alive || Math.abs(s.x - this.x) > 24 || s.y - 30 > this.v) continue;
+        g.damage(s, ORBITAL_DMG, this.owner);
       }
     }
-    if (this.f <= 0) { this.dead = true; g.explode(this.x, this.v, 28, 20, { owner: this.owner, knock: 260 }); }
+    if (this.f <= 0) { this.dead = true; g.explode(this.x, this.v, 28, ORBITAL_DMG * 4, { owner: this.owner, knock: 0 }); }
   }
 }
 
@@ -662,8 +685,9 @@ const FIRE = {
   },
   airstrike(g, s, p) {
     if (!isNum(p.tx)) return false;
+    // сброс — по команде игрока (ЛКМ / F / Enter), c.x — где он видел самолёт
     const jet = new Jet(g, clamp(p.tx, 60, g.W - 60), p.tx >= s.x ? 1 : -1, s); g.spawn(jet);
-    return { usage: { update() { return jet.dropped || jet.dead; }, fire(gg) { jet.release(gg); } } };
+    return { usage: { update() { return jet.dropped || jet.dead; }, fire(gg, c) { jet.release(gg, c && c.x); } } };
   },
   lightning(g, s, p) {
     if (!isNum(p.tx)) return false;

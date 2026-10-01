@@ -126,12 +126,32 @@ TexLib.load();
    Лист free: строки — стойка, шаг, бег, лазание; лист aim: строка — угол прицела (−90°…+90° через 15°),
    столбец 0 — стойка, 1…12 — шаг. Светлые пластины брони перекрашиваются в цвет команды. */
 const SoldierArt = {
-  CELL: 144, FOOT: [72, 126], MPP: 2.3 / 144, SHOULDER: [72.8, 38.5], K: 0.40,
+  CELL: 144, FOOT: [72, 126], MPP: 2.3 / 144, SHOULDER: [72.8, 38.5], K: 0.40, HAT_S: 0.56, HAT_DY: 3.6,
   FREE: { idle: [0, 8], walk: [1, 12], run: [2, 10], climb: [3, 8] },
   cache: new Map(),
   ok() { return !!(TexLib.data.soldier_free && TexLib.data.soldier_aim); },
-  sheet(name, color) {
-    const key = name + color; let cv = this.cache.get(key); if (cv) return cv;
+  /** верх головы в кадре (пиксели клетки). Ищется по кадрам без оружия, где руки ниже головы; кадры с прицелом
+      (столбец 0 — стойка, 1…12 — шаг) и лазание повторяют позу тела этих кадров */
+  head(sheet, row, fr) {
+    let r = row, f = fr, f2 = -1;
+    if (sheet === 'aim') { r = fr > 0 ? 1 : 0; f = fr > 0 ? fr - 1 : 0; }
+    else if (row === 3) { const j = fr * 1.5; r = 1; f = Math.floor(j) % 12; if (j % 1) f2 = (f + 1) % 12; }
+    const a = this.headAt(r, f); if (f2 < 0) return a;
+    const b = this.headAt(r, f2); return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  },
+  headAt(r, f) {
+    const key = r * 16 + f; let h = this.heads.get(key); if (h) return h;
+    const T = TexLib.data.soldier_free, C = this.CELL, W = T.w, d = T.d, at = (x, y) => d[((r * C + y) * W + f * C + x) * 4 + 3] > 40;
+    let top = -1, x0 = C, x1 = -1;
+    for (let y = 0; y < C && top < 0; y++) for (let x = 0; x < C; x++) if (at(x, y)) { top = y; break; }
+    if (top < 0) top = 18;
+    for (let y = top; y < Math.min(C, top + 8); y++) for (let x = 0; x < C; x++) if (at(x, y)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+    h = { x: x1 >= x0 ? (x0 + x1) / 2 : this.FOOT[0] + 6, y: top }; this.heads.set(key, h); return h;
+  },
+  heads: new Map(),
+  /** bare — без каски цвета команды: шапку рисуем поверх, голова под ней в полевой оливе */
+  sheet(name, color, bare = false) {
+    const key = name + color + (bare ? ':bare' : ''); let cv = this.cache.get(key); if (cv) return cv;
     const T = TexLib.data['soldier_' + name]; cv = makeCanvas(T.w, T.h); const c = cv.getContext('2d');
     const img = c.createImageData(T.w, T.h), d = img.data, s = T.d; d.set(s);
     // светлые пластины брони: на шлеме — цвет команды, остальное — полевая олива (как у настоящей формы)
@@ -139,7 +159,7 @@ const SoldierArt = {
     for (let j = 0; j < d.length; j += 4) {
       if (s[j + 3] < 8) continue;
       const r = s[j], g = s[j + 1], b = s[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = ((j >> 2) / W | 0) % C, helm = cy < 40, vest = cy >= 46 && cy < 64;
+      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = ((j >> 2) / W | 0) % C, helm = !bare && cy < 40, vest = cy >= 46 && cy < 64;
       if (helm && L > 25) {                                                   // шлем целиком — насыщенный цвет команды (с фактурой и светом модели)
         const f = Math.min(1.5, L / tl * 1.25); d[j] = tr * f; d[j + 1] = tg * f; d[j + 2] = tb * f; continue;
       }

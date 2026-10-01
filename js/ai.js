@@ -165,14 +165,13 @@ class AI {
   }
   during(s, send) {
     const g = this.g;
-    // авиаудар: прогнозируем падение бомб и сбрасываем с упреждением
-    if (this.plan && this.plan.w === 'airstrike') {
+    // авиаудар: прицел сброса бежит по земле под самолётом — жмём сброс, когда он дошёл до точки (ошибка ИИ — в самой точке и в реакции)
+    if (this.plan && this.plan.w === 'airstrike' && this.goalTx !== undefined) {
       const jet = g.entities.find(e => e.k === 'jet' && !e.dropped && e.owner === s);
-      if (jet && this.goalTx !== undefined) {
-        if (this.dropAim === undefined) this.dropAim = this.goalTx + gauss() * this.L.aim * 900;
-        const e = { x: jet.x, y: jet.y + 14, vx: jet.vx * 0.39, vy: 47 }; let hitX = null;
-        for (let i = 0; i < 420; i++) { if (flyStep(g, e, 1 / 60, 1, 0.45, 3, null)) { hitX = e.x; break; } }
-        if (hitX !== null && (jet.dir > 0 ? hitX >= this.dropAim : hitX <= this.dropAim)) send({ c: 'fire' });
+      if (jet) {
+        if (this.dropAim === undefined) this.dropAim = this.goalTx + gauss() * this.L.aim * 300;
+        const hit = bombImpact(g, jet.x, jet.y, jet.dir);
+        if (hit && (jet.dir > 0 ? hit.x >= this.dropAim : hit.x <= this.dropAim)) send({ c: 'fire' });
       }
     }
     // орбитальный лазер: подводим луч к цели клавишами

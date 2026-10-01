@@ -3,7 +3,7 @@
    Ввод (клавиатура + мышь) и локальный контроллер игрока
    ========================================================= */
 const Input = {
-  keys: {}, pressed: {}, mouse: { x: 0, y: 0, down: [false, false, false], clicked: [false, false, false], moved: false },
+  keys: {}, pressed: {}, mouse: { x: 0, y: 0, down: [false, false, false], clicked: [false, false, false], moved: false, inside: false },
   wheel: 0, typing: false, drag: null, onClickRight: null, onBinoc: null, onWheel: null,
   GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'KeyF']),
   init(cv) {
@@ -14,19 +14,21 @@ const Input = {
       this.keys[e.code] = true;
     });
     window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
-    window.addEventListener('blur', () => { this.keys = {}; this.mouse.down = [false, false, false]; this.releaseRight(); });
+    window.addEventListener('blur', () => { this.keys = {}; this.mouse.down = [false, false, false]; this.mouse.inside = false; this.releaseRight(); });
+    // курсор ушёл с поля (за окно или на кнопки интерфейса) — прокрутка у края экрана останавливается
+    cv.addEventListener('mouseleave', () => { this.mouse.inside = false; });
     window.addEventListener('contextmenu', (e) => { if (this.drag || this.binocOn) e.preventDefault(); });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('mousemove', (e) => {
       const dx = e.clientX - this.mouse.x, dy = e.clientY - this.mouse.y;
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.moved = true;
+      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.moved = true; this.mouse.inside = true;
       // кнопку отпустили там, где событие не дошло (за окном, над интерфейсом) — бинокль всё равно выключаем
       if (this.drag && this.drag.btn === 2 && !(e.buttons & 2)) { this.releaseRight(); return; }
       if (this.drag) { this.drag.dist += Math.abs(dx) + Math.abs(dy); this.checkBinoc(); }
     });
     cv.addEventListener('mousedown', (e) => {
       Sfx.resume();
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY;
+      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true;
       this.mouse.down[e.button] = true; if (e.button === 0) this.mouse.clicked[0] = true;
       // ПКМ: короткий клик — арсенал, удержание — бинокль
       if (e.button === 2) { this.drag = { btn: 2, dist: 0, t0: performance.now(), binoc: false }; e.preventDefault(); }
@@ -76,12 +78,12 @@ class LocalController {
     if (T.phase === 'use') {
       if (T.weapon === 'robot') return 'ЛКМ / Enter — взорвать робота';
       if (T.weapon === 'jetpack') return 'W / Пробел — тяга, A/D — в стороны, ЛКМ — выключить';
-      if (T.weapon === 'airstrike') return 'ЛКМ / Enter — СБРОС! Бомбы летят вперёд: берите упреждение';
+      if (T.weapon === 'airstrike') return 'ЛКМ / F — сброс на глаз с упреждением: бомбы летят вперёд. Не успели — у края экрана';
       if (T.weapon === 'orbital') return 'A / D — ведите луч к цели';
       return 'Огонь!';
     }
     if (W.id === 'sniper') return this.breath <= 0.05 ? 'Руки дрожат — отпустите Shift и отдышитесь' : `Мышь — прицел, ЛКМ или F — выстрел. Shift — задержать дыхание. E — ${this.scopeOn ? 'убрать' : 'показать'} оптику`;
-    if (W.id === 'airstrike') return 'Кликните по району: самолёт пройдёт над ним, бомбы сбрасываете сами';
+    if (W.id === 'airstrike') return 'Кликните по цели: самолёт пройдёт над ней, сброс — ЛКМ или F';
     if (W.id === 'lightning') return 'Кликните: туча уйдёт по ветру и ударит в самую высокую точку';
     if (W.id === 'orbital') return 'Кликните: спутник наведётся с ошибкой, луч доводите клавишами A/D';
     if (W.id === 'nuke') return 'Кликните по району: разброс и снос ветром — целься с поправкой';
@@ -109,7 +111,7 @@ class LocalController {
     const w = cam.toWorld(Input.mouse.x, Input.mouse.y, sw, sh); this.mouseW.x = w[0]; this.mouseW.y = w[1];
     const s = sc.soldiers.find(o => o.id === T.sid);
     this.mine = !!(s && s.alive && !s.gone && this.myTeams.includes(T.team) && T.phase !== 'over');
-    if (!this.mine) { this.cancelCharge(); this.key = null; this.scopeOn = false; this.scopeWeapon = null; return; }
+    if (!this.mine) { this.cancelCharge(); this.key = null; this.scopeOn = false; this.scopeWeapon = null; this.edgePan = false; return; }
     const key = T.round + ':' + T.sid;
     if (this.key !== key) { this.scopeOn = false; this.scopeWeapon = null; this.key = key; this.aim = this.base = s.aim; this.power = 0; this.cancelCharge(); this.pendingTarget = false; this.lastSig = ''; this.breath = 2.5; }
     if (this.base === undefined) this.base = this.aim;
@@ -123,6 +125,8 @@ class LocalController {
     const up = !!K.KeyW, down = !!K.KeyS, aimUp = !!K.ArrowUp, aimDown = !!K.ArrowDown;
     // мышь также выбирает точку для авиаудара, молнии и т. п.
     const pickPoint = W.mode === 'target' || W.mode === 'place' || (W.mode === 'tcharge' && !T.target);
+    // цель дальнобойного оружия может быть за экраном: курсор у края экрана сам ведёт обзор (render.js, Camera.edgeDir)
+    this.edgePan = canAct && (W.mode === 'target' || (W.mode === 'tcharge' && !T.target));
     // прежняя оптика ×3 появляется сразу при выборе снайперки; E только скрывает или показывает её
     const sniperScope = T.weapon === 'sniper' && canAct;
     if (sniperScope && this.scopeWeapon !== 'sniper') { this.scopeOn = true; this.aimMode = 'mouse'; }
@@ -168,7 +172,20 @@ class LocalController {
     if (P.Space && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
     // в бинокль клик не стреляет: мышь ведёт обзор (кроме оружия с выбором точки)
     const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = !!(P.Enter || P.KeyF);   // выстрел: ЛКМ, Enter или F
-    if (phase === 'use') { if (mFire || kFire) this.send({ c: 'fire' }); }
+    if (phase === 'use') {
+      // авиаудар: сброс — ЛКМ, F или Enter; не сбросили — бомбы уходят сами, когда самолёт долетает до края экрана
+      const jet = T.weapon === 'airstrike' ? sc.entities.find(e => e.k === 'jet' && !e.s && e.team === T.team) : null;
+      if (jet) {
+        const dir = Math.cos(jet.a) >= 0 ? 1 : -1, sx = cam.toScreen(jet.x, jet.y, sw, sh)[0], nose = 42 * cam.z;
+        if (sx >= 0 && sx <= sw) this.jetSeen = jet.id;
+        // край экрана считается, когда самолёт уже прошёл над точкой курса (f): пока обзор едет к цели, самолёт может мелькнуть у края раньше
+        const passed = !jet.f || dir * (jet.x - jet.f) > 0;
+        const atEdge = !this.binoc && passed && this.jetSeen === jet.id && (dir > 0 ? sx >= sw - nose : sx <= nose);
+        // точка сброса — где самолёт нарисован на экране (между шагами симуляции, как в main.js)
+        const seenX = jet.px !== undefined && typeof App !== 'undefined' ? jet.px + (jet.x - jet.px) * clamp(App.acc / DT, 0, 1) : jet.x;
+        if ((mFire || kFire || atEdge) && this.jetSent !== jet.id) { this.jetSent = jet.id; this.send({ c: 'fire', x: Math.round(seenX * 10) / 10 }); }
+      } else if (mFire || kFire) this.send({ c: 'fire' });
+    }
     else if (canAct) {
       switch (W.mode) {
         case 'charge': case 'tcharge': {

@@ -17,6 +17,7 @@ const UI = {
     $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
     for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai', 'o-side']) $(id).addEventListener('change', () => this.onSettingsChanged());
     $('o-turnTime').addEventListener('input', () => this.onSettingsChanged());
+    $('o-turnInf').addEventListener('change', () => { this.syncTurnInf(); this.onSettingsChanged(); });
     $('o-hp').addEventListener('input', () => this.onSettingsChanged());
     $('o-arsenal').addEventListener('change', () => { this.fillAmmo(makeAmmo($('o-arsenal').value)); this.onSettingsChanged(); });
     $('ammo-all').addEventListener('click', () => { const m = {}; for (const w of WEAPONS) m[w.id] = w.ammo; this.fillAmmo(m); this.onSettingsChanged(); });
@@ -81,7 +82,7 @@ const UI = {
     $('room-box').classList.toggle('hidden', !(mode === 'host' || mode === 'guest'));
     $('o-ai-wrap').classList.toggle('hidden', mode !== 'cpu');
     const guest = mode === 'guest';
-    document.querySelectorAll('#opts select, #opts input, #ammo-box input, #ammo-box button').forEach(s => { s.disabled = guest; });
+    document.querySelectorAll('#opts select, #opts input, #ammo-box input, #ammo-box button').forEach(s => { s.disabled = guest; }); this.syncTurnInf();
     $('btn-start').classList.toggle('hidden', guest);
     this.setNote(guest ? 'Хост выбирает карту и настройки. Вы можете настроить свою команду.' : mode === 'host' ? 'Отправьте код другу. Когда он подключится — жмите «В бой!»' : '');
     this.buildTeams(); this.markMap(); this.show('s-setup');
@@ -92,13 +93,20 @@ const UI = {
   readSettings() {
     const S = this.settings;
     S.perTeam = +$('o-perTeam').value; { const hp = Math.round(+$('o-hp').value); if (Number.isFinite(hp) && hp >= 1) S.hp = Math.min(1000, hp); } S.wind = $('o-wind').value === '1'; S.side = $('o-side').value;
-    const tt = Math.round(+$('o-turnTime').value); if (Number.isFinite(tt) && tt >= 5) S.turnTime = Math.min(600, tt);
+    // время хода: 0 — без ограничения (ход длится до выстрела или пропуска)
+    const tt = Math.round(+$('o-turnTime').value);
+    if ($('o-turnInf').checked) S.turnTime = 0;
+    else if (Number.isFinite(tt) && tt >= 5) S.turnTime = Math.min(600, tt);
+    else if (!(S.turnTime > 0)) S.turnTime = 45;
     S.crates = false; S.sd = 0; S.arsenal = $('o-arsenal').value; S.ai = $('o-ai').value;
     S.ammo = this.readAmmo();
     return S;
   },
+  /** «без лимита» выключает поле секунд (у гостя настройки и так недоступны) */
+  syncTurnInf() { $('o-turnTime').disabled = this.mode === 'guest' || $('o-turnInf').checked; },
   applySettings(S) {
-    $('o-perTeam').value = String(S.perTeam); $('o-hp').value = String(S.hp); $('o-turnTime').value = String(S.turnTime); $('o-wind').value = S.wind ? '1' : '0';
+    const inf = !(S.turnTime > 0); $('o-turnInf').checked = inf; if (!inf || !$('o-turnTime').value) $('o-turnTime').value = String(inf ? 45 : S.turnTime); this.syncTurnInf();
+    $('o-perTeam').value = String(S.perTeam); $('o-hp').value = String(S.hp); $('o-wind').value = S.wind ? '1' : '0';
     $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal'; $('o-side').value = S.side || 'random';
     this.fillAmmo(S.ammo || makeAmmo(S.arsenal));
   },

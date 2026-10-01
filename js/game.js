@@ -248,7 +248,7 @@ class Game {
       case 'spin': if (T.phase === 'aim') T.spin = T.spin === 0 ? 1 : T.spin === 1 ? -1 : 0; break;
       case 'fire':
         if (T.phase === 'aim') { if (isNum(c.pw) && s.armFactor) c.pw = Math.min(c.pw, s.armFactor()); this.fire(s, c); }   // раненые руки не дают бросить в полную силу
-        else if (T.phase === 'use' && this.usage && this.usage.fire) this.usage.fire(this);
+        else if (T.phase === 'use' && this.usage && this.usage.fire) this.usage.fire(this, c);
         break;
       case 'skip': if (T.phase === 'aim' || T.phase === 'retreat') this.endTurn(); break;
     }
@@ -294,12 +294,14 @@ class Game {
     }
     // запас хода — оставшийся радиус по горизонтали от точки начала хода
     if (T.ox !== undefined && act && act.alive && (T.phase === 'aim' || T.phase === 'retreat')) T.walk = Math.max(0, WALK_BUDGET - Math.abs(act.x - T.ox));
+    const limited = this.cfg.settings.turnTime > 0;
     switch (T.phase) {
       case 'wait': T.delay -= dt; if (T.delay <= 0) this.beginTurn(); break;
       case 'crate': T.delay -= dt; if ((T.delay <= 0 && !this.anyBusy()) || T.delay < -6) this.nextTurn(); break;
-      case 'aim': T.time -= dt; if (!act || !act.alive) this.endTurn(); else if (T.time <= 0) { T.time = 0; this.endTurn(); } break;
+      // время хода 0 — без ограничения: ход длится до выстрела или пропуска
+      case 'aim': if (limited) T.time -= dt; if (!act || !act.alive) this.endTurn(); else if (limited && T.time <= 0) { T.time = 0; this.endTurn(); } break;
       case 'use':
-        if (T.weapon === 'jetpack') { T.time -= dt; if (T.time <= 0) { T.time = 0; if (act && act.st === 'jet') act.st = 'air'; } }
+        if (T.weapon === 'jetpack' && limited) { T.time -= dt; if (T.time <= 0) { T.time = 0; if (act && act.st === 'jet') act.st = 'air'; } }
         if (!act || !act.alive) { this.usage = null; this.endTurn(); }
         break;
       case 'retreat': {

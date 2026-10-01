@@ -17,8 +17,9 @@ try {
             $branch = (& git rev-parse --abbrev-ref HEAD 2>$null)
             & git fetch --quiet origin $branch 2>$null
             if ($LASTEXITCODE -eq 0) {
+                # только перемотка вперёд: локальные коммиты и правки в рабочей папке никогда не стираются
                 & git merge --ff-only --quiet "origin/$branch" 2>$null
-                if ($LASTEXITCODE -ne 0) { & git reset --hard --quiet "origin/$branch" 2>$null }
+                if ($LASTEXITCODE -ne 0) { Write-Host 'Здесь есть свои изменения — автообновление пропущено, запускаем локальную версию.' }
             }
             $after = (& git rev-parse HEAD 2>$null)
             $updated = ($before -ne $after)

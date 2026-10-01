@@ -1,6 +1,6 @@
 'use strict';
 /* Same-origin WebSocket relay. The host owns the simulation. */
-const NET_VERSION = 5;
+const NET_VERSION = 6;
 const Net = {
   socket: null, role: null, code: null, h: {}, pingT: null, rtt: 0,
   lastData: 0, chunks: new Map(), joinTimer: null, linked: false,

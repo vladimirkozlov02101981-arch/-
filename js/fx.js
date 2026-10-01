@@ -96,6 +96,8 @@ class FX {
       case 'bolt': {
         this.bolts.push({ pts: ev.pts, life: 0.5, max: 0.5 }); this.flash = Math.max(this.flash, 0.35); this.flashCol = '#cfe6ff';
         const e = ev.pts[ev.pts.length - 1]; this.lights.push({ x: e[0], y: e[1], r: 260, life: 0.4, max: 0.4, col: '#9fd0ff' });
+        // главный удар молнии камера показывает: место удара и разряд над ним остаются в кадре, пока не осядут бойцы
+        if (ev.m) this.focus = { x: e[0], y: e[1] - 110, t: 1.8 };
         for (let i = 0; i < 14; i++) P.spark(e[0], e[1], rand(-260, 260), rand(-320, -40), rand(0.3, 0.6), '#bfe6ff');
         Sfx.play('zap', { x: e[0], y: e[1] }); this.shake = Math.max(this.shake, 8);
         break;
