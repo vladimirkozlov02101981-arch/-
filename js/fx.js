@@ -324,7 +324,7 @@ class FX {
       M.setTransform(z * 0.5, 0, 0, z * 0.5, ox * 0.5, oy * 0.5);
       {
         const x0 = Math.max(0, Math.floor(v.x0)), y0 = Math.max(0, Math.floor(v.y0)), x1 = Math.min(sc.W, Math.ceil(v.x1)), y1 = Math.min(sc.H, Math.ceil(v.y1));
-        if (x1 > x0 && y1 > y0) for (const cv of [sc.terrain.decor, sc.terrain.canvas]) if (cv) M.drawImage(cv, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+        if (x1 > x0 && y1 > y0) for (const cv of [sc.terrain.decor, sc.terrain.canvas, sc.terrain.surface && sc.terrain.surface.canvas]) if (cv) M.drawImage(cv, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
       }
       M.setTransform(1, 0, 0, 1, 0, 0); M.globalCompositeOperation = 'source-in'; M.fillStyle = amb; M.fillRect(0, 0, W, H);
       L.setTransform(1, 0, 0, 1, 0, 0); L.globalCompositeOperation = 'source-over'; L.globalAlpha = 1; L.fillStyle = '#fff'; L.fillRect(0, 0, W, H); L.drawImage(this.maskCv, 0, 0);

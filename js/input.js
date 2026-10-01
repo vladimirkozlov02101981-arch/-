@@ -55,7 +55,7 @@ const Input = {
 class LocalController {
   constructor(send) {
     this.send = send; this.myTeams = []; this.aim = -0.5; this.aimMode = 'mouse'; this.charging = false; this.chargeByMouse = false;
-    this.power = 0; this.key = null; this.lastSig = ''; this.sendT = 0; this.mouseW = { x: 0, y: 0 }; this.mine = false; this.pendingTarget = false;
+    this.power = 0; this.key = null; this.lastSig = ''; this.sendT = 0; this.mouseW = { x: 0, y: 0 }; this.mine = false; this.pendingTarget = false; this.scopeOn = false; this.scopeWeapon = null;
   }
   available(sc, T) {
     const tm = sc.teams[T.team]; if (!tm) return [];
@@ -80,7 +80,7 @@ class LocalController {
       if (T.weapon === 'orbital') return 'A / D — ведите луч к цели';
       return 'Огонь!';
     }
-    if (W.id === 'sniper') return this.breath <= 0.05 ? 'Руки дрожат — отпустите Shift и отдышитесь' : (this.scopeOn ? 'Мышь — прицел, ЛКМ или F — выстрел. Shift — задержать дыхание. E — убрать оптику' : 'E — оптический прицел. ↑/↓ — наклон, F — выстрел');
+    if (W.id === 'sniper') return this.breath <= 0.05 ? 'Руки дрожат — отпустите Shift и отдышитесь' : `Мышь — прицел, ЛКМ или F — выстрел. Shift — задержать дыхание. E — ${this.scopeOn ? 'убрать' : 'показать'} оптику`;
     if (W.id === 'airstrike') return 'Кликните по району: самолёт пройдёт над ним, бомбы сбрасываете сами';
     if (W.id === 'lightning') return 'Кликните: туча уйдёт по ветру и ударит в самую высокую точку';
     if (W.id === 'orbital') return 'Кликните: спутник наведётся с ошибкой, луч доводите клавишами A/D';
@@ -109,9 +109,9 @@ class LocalController {
     const w = cam.toWorld(Input.mouse.x, Input.mouse.y, sw, sh); this.mouseW.x = w[0]; this.mouseW.y = w[1];
     const s = sc.soldiers.find(o => o.id === T.sid);
     this.mine = !!(s && s.alive && !s.gone && this.myTeams.includes(T.team) && T.phase !== 'over');
-    if (!this.mine) { this.cancelCharge(); this.key = null; return; }
+    if (!this.mine) { this.cancelCharge(); this.key = null; this.scopeOn = false; this.scopeWeapon = null; return; }
     const key = T.round + ':' + T.sid;
-    if (this.key !== key) { this.scopeOn = false; this.key = key; this.aim = this.base = s.aim; this.power = 0; this.cancelCharge(); this.pendingTarget = false; this.lastSig = ''; this.breath = 2.5; }
+    if (this.key !== key) { this.scopeOn = false; this.scopeWeapon = null; this.key = key; this.aim = this.base = s.aim; this.power = 0; this.cancelCharge(); this.pendingTarget = false; this.lastSig = ''; this.breath = 2.5; }
     if (this.base === undefined) this.base = this.aim;
     if (T.target) this.pendingTarget = false;
     const W = WEAPON[T.weapon] || WEAPON.bazooka; const phase = T.phase;
@@ -121,15 +121,18 @@ class LocalController {
     const left = !!(K.KeyA || K.ArrowLeft), right = !!(K.KeyD || K.ArrowRight);
     // W/S — лазание по лестницам и тяга джетпака; стрелки ↑/↓ — только наклон ствола
     const up = !!K.KeyW, down = !!K.KeyS, aimUp = !!K.ArrowUp, aimDown = !!K.ArrowDown;
-    // мышью наводится только снайперка; мышь также выбирает точку для авиаудара, молнии и т. п.
+    // мышь также выбирает точку для авиаудара, молнии и т. п.
     const pickPoint = W.mode === 'target' || W.mode === 'place' || (W.mode === 'tcharge' && !T.target);
-    // снайперка: оптика включается и выключается клавишей E; пока оптика включена — наведение мышью
-    if (T.weapon !== 'sniper' || !canAct) this.scopeOn = false;
-    else if (P.KeyE && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); P.KeyE = false; }
-    // наведение: мышью (как раньше) или стрелками ↑/↓ — работает то, чем пользовались последним. У снайперки мышь ведёт ствол только в оптике
-    if (Input.mouse.moved) this.aimMode = 'mouse';
+    // прежняя оптика ×3 появляется сразу при выборе снайперки; E только скрывает или показывает её
+    const sniperScope = T.weapon === 'sniper' && canAct;
+    if (sniperScope && this.scopeWeapon !== 'sniper') { this.scopeOn = true; this.aimMode = 'mouse'; }
+    if (!sniperScope) this.scopeOn = false;
+    this.scopeWeapon = sniperScope ? 'sniper' : null;
+    if (sniperScope && P.KeyE && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); P.KeyE = false; }
+    // наведение мышью или стрелками ↑/↓ — работает то, чем пользовались последним, даже со скрытой оптикой
+    if (Input.mouse.moved || (sniperScope && Input.mouse.clicked[0])) this.aimMode = 'mouse';
     if (aimUp || aimDown) this.aimMode = 'keys';
-    const mouseAim = canAct && this.aimMode === 'mouse' && (T.weapon !== 'sniper' || this.scopeOn);
+    const mouseAim = canAct && this.aimMode === 'mouse';
     if (mouseAim && (!this.binoc || pickPoint)) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
     else {
       let face = Math.cos(this.base) >= 0 ? 1 : -1;

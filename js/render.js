@@ -177,6 +177,7 @@ class Renderer {
     this.drawLiquid(c, sc, v, t, true);
     if (!this.hires) this.hires = new HiResTerrain();
     if (!this.hires.draw(c, sc, v, z * dpr)) { this.blit(c, sc.terrain.decor, v, sc); this.blit(c, sc.terrain.canvas, v, sc); }
+    if (sc.terrain.drawSurfaceNative) sc.terrain.drawSurfaceNative(c, v, z * dpr);
     drawTacticalRoutes(c, sc.map);
     if (window.NAV_DEBUG && typeof NavCheck !== 'undefined' && NAV_DEBUG.map === sc.map.id) NavCheck.draw(c, NAV_DEBUG.res);
     if (sc.terrain.glow) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.5 + 0.22 * Math.sin(t * 1.6); this.blit(c, sc.terrain.glow, v, sc); c.restore(); }
@@ -228,6 +229,7 @@ class Renderer {
     const d = this.detCv.getContext('2d'); d.setTransform(1, 0, 0, 1, 0, 0); d.globalCompositeOperation = 'source-over'; d.clearRect(0, 0, cv.width, cv.height);
     d.setTransform(c.getTransform()); d.imageSmoothingEnabled = true;
     this.blit(d, sc.terrain.decor, v, sc); this.blit(d, sc.terrain.canvas, v, sc);
+    if (sc.terrain.surface) this.blit(d, sc.terrain.surface.canvas, v, sc);
     d.globalCompositeOperation = 'source-in'; d.fillStyle = pat; d.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0);
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'overlay'; c.globalAlpha = 0.55 * k; c.drawImage(this.detCv, 0, 0); c.restore();
   }

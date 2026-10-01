@@ -66,9 +66,34 @@ const TexLib = {
     im.src = `assets/tex/hi/${n}.webp`;
     return null;
   },
+  surfaceHi: {},
+  fine: {},
+  fineAvail: new Set(['dirt_valley', 'dirt_castle']),
+  /** цветные фотодетали: 128 = исходный цвет, 8 текселей на игровую единицу */
+  loadFine(n) {
+    if (this.fine[n] !== undefined) return this.fine[n];
+    this.fine[n] = null; if (!this.fineAvail.has(n)) return null;
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(c.width * c.height * 3);
+        for (let i = 0; i < c.width * c.height; i++) { rgb[i * 3] = d[i * 4]; rgb[i * 3 + 1] = d[i * 4 + 1]; rgb[i * 3 + 2] = d[i * 4 + 2]; }
+        const mw = Math.floor(c.width / 2), mh = Math.floor(c.height / 2), md = new Uint8Array(mw * mh * 3);
+        for (let y = 0; y < mh; y++) for (let xx = 0; xx < mw; xx++) for (let channel = 0; channel < 3; channel++) {
+          const a = (y * 2 * c.width + xx * 2) * 3 + channel, b = a + c.width * 3;
+          md[(y * mw + xx) * 3 + channel] = Math.round((rgb[a] + rgb[a + 3] + rgb[b] + rgb[b + 3]) / 4);
+        }
+        this.fine[n] = { name: n, w: c.width, h: c.height, scale: 8, d: rgb, mip: { w: mw, h: mh, scale: 4, d: md } };
+      } catch (e) { /* без мелких фотодеталей */ }
+    };
+    im.onerror = () => {};
+    im.src = `assets/tex/fine/${n}.webp`;
+    return null;
+  },
   load() {
     if (this.ready) return this.ready;
-    this.ready = Promise.all(this.names.map((n) => new Promise((res) => {
+    const base = this.names.map((n) => new Promise((res) => {
       const im = new Image();
       im.onload = () => {
         try {
@@ -79,7 +104,20 @@ const TexLib = {
       };
       im.onerror = () => res();
       im.src = `assets/tex/${n}.png`;
-    })));
+    }));
+    const surface = ['grass_valley', 'bush1', 'bush2'].map((n) => new Promise((res) => {
+      const im = new Image();
+      im.onload = () => {
+        try {
+          const c = makeCanvas(im.naturalWidth, im.naturalHeight); c.getContext('2d').drawImage(im, 0, 0);
+          this.surfaceHi[n] = { name: n, w: c.width, h: c.height, canvas: c, scale: 4 };
+        } catch (e) { /* остаётся обычный спрайт */ }
+        res();
+      };
+      im.onerror = () => res();
+      im.src = `assets/tex/surface/${n}.png`;
+    }));
+    this.ready = Promise.all(base.concat(surface));
     return this.ready;
   },
 };
