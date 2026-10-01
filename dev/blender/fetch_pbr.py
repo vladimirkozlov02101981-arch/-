@@ -5,7 +5,8 @@
 """
 import json, os, sys, urllib.request
 
-RES = sys.argv[1] if len(sys.argv) > 1 else '4k'
+_a = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [a for a in sys.argv[1:] if not a.startswith('-') and not a.endswith('.py')]
+RES = _a[0] if _a else '4k'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'pbr')
 UA = {'User-Agent': 'TerritoryWar-texture-fetch/1.0'}
 
