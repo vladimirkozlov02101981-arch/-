@@ -121,6 +121,44 @@ def mat(name, col, metal=0.0, rough=0.5, bump=0.0, scale=40, wear=0.0, bare=(0.6
     L.new(fz.outputs['Fac'], bp.inputs['Height']); L.new(bev.outputs['Normal'], bp.inputs['Normal']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
     return m
 
+PBR = os.path.join(HERE, '..', 'pbr')
+def scan(target):
+    """фотоскан Poly Haven из dev/pbr (если скачан): словарь путей diff/rough/nor_gl"""
+    import json, glob
+    try: aid = json.load(open(os.path.join(PBR, 'catalog.json'), encoding='utf-8'))[target][0]
+    except Exception: return None
+    get = lambda k: (sorted(glob.glob(os.path.join(PBR, aid, '%s_%s_*' % (aid, k)))) or [None])[-1]
+    return {'diff': get('diff'), 'rough': get('rough'), 'nor': get('nor_gl')}
+
+def apply_scan(m, target, scale, tint=None, keep_color=True):
+    """накладывает скан на материал: кубическая проекция по координатам объекта (без развёртки)"""
+    S = scan(target)
+    if not S: return m
+    N = m.node_tree.nodes; L = m.node_tree.links; b = N['Principled BSDF']
+    tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (scale, scale, scale)
+    L.new(tc.outputs['Object'], mp.inputs['Vector'])
+    def img(path, nc):
+        t = N.new('ShaderNodeTexImage'); t.image = bpy.data.images.load(path, check_existing=True); t.projection = 'BOX'; t.projection_blend = 0.3
+        if nc: t.image.colorspace_settings.name = 'Non-Color'
+        L.new(mp.outputs['Vector'], t.inputs['Vector']); return t
+    if S['rough']:
+        rr = img(S['rough'], True); mr = N.new('ShaderNodeMapRange'); mr.inputs['To Min'].default_value = 0.15; mr.inputs['To Max'].default_value = 0.85
+        L.new(rr.outputs['Color'], mr.inputs['Value']); L.new(mr.outputs['Result'], b.inputs['Roughness'])
+    if S['nor']:
+        nt = N.new('ShaderNodeNormalMap'); nt.inputs['Strength'].default_value = 0.8; L.new(img(S['nor'], True).outputs['Color'], nt.inputs['Color']); L.new(nt.outputs['Normal'], b.inputs['Normal'])
+    if S['diff']:
+        dt = img(S['diff'], False)
+        if keep_color and b.inputs['Base Color'].is_linked:   # свой цвет × яркость скана (пятна, износ, грязь)
+            src = b.inputs['Base Color'].links[0].from_socket
+            bw = N.new('ShaderNodeRGBToBW'); L.new(dt.outputs['Color'], bw.inputs['Color'])
+            k = N.new('ShaderNodeMath', operation='MULTIPLY') if False else N.new('ShaderNodeMath'); k.operation = 'MULTIPLY'; k.inputs[1].default_value = 2.2
+            L.new(bw.outputs['Val'], k.inputs[0])
+            vm = N.new('ShaderNodeVectorMath'); vm.operation = 'SCALE'; L.new(src, vm.inputs[0]); L.new(k.outputs[0], vm.inputs['Scale'])
+            L.new(vm.outputs['Vector'], b.inputs['Base Color'])
+        else:
+            L.new(dt.outputs['Color'], b.inputs['Base Color'])
+    return m
+
 def wood_mat():
     """орех под лаком: годовые кольца, поры, лаковое покрытие, потёртый лак на рёбрах"""
     m = bpy.data.materials.new('wood'); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links; b = N['Principled BSDF']
@@ -187,11 +225,11 @@ def render(sc, name):
         SHOW['n'] += 1; print('ADDED', name); return
     os.makedirs(OUT, exist_ok=True); sc.render.filepath = os.path.join(OUT, 'wpn_' + name + '.png'); bpy.ops.render.render(write_still=True); print('WROTE', name)
 
-STEEL = lambda: mat('steel', (0.55, 0.56, 0.58), 1.0, 0.32, 0.06, 60, scratches=0.6, dirt=0.25)
-BLACK = lambda: mat('black', (0.07, 0.072, 0.075), 0.85, 0.42, 0.06, 80, wear=0.7, bare=(0.55, 0.55, 0.57), scratches=0.4)
-WOOD = wood_mat
-OLIVE = lambda: mat('olive', (0.28, 0.32, 0.18), 0.0, 0.62, 0.08, 50, wear=0.8, bare=(0.45, 0.45, 0.46), dirt=0.45)
-RUBBER = lambda: mat('rubber', (0.06, 0.06, 0.058), 0.0, 0.78, 0.25, 140, dirt=0.2)
+STEEL = lambda: apply_scan(mat('steel', (0.55, 0.56, 0.58), 1.0, 0.32, 0.06, 60, scratches=0.6, dirt=0.25), 'gun_metal', 6.0)
+BLACK = lambda: apply_scan(mat('black', (0.07, 0.072, 0.075), 0.85, 0.42, 0.06, 80, wear=0.7, bare=(0.55, 0.55, 0.57), scratches=0.4), 'gun_metal', 6.0)
+WOOD = lambda: apply_scan(wood_mat(), 'gun_wood', 5.0, keep_color=False) if scan('gun_wood') else wood_mat()
+OLIVE = lambda: apply_scan(mat('olive', (0.28, 0.32, 0.18), 0.0, 0.62, 0.08, 50, wear=0.8, bare=(0.45, 0.45, 0.46), dirt=0.45), 'gun_metal', 4.0)
+RUBBER = lambda: apply_scan(mat('rubber', (0.06, 0.06, 0.058), 0.0, 0.78, 0.25, 140, dirt=0.2), 'rubber', 12.0)
 
 def bazooka():
     sc = reset(); ol, st, bl, rb = OLIVE(), STEEL(), BLACK(), RUBBER()
