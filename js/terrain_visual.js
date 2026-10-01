@@ -667,12 +667,12 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const seed = map.seed || 1;
   const colOff = new Float32Array(W), capN = new Float32Array(W), capS = new Float32Array(W);
   // рваный нижний край травяной шапки: стебли свисают на землю зубцами разной длины
-  const fringe = new Float32Array(W); for (let x = 0; x < W; x++) { const ph = (x + hash3(x >> 2, 0, seed) * 3) % 4, tip = 1 - Math.abs(ph - 2) / 2; fringe[x] = tip * tip * (G.cap.blades ? 4 + hash3(x >> 2, 1, seed) * 11 : hash3(x >> 2, 1, seed) * 2.5); }
+  const fringe = new Float32Array(W); for (let x = 0; x < W; x++) { const ph = (x + hash3(x >> 2, 0, seed) * 3) % 4, tip = 1 - Math.abs(ph - 2) / 2; fringe[x] = tip * tip * (G.cap.blades ? (theme.id === 'valley' || theme.id === 'castle' ? 1 + hash3(x >> 2, 1, seed) * 4 : 4 + hash3(x >> 2, 1, seed) * 11) : hash3(x >> 2, 1, seed) * 2.5); }
   for (let x = 0; x < W; x++) { colOff[x] = fbm1(x / 420, seed + 5, 3) * 28; capN[x] = (fbm1(x / 55, seed + 7, 2) + 1) * 0.5; capS[x] = Math.abs(Math.sin(x * 0.2 + capN[x] * 9)); }
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[82, 102, 34], [60, 76, 24], [54, 42, 24]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[102, 121, 63], [71, 83, 38], [59, 52, 34]] : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -825,12 +825,29 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
   const matAt = (x, y) => mat[y * W + x];
   const grassTex = G.tex && G.tex.grass && TexLib.data[G.tex.grass];
   if (grassTex) {
-    // фотореалистичная трава из Blender: столбик полосы на каждый пиксель поверхности, корни уходят в землю
-    const gh = grassTex.h, gw = grassTex.w, img = grassTex.canvas;
+    // Отдельные пучки разной высоты; низкая светлая кромка долины и замков.
+    const gh = grassTex.h, gw = grassTex.w, meadow = theme.id === 'valley' || theme.id === 'castle';
+    let img = grassTex.canvas;
+    if (meadow) {
+      img = makeCanvas(gw, gh); const sx = img.getContext('2d');
+      sx.filter = 'brightness(1.2) saturate(0.8)'; sx.drawImage(grassTex.canvas, 0, 0);
+    }
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
       if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1) continue;
-      c.drawImage(img, ((x % gw) + gw) % gw, 0, 1, gh, x, y + 7 - gh, 1, gh);
+      const h = meadow ? gh * (0.52 + (fbm1(x / 32, seed + 91, 2) + 1) * 0.16 + hash3(x >> 2, 0, seed + 92) * 0.12) : gh;
+      const offset = meadow ? Math.round(fbm1(x / 90, seed + 93, 2) * 32) : 0;
+      c.drawImage(img, (((x + offset) % gw) + gw) % gw, 0, 1, gh, x, y + 5 - h, 1, h);
+    }
+    if (meadow) {
+      c.save(); c.lineWidth = 0.7;
+      for (let k = 0; k < tops.length; k += 2) {
+        const x = tops[k], y = tops[k + 1];
+        if (y > waterY - 4 || matAt(x, y) !== 1 || !flatTop(x, y) || hash3(x >> 3, 0, seed + 94) < 0.7 || rng() > 0.22) continue;
+        c.strokeStyle = rng() < 0.5 ? '#bab181' : '#adbe70'; const h = 3 + rng() * 9;
+        c.beginPath(); c.moveTo(x, y + 1); c.quadraticCurveTo(x + 1, y - h * 0.5, x + (rng() - 0.5) * 5, y - h); c.stroke();
+      }
+      c.restore();
     }
   }
   if (G.cap.blades && !grassTex) {

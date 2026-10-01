@@ -14,3 +14,4 @@ dist/
 /Territory-War.html
 dev/pbr/
 dev/blender/scenes/
+__pycache__/

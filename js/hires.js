@@ -6,7 +6,7 @@
       поперёк края добавляется резкость, контур на фоне неба остаётся чётким;
    2) поверх накладывается мелкий рельеф материала из фото-текстуры (4 текселя на единицу) — меняется только светотень.
    Плитки кэшируются и пересчитываются только там, где ландшафт изменился (взрыв, балка). */
-const HIRES_T = 128, HIRES_S = 4, HIRES_P = 3;
+const HIRES_T = 128, HIRES_S = 4, HIRES_P = 3, HIRES_G = 1;
 
 class HiResTerrain {
   constructor() {
@@ -71,13 +71,13 @@ class HiResTerrain {
       }
     }
     wk.idle = false; this.pending.add(key);
-    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: HIRES_S, P, src, ref, tab }, [src.buffer, ref.buffer]);
+    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: HIRES_S, P, G: HIRES_G, src, ref, tab }, [src.buffer, ref.buffer]);
     return true;
   }
   done(wk, m) {
     wk.idle = true; this.pending.delete(m.key);
     if (m.ep !== this.epoch || (this.gen.get(m.key) || 0) !== m.g) return;   // плитка устарела (взрыв, смена карты, пришли детали)
-    const N = HIRES_T * HIRES_S, cv = makeCanvas(N, N);
+    const N = (HIRES_T + 2 * HIRES_G) * HIRES_S, cv = makeCanvas(N, N);
     if (m.out) cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(m.out), N, N), 0, 0);
     this.tiles.set(m.key, { cv, used: this.frame });
   }
@@ -91,13 +91,20 @@ class HiResTerrain {
     const cxw = (v.x0 + v.x1) / 2, cyw = (v.y0 + v.y1) / 2, need = [];
     for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) need.push([tx, ty, Math.hypot((tx + 0.5) * T - cxw, (ty + 0.5) * T - cyw)]);
     need.sort((a, b) => a[2] - b[2]);
+    // общие границы в физических пикселях: ни щелей, ни перекрытия полупрозрачных краёв
+    const m = c.getTransform(); c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     for (const [tx, ty] of need) {
       const key = tx + ',' + ty; let e = this.tiles.get(key);
       if (!e && !this.pending.has(key)) this.request(sc, tx, ty);
       const x = tx * T, y = ty * T, w = Math.min(T, sc.W - x), h = Math.min(T, sc.H - y);
-      if (e) { e.used = this.frame; c.drawImage(e.cv, 0, 0, w * HIRES_S, h * HIRES_S, x, y, w, h); }
-      else { c.drawImage(terr.decor, x, y, w, h, x, y, w, h); c.drawImage(terr.canvas, x, y, w, h, x, y, w, h); }
+      const px0 = Math.round(x * m.a + m.e), py0 = Math.round(y * m.d + m.f), px1 = Math.round((x + w) * m.a + m.e), py1 = Math.round((y + h) * m.d + m.f);
+      const dw = px1 - px0, dh = py1 - py0; if (dw <= 0 || dh <= 0) continue;
+      // обратное преобразование сохраняет мировые координаты текстуры; кромка даёт соседние тексели фильтру
+      const wx = (px0 - m.e) / m.a, wy = (py0 - m.f) / m.d, ww = dw / m.a, wh = dh / m.d;
+      if (e) { e.used = this.frame; c.drawImage(e.cv, (wx - x + HIRES_G) * HIRES_S, (wy - y + HIRES_G) * HIRES_S, ww * HIRES_S, wh * HIRES_S, px0, py0, dw, dh); }
+      else { c.drawImage(terr.decor, wx, wy, ww, wh, px0, py0, dw, dh); c.drawImage(terr.canvas, wx, wy, ww, wh, px0, py0, dw, dh); }
     }
+    c.restore();
     if (this.tiles.size > 140) {   // память: выбрасываем давно не видимые плитки
       const old = [...this.tiles.entries()].sort((a, b) => a[1].used - b[1].used);
       for (let i = 0; i < old.length - 110; i++) this.tiles.delete(old[i][0]);
@@ -111,7 +118,7 @@ function hiresWorkerMain() {
   const HI = {};
   onmessage = (ev) => {
     const m = ev.data; if (m.hi) { HI[m.hi.name] = m.hi; return; }
-    const { T, S, P, src: sd, tx, ty } = m, w = T + 2 * P, n = w * w, N = T * S;
+    const { T, S, P, G: pad, src: sd, tx, ty } = m, w = T + 2 * P, n = w * w, N = (T + 2 * pad) * S;
     const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), A = new Float32Array(n), L = new Float32Array(n);
     let any = false;
     for (let i = 0; i < n; i++) {
@@ -151,9 +158,9 @@ function hiresWorkerMain() {
       return ((d[ya * W2 + xa] * (1 - fx) + d[ya * W2 + xb] * fx) * (1 - fy) + (d[yb * W2 + xa] * (1 - fx) + d[yb * W2 + xb] * fx) * fy) / 128;
     };
     for (let Y = 0; Y < N; Y++) {
-      const v = P + (Y + 0.5) / S - 0.5, vi = Math.round(v), wy = ty * T + (Y + 0.5) / S;
+      const v = P - pad + (Y + 0.5) / S - 0.5, vi = Math.round(v), wy = ty * T - pad + (Y + 0.5) / S;
       for (let X = 0; X < N; X++) {
-        const u = P + (X + 0.5) / S - 0.5, li = vi * w + Math.round(u), o = (Y * N + X) * 4, co = CO[li];
+        const u = P - pad + (X + 0.5) / S - 0.5, li = vi * w + Math.round(u), o = (Y * N + X) * 4, co = CO[li];
         let sr, sg, sb, sa;
         if (co > 0.12) {
           // вдоль края — усреднение (ступеньки пропадают), поперёк — резкость
@@ -174,7 +181,7 @@ function hiresWorkerMain() {
         const rid = REF[li];
         if (rid) {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
           const e = TAB[rid], h = HI[e.name];
-          if (h) { const wx = tx * T + (X + 0.5) / S, q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
+          if (h) { const wx = tx * T - pad + (X + 0.5) / S, q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
         }
         out[o] = r * 255; out[o + 1] = g * 255; out[o + 2] = b * 255; out[o + 3] = a * 255;
       }

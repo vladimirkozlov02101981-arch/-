@@ -3,6 +3,7 @@
    Открывается двойным щелчком без Node.js (игра с компьютером и вдвоём на одном экране).
    Для игры по сети по-прежнему нужен сервер (Играть.cmd / Играть онлайн.cmd).
    Нужен запущенный сервер (npm start) — через браузер PNG-панорамы пережимаются в WebP. */
+require('./tools/pw-chromium.cjs');
 const { chromium } = require('playwright');
 const fs = require('node:fs'), path = require('node:path');
 const root = path.join(__dirname, '..');
@@ -38,6 +39,11 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
       }, '/' + p);
     }
   } finally { await browser.close(); }
+  // карты мелких деталей уже в WebP: сохраняем исходные пиксели без повторного сжатия
+  const hiDir = path.join(root, 'assets/tex/hi');
+  if (fs.existsSync(hiDir)) for (const f of fs.readdirSync(hiDir)) if (f.endsWith('.webp')) {
+    const p = 'assets/tex/hi/' + f; assets[p] = dataUri(p);
+  }
   for (const f of fs.readdirSync(path.join(root, 'assets/sfx'))) if (f.endsWith('.ogg')) assets['assets/sfx/' + f] = dataUri('assets/sfx/' + f);
 
   // шрифты — прямо в CSS
@@ -48,7 +54,7 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
   html = html.replace(/<link rel="icon" href="assets\/favicon.svg"[^>]*>/, `<link rel="icon" href="${dataUri('assets/favicon.svg')}" type="image/svg+xml">`);
   // пути к ресурсам → встроенные данные
   const patch = {
-    'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.png`', 'im.src = ASSET(`assets/tex/${n}.png`)']],
+    'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.png`', 'im.src = ASSET(`assets/tex/${n}.png`)'], ['im.src = `assets/tex/hi/${n}.webp`', 'im.src = ASSET(`assets/tex/hi/${n}.webp`)']],
     'js/ui.js': [['url("assets/maps/${m.id}.png")', 'url("${ASSET(`assets/maps/${m.id}.png`)}")'], ['img.src = `assets/maps/${m.id}-thumb.webp`', 'img.src = ASSET(`assets/maps/${m.id}-thumb.webp`)']],
     'js/audio.js': [['fetch(`assets/sfx/${n}.ogg`)', 'fetch(ASSET(`assets/sfx/${n}.ogg`))']],
   };
