@@ -76,6 +76,13 @@ class Game {
     }
     return null;
   }
+  /** после хода: убрать крошку и занозы там, где ландшафт менялся (и у гостя онлайн — тем же событием) */
+  tidyTerrain() {
+    const T = this.terrain, n = T.touches.length; if (this.tidyN === undefined) this.tidyN = 0;
+    if (n <= this.tidyN) return;
+    const boxes = T.touches.slice(this.tidyN).map(b => [Math.round(b[0]) - 6, Math.round(b[1]) - 6, Math.round(b[2]) + 6, Math.round(b[3]) + 6]);
+    T.tidy(boxes); this.tidyN = T.touches.length; this.emit({ t: 'tidy', b: boxes });
+  }
   carve(x, y, r, scorch = true) { x = Math.round(x); y = Math.round(y); r = Math.round(r); if (r <= 0) return; this.terrain.carve(x, y, r, scorch); this.emit({ t: 'carve', x, y, r, s: scorch ? 1 : 0 }); }
   carveLine(x1, y1, x2, y2, r) { x1 = Math.round(x1); y1 = Math.round(y1); x2 = Math.round(x2); y2 = Math.round(y2); r = Math.round(r); this.terrain.carveLine(x1, y1, x2, y2, r); this.emit({ t: 'cline', x1, y1, x2, y2, r }); }
   splash(x, size) { this.emit({ t: 'splash', x: R1(x), s: size }); }
@@ -330,6 +337,7 @@ class Game {
     return false;
   }
   nextTurn() {
+    this.tidyTerrain();
     const T = this.turn; const alive = this.aliveTeams();
     if (alive.length <= 1) { this.finish(alive[0] || null); return; }
     let ti = T.team;

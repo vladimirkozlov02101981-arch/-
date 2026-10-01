@@ -80,7 +80,7 @@ class HiResTerrain {
   }
   /** рисует видимую часть ландшафта; false — увеличение не нужно (рисуется как обычно) */
   draw(c, sc, v, zp) {
-    if (zp < 1.6 || typeof window !== 'undefined' && window.__noHiRes) return false;
+    if (zp < 1.15 || typeof window !== 'undefined' && window.__noHiRes) return false;
     if (!this.pool()) return false;
     const terr = sc.terrain; if (!this.gen) this.gen = new Map(); this.sync(terr); this.frame++;
     const T = HIRES_T, tx0 = Math.max(0, Math.floor(v.x0 / T)), ty0 = Math.max(0, Math.floor(v.y0 / T)), tx1 = Math.min(Math.ceil(sc.W / T) - 1, Math.floor(v.x1 / T)), ty1 = Math.min(Math.ceil(sc.H / T) - 1, Math.floor(v.y1 / T));
@@ -128,6 +128,9 @@ function hiresWorkerMain() {
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = (y + dy) * w + x + dx; a += Jxx[j]; b += Jxy[j]; c += Jyy[j]; }
       const i = y * w + x, sum = a + c; if (sum < 0.004) continue;
       const dif = Math.sqrt((a - c) * (a - c) + 4 * b * b), th = 0.5 * Math.atan2(2 * b, a - c);
+      // только контур (рядом есть прозрачность): фактуру породы не трогаем, иначе она «плывёт» как масло
+      let amin = 1, amax = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const av = A[(y + dy) * w + x + dx]; if (av < amin) amin = av; if (av > amax) amax = av; }
+      if (amax - amin < 0.25) continue;
       NX[i] = Math.cos(th); NY[i] = Math.sin(th); CO[i] = Math.min(1, (dif / sum) * Math.min(1, sum / 0.03));
     }
     const bil = (arr, u, v) => {

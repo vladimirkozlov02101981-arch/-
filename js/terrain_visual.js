@@ -208,10 +208,10 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = (o.r + o.g + o.b) / S.capMean; r *= q; g *= q; bl *= q; }   // зерно снега/песка/пепла из Blender
   } else if (mt === 1 && S.tx.dirt) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
-    const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
+    const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.texGain; g = o.g * S.texGain; bl = o.b * S.texGain; o.tex = true;
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
     if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
-    { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.26 * dk; g *= 1 - 0.28 * dk; bl *= 1 - 0.27 * dk; }
+    { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
   } else if (mt === 1) {
     const sd = t - capT;
     // крупный масштаб: пятна тона, изгиб пластов и скопления камней (не равномерная сетка)
@@ -286,7 +286,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (r * G2[0] + g * G2[1] + bl * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(r, g, bl) + 1)), br = Math.max(r, g, bl);
       if (dot > 0.93 && br > 150) { o.ga = Math.min(255, (br - 150) * 2.4); o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, k = sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
-    { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.3 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
+    { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.08 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
   } else if (mt === 2) {
     // скала: пласты осадочной породы разной толщины, волнистые; пласт разбит вертикальными трещинами
     // на глыбы; у глыб — объёмная фаска (светлый верх/левый край, тёмный низ), выветренные карнизы и потёки

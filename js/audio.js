@@ -221,7 +221,7 @@ const Sfx = (() => {
       const mat = scene?.terrain.materialAt(pos.x, pos.y + 2) || 1, snowy = !!scene?.theme?.ground?.cap?.snow;
       let set = STEPS[mat] || 'rock'; if (set === 'dirt' && snowy) set = 'snow';
       const list = STEP_SET[set]; let n = pick(list); if (n === lastStep && list.length > 1) n = list[(list.indexOf(n) + 1) % list.length]; lastStep = n;
-      return sample(n, pos, (set === 'dirt' ? 0.5 : set === 'snow' ? 0.55 : 0.45) * rr([0.85, 1.05]), rr([0.985, 1.015]));
+      return sample(n, pos, (set === 'dirt' ? 0.13 : set === 'snow' ? 0.14 : 0.11) * rr([0.85, 1.05]), rr([0.985, 1.015]));   // шаг намного тише любого взрыва и выстрела
     }
     const e = REAL[name]; if (!e) return false;
     const ok = sample(pick(e.f), e.ui ? null : pos, e.v, rr(e.r), e.o || 0);

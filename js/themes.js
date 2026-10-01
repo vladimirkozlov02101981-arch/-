@@ -39,12 +39,12 @@ const THEMES = {
     clouds: { n: 4, color: '#fffaf0', shade: '#eed8bb', alpha: 0.7 },
     liquid: { kind: 'water', top: '#5ad4cb', mid: '#1f9aa3', deep: '#0c4a5e', foam: '#e8fffb', alpha: 0.84 },
     ground: {
-      cap: { cols: ['#f7dfa6', '#ecc787', '#dcac68'], thick: 12, blades: null, ripples: true },
+      cap: { cols: ['#d8b088', '#b88a62', '#8a5e3c'], thick: 8, blades: null, ripples: false },   /* гравий в цвет породы, как в эталоне */
       soil: '#d9a064', soilDepth: 18,
       strata: ['#e39b5b', '#c97944', '#f2b877', '#b4643a', '#d98b52', '#a8552f', '#eaa66a'], band: 17, bandSharp: 0.55,
       rock: ['#d98b52', '#c47444', '#e8a468', '#b3623a', '#cf8250'],
       pebbles: ['#b98a5e', '#9c6f48', '#d0a57a'],
-      outline: '#4d240f', veins: null, ceiling: 'drips', capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand' },
+      outline: '#4d240f', veins: null, ceiling: null, capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand', gain: 1.45 },
     },
     scatter: ['rock', 'drygrass', 'cactusSmall', 'drygrass', 'rock', 'drygrass', 'skull', 'tumbleweed'], scatterRock: true,
     weather: 'dust', birds: false, ambient: null, ambientSound: 'wind',

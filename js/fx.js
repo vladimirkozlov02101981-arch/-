@@ -12,7 +12,7 @@ class FX {
   constructor() { this.isLocalTeam = () => true; this.onOver = null; this.onTurn = null; this.reset(null); }
   reset(sc) {
     this.P = new Particles(); this.P.onRest = (p) => this.litterAdd(p.t === 4 ? 2 : p.t === 7 ? 3 : 4, p.x, p.y, p.rot || 0, p.col, p.s);
-    this.litter = []; this.flyers = [];   // всё, что упало на карту, лежит до конца боя; летящие осколки
+    this.litter = []; this.flyers = [];   // всё, что упало на карту, убирается в начале следующего хода; летящие осколки
     this.lights = []; this.texts = []; this.banners = []; this.traces = []; this.bolts = [];
     this.shake = 0; this.flash = 0; this.flashCol = '#ffffff'; this.focus = null; this.trailAcc = new Map(); this.frameLights = [];
     this.weather = sc ? new Weather(sc.theme.weather) : null; this.propAcc = 0; this.t = 0; this.lightCv = null;
@@ -43,6 +43,7 @@ class FX {
         this.litterAdd(1, ev.x, ev.y);   // пуля застряла в преграде
         for(let i=0;i<4;i++)P.spark(ev.x,ev.y,rand(-80,80),rand(-110,-20),.2,ev.material===6?'#ffe9ad':'#b8ad96');break;
       case 'carve': if (!isHost) sc.terrain.carve(ev.x, ev.y, ev.r, ev.s !== 0); break;
+      case 'tidy': if (!isHost) sc.terrain.tidy(ev.b); break;
       case 'cline': if (!isHost) sc.terrain.carveLine(ev.x1, ev.y1, ev.x2, ev.y2, ev.r); break;
       case 'girder':
         if (!isHost) sc.terrain.addGirder(ev.x, ev.y, ev.a);
@@ -109,7 +110,7 @@ class FX {
         Sfx.play('teleport', { x: ev.x2, y: ev.y2 }); break;
       case 'pickup': this.text(ev.txt, ev.x, ev.y - 20, '#ffd23a', 16); Sfx.play('pickup', ev); break;
       case 'msg': if (ev.to === undefined || this.isLocalTeam(ev.to)) { this.banner(ev.txt, ev.c || '#fff', !!ev.big); if (ev.to !== undefined) Sfx.play('denied'); } break;
-      case 'turn': if (this.onTurn) this.onTurn(ev, sc); Sfx.play('turn'); break;
+      case 'turn': this.litter.length = 0; this.flyers.length = 0; if (this.onTurn) this.onTurn(ev, sc); Sfx.play('turn'); break;   // обломки и осколки исчезают после хода
       case 'water': sc.waterY = ev.y; break;
       case 'siren': Sfx.play('siren'); this.banner('☢ ЯДЕРНЫЙ УДАР! ☢', '#ffd23a', true, 2.4); break;
       case 'plane': Sfx.play('plane'); break;

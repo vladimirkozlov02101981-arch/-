@@ -206,6 +206,65 @@ class Terrain {
     }
     this.touches.push([Math.min(x1, x2) - r - 10, Math.min(y1, y2) - r - 10, Math.max(x1, x2) + r + 10, Math.max(y1, y2) + r + 10]); this.version++;
   }
+  /** уборка после хода: срезает одиночные пиксели-занозы и мелкие бугорки на поверхностях и убирает висящую крошку
+      (мелкие оторванные кусочки) в изменённых областях — по рваному краю воронки бойцы шли рывками.
+      Детерминированно по маске: на обоих компьютерах онлайн-игры даёт одинаковый результат */
+  tidy(boxes) {
+    const W = this.W, H = this.H, m = this.mask, removed = [];
+    const kill = (i) => { if (m[i]) { m[i] = 0; removed.push(i); } };
+    for (const b of boxes) {
+      const x0 = Math.max(1, b[0] | 0), y0 = Math.max(1, b[1] | 0), x1 = Math.min(W - 2, b[2] | 0), y1 = Math.min(H - 2, b[3] | 0);
+      if (x1 <= x0 || y1 <= y0) continue;
+      for (let pass = 0; pass < 3; pass++) {
+        // занозы: твёрдый пиксель, у которого не больше одного твёрдого соседа
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          const i = y * W + x; if (!m[i]) continue;
+          if (m[i - 1] + m[i + 1] + m[i - W] + m[i + W] <= 1) kill(i);
+        }
+        // бугорки шириной 1–2 px и высотой до 3 px на открытой сверху поверхности
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          const i = y * W + x; if (!m[i] || m[i - W]) continue;
+          for (const wdt of [1, 2]) {
+            if (x + wdt > x1) continue; let ok = true;
+            for (let k = 1; k < wdt; k++) if (!m[i + k] || m[i + k - W]) ok = false;
+            if (!ok) continue;
+            const l = i - 1, r = i + wdt; let h = 0;
+            while (h < 4 && !m[l + h * W] && !m[r + h * W]) h++;
+            if (h >= 1 && h <= 3) { for (let q = 0; q < h; q++) for (let k = 0; k < wdt; k++) kill(i + q * W + k); break; }
+          }
+        }
+      }
+      // крошка: связные кусочки меньше 40 пикселей
+      const seen = new Uint8Array((x1 - x0 + 1) * (y1 - y0 + 1));
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const i = y * W + x, si = (y - y0) * (x1 - x0 + 1) + x - x0; if (!m[i] || seen[si]) continue;
+        const st = [i], comp = []; seen[si] = 1; let big = false;
+        while (st.length) {
+          const j = st.pop(); comp.push(j); if (comp.length > 40) { big = true; break; }
+          const jx = j % W, jy = (j / W) | 0;
+          for (const n of [j - 1, j + 1, j - W, j + W]) {
+            if (!m[n]) continue; const nx = n % W, ny = (n / W) | 0;
+            if (nx < x0 || nx > x1 || ny < y0 || ny > y1) { big = true; break; }   // уходит за область — часть массива
+            const sn = (ny - y0) * (x1 - x0 + 1) + nx - x0; if (!seen[sn]) { seen[sn] = 1; st.push(n); }
+          }
+          if (big) break; void jx; void jy;
+        }
+        if (!big) for (const j of comp) kill(j);
+      }
+    }
+    if (!removed.length) return 0;
+    // стираем убранные пиксели и с картинки ландшафта
+    let bx0 = W, by0 = H, bx1 = 0, by1 = 0;
+    for (const i of removed) { const x = i % W, y = (i / W) | 0; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+    const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1;
+    try {
+      const img = this.ctx.getImageData(bx0, by0, bw, bh), d = img.data;
+      for (const i of removed) { const x = i % W - bx0, y = ((i / W) | 0) - by0; d[(y * bw + x) * 4 + 3] = 0; }
+      this.ctx.putImageData(img, bx0, by0);
+    } catch (e) { /* без холста (тесты) */ }
+    this.touches.push([bx0 - 2, by0 - 2, bx1 + 2, by1 + 2]); this.version++;
+    return removed.length;
+  }
   /** балка строителя: ai — индекс угла 0..7 (шаг 22.5°) */
   addGirder(cx, cy, ai, len = 96, thick = 12) {
     cx = Math.round(cx); cy = Math.round(cy); ai = ((ai % 8) + 8) % 8;
