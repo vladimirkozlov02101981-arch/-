@@ -84,7 +84,13 @@ def cyl(x, y, L, r, m, seg=32, r2=None, rot=0.0):
     o.location = ((x + L / 2 * math.cos(rot)) * U, 0, -(y - L / 2 * math.sin(rot)) * U)
     return o
 
+SHOW = {'on': False, 'n': 0}
 def render(sc, name):
+    if SHOW['on']:   # витрина: модели остаются в сцене, каждая — на своей «полке»
+        n = SHOW['n']; dx, z = (n % 3) * 0.56, -(n // 3) * 0.30
+        for o in sc.collection.objects:
+            if o.type == 'MESH' and not o.get('shelf'): o.location.x += dx; o.location.z += z; o['shelf'] = name
+        SHOW['n'] += 1; print('ADDED', name); return
     os.makedirs(OUT, exist_ok=True); sc.render.filepath = os.path.join(OUT, 'wpn_' + name + '.png'); bpy.ops.render.render(write_still=True); print('WROTE', name)
 
 STEEL = lambda: mat('steel', (0.42, 0.43, 0.45), 1.0, 0.32, 0.15, 60)
@@ -233,6 +239,20 @@ def homing():
     render(sc, 'homing')
 
 ALL = {'bazooka': bazooka, 'rpg': rpg, 'assault': assault, 'sniper': sniper, 'shotgun': shotgun, 'revolver': revolver, 'magnum': magnum, 'uzi': uzi, 'minigun': minigun, 'flamer': flamer, 'autocannon': autocannon, 'mortar': mortar, 'homing': homing}
+def showcase(path):
+    """все модели в одной сцене .blend — открыть в Blender и посмотреть/доработать (рендер F12)"""
+    global reset
+    sc = reset(); SHOW['on'] = True
+    _reset = reset; reset = lambda: bpy.context.scene
+    for k in ALL: ALL[k]()
+    reset = _reset
+    cam = sc.camera; n = SHOW['n']; rows = (n + 2) // 3; W, H = 3 * 0.56, rows * 0.30
+    cam.data.ortho_scale = max(W, H) + 0.06; cam.location = (0.08 + 0.56, -5, -(rows - 1) * 0.30 / 2)
+    sc.render.resolution_x = 1800; sc.render.resolution_y = int(1800 * H / W); sc.render.film_transparent = False
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(path)); print('SAVED', path)
+
 if __name__ == '__main__':
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
-    for k in (argv or list(ALL)): ALL[k]()
+    if argv and argv[0] == 'blend': showcase(argv[1] if len(argv) > 1 else 'weapons.blend')
+    else:
+        for k in (argv or list(ALL)): ALL[k]()

@@ -46,6 +46,9 @@ def reset():
     except Exception:
         pass
     sc.cycles.samples = 128
+    # TEX_SCALE=2: та же сцена в двойном разрешении — детали для чёткой карты при приближении (assets/tex/hi)
+    k = int(os.environ.get('TEX_SCALE', '1'))
+    if k > 1: sc.render.resolution_percentage = 100 * k; sc.cycles.samples = 48
     sc.cycles.use_denoising = True
     sc.render.resolution_x = PX
     sc.render.resolution_y = PX
@@ -77,6 +80,9 @@ def reset():
 def render(sc, name):
     os.makedirs(OUT, exist_ok=True)
     sc.render.filepath = os.path.join(OUT, name + '.png')
+    if os.environ.get('SAVE_BLEND'):   # сохранить сцену, чтобы открыть её в Blender
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.join(os.environ['SAVE_BLEND'], name + '.blend')); print('SAVED', name + '.blend')
+        if os.environ.get('NO_RENDER'): return
     bpy.ops.render.render(write_still=True)
     print('WROTE', sc.render.filepath)
 

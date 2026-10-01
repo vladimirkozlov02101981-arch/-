@@ -47,6 +47,25 @@ const TexLib = {
     'wpn_bazooka', 'wpn_rpg', 'wpn_assault', 'wpn_sniper', 'wpn_shotgun', 'wpn_revolver', 'wpn_magnum', 'wpn_uzi', 'wpn_minigun', 'wpn_flamer', 'wpn_autocannon', 'wpn_mortar', 'wpn_homing'],
   data: {},
   ready: null,
+  hi: {},
+  hiAvail: new Set(['brick_castle', 'dirt_canyon', 'rock_canyon']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
+  /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
+  loadHi(n) {
+    if (this.hi[n] !== undefined) return this.hi[n];
+    this.hi[n] = null; if (!this.hiAvail.has(n)) return null;
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data, g = new Uint8Array(c.width * c.height);
+        for (let i = 0; i < g.length; i++) g[i] = d[i * 4];
+        this.hi[n] = { name: n, w: c.width, h: c.height, d: g };
+      } catch (e) { /* без деталей */ }
+    };
+    im.onerror = () => {};
+    im.src = `assets/tex/hi/${n}.webp`;
+    return null;
+  },
   load() {
     if (this.ready) return this.ready;
     this.ready = Promise.all(this.names.map((n) => new Promise((res) => {
@@ -54,7 +73,7 @@ const TexLib = {
       im.onload = () => {
         try {
           const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
-          x.drawImage(im, 0, 0); this.data[n] = { w: c.width, h: c.height, canvas: c, d: x.getImageData(0, 0, c.width, c.height).data };
+          x.drawImage(im, 0, 0); this.data[n] = { name: n, w: c.width, h: c.height, canvas: c, d: x.getImageData(0, 0, c.width, c.height).data };
         } catch (e) { /* холст недоступен — без текстуры */ }
         res();
       };

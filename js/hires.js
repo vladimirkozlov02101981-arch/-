@@ -15,24 +15,17 @@ class HiResTerrain {
     const w = HIRES_T + 2 * HIRES_P;
     this.src = makeCanvas(w, w); this.sx = this.src.getContext('2d', { willReadFrequently: true });
   }
-  /** высокочастотная часть фото-текстуры темы (серое, среднее 0) */
-  detail(sc) {
-    const id = sc.theme.id; if (this.detKey === id) return this.det;
-    const tx = (sc.theme.ground && sc.theme.ground.tex) || {}, T = TexLib.data[tx.rock || tx.dirt || tx.concrete || tx.cave];
-    this.detKey = id; this.det = null; if (!T) return null;
-    const W = T.w, H = T.h, d = T.d, n = W * H, g = new Float32Array(n);
-    for (let i = 0; i < n; i++) g[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11;
-    const R = 1, tmp = new Float32Array(n), bl = new Float32Array(n);   // только мелкое зерно, не крупный рисунок
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let a = 0; for (let k = -R; k <= R; k++) a += g[y * W + ((x + k + W) % W)]; tmp[y * W + x] = a / (2 * R + 1); }
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let a = 0; for (let k = -R; k <= R; k++) a += tmp[((y + k + H) % H) * W + x]; bl[y * W + x] = a / (2 * R + 1); }
-    let v2 = 0; for (let i = 0; i < n; i++) { const h = g[i] - bl[i]; v2 += h * h; }
-    const amp = 0.085 / Math.max(3, Math.sqrt(v2 / n)), out = new Float32Array(n);
-    for (let i = 0; i < n; i++) out[i] = Math.max(-0.5, Math.min(0.5, (g[i] - bl[i]) * amp));
-    this.det = { w: W, h: H, d: out }; return this.det;
+  /** сколько карт деталей уже загружено — когда приходят новые, плитки пересчитываются */
+  hiCount(terr) {
+    const tab = terr.texRef ? terr.texRef.tab : [], names = new Set(); let n = 0;
+    for (let i = 1; i < tab.length; i++) if (tab[i]) names.add(tab[i].name);
+    for (const nm of names) { if (TexLib.loadHi(nm) || TexLib.hi[nm]) n++; }
+    return n;
   }
   sync(terr) {
     if (!this.pending) this.pending = new Set();
-    if (terr !== this.terr) { this.tiles.clear(); this.gen = new Map(); this.pending.clear(); this.terr = terr; this.ver = terr.version; this.nTouch = (terr.touches || []).length; return; }
+    const hc = this.hiCount(terr);
+    if (terr !== this.terr || hc !== this.hc) { this.tiles.clear(); this.gen = new Map(); this.pending.clear(); this.epoch = (this.epoch || 0) + 1; this.hc = hc; this.terr = terr; this.ver = terr.version; this.nTouch = (terr.touches || []).length; return; }
     if (terr.version === this.ver) return;
     const T = terr.touches || [];
     if (T.length === this.nTouch) { this.tiles.clear(); this.gen = new Map(); this.pending.clear(); }   // перерисовка целиком
@@ -52,7 +45,7 @@ class HiResTerrain {
       const n = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) - 1));
       this.workers = [];
       for (let i = 0; i < n; i++) {
-        const wk = new Worker(url); wk.idle = true; wk.detKey = null;
+        const wk = new Worker(url); wk.idle = true; wk.hiSent = new Set();
         wk.onmessage = (ev) => this.done(wk, ev.data); wk.onerror = () => { wk.idle = true; };
         this.workers.push(wk);
       }
@@ -65,15 +58,25 @@ class HiResTerrain {
     const x0 = tx * T - P, y0 = ty * T - P, sx = this.sx;
     sx.clearRect(0, 0, w, w); sx.drawImage(terr.decor, x0, y0, w, w, 0, 0, w, w); sx.drawImage(terr.canvas, x0, y0, w, w, 0, 0, w, w);
     const src = sx.getImageData(0, 0, w, w).data;
-    const det = this.detail(sc);
-    if (det && wk.detKey !== this.detKey) { wk.postMessage({ det: { w: det.w, h: det.h, d: det.d } }); wk.detKey = this.detKey; }
+    // ссылки на текстуры: какой пиксель из какой текстуры (перед — твёрдое, иначе задняя стена)
+    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {};
+    if (R) for (let y = 0; y < w; y++) {
+      const gy = y0 + y; if (gy < 0 || gy >= H) continue;
+      for (let x = 0; x < w; x++) {
+        const gx = x0 + x; if (gx < 0 || gx >= W) continue;
+        const i = gy * W + gx, id = terr.mask[i] ? R.F[i] : R.B[i]; if (!id) continue;
+        const e = R.tab[id], hi = e && TexLib.hi[e.name]; if (!hi) continue;
+        ref[y * w + x] = id;
+        if (!tab[id]) { tab[id] = { name: e.name, dx: e.dx, dy: e.dy, k: hi.w / e.w }; if (!wk.hiSent.has(e.name)) { wk.postMessage({ hi: hi }); wk.hiSent.add(e.name); } }
+      }
+    }
     wk.idle = false; this.pending.add(key);
-    wk.postMessage({ key, g: this.gen.get(key) || 0, tx, ty, T, S: HIRES_S, P, src, useDet: !!det, theme: this.detKey }, [src.buffer]);
+    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: HIRES_S, P, src, ref, tab }, [src.buffer, ref.buffer]);
     return true;
   }
   done(wk, m) {
     wk.idle = true; this.pending.delete(m.key);
-    if (m.theme !== this.detKey || (this.gen.get(m.key) || 0) !== m.g) return;   // плитка устарела (взрыв, смена карты)
+    if (m.ep !== this.epoch || (this.gen.get(m.key) || 0) !== m.g) return;   // плитка устарела (взрыв, смена карты, пришли детали)
     const N = HIRES_T * HIRES_S, cv = makeCanvas(N, N);
     if (m.out) cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(m.out), N, N), 0, 0);
     this.tiles.set(m.key, { cv, used: this.frame });
@@ -105,9 +108,9 @@ class HiResTerrain {
 
 /* код фонового потока (запускается из строки — работает и в сборке одним файлом) */
 function hiresWorkerMain() {
-  let DET = null;
+  const HI = {};
   onmessage = (ev) => {
-    const m = ev.data; if (m.det) { DET = m.det; return; }
+    const m = ev.data; if (m.hi) { HI[m.hi.name] = m.hi; return; }
     const { T, S, P, src: sd, tx, ty } = m, w = T + 2 * P, n = w * w, N = T * S;
     const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), A = new Float32Array(n), L = new Float32Array(n);
     let any = false;
@@ -116,7 +119,7 @@ function hiresWorkerMain() {
       R[i] = sd[i * 4] / 255 * a; G[i] = sd[i * 4 + 1] / 255 * a; B[i] = sd[i * 4 + 2] / 255 * a;
       L[i] = R[i] * 0.3 + G[i] * 0.59 + B[i] * 0.11 + a * 0.6;
     }
-    if (!any) { postMessage({ key: m.key, g: m.g, theme: m.theme, out: null }); return; }
+    if (!any) { postMessage({ key: m.key, g: m.g, ep: m.ep, out: null }); return; }
     const Jxx = new Float32Array(n), Jxy = new Float32Array(n), Jyy = new Float32Array(n);
     for (let y = 1; y < w - 1; y++) for (let x = 1; x < w - 1; x++) {
       const i = y * w + x, gx = L[i + 1] - L[i - 1], gy = L[i + w] - L[i - w];
@@ -139,10 +142,16 @@ function hiresWorkerMain() {
       return (arr[i] * (1 - fx) + arr[i + 1] * fx) * (1 - fy) + (arr[i + w] * (1 - fx) + arr[i + w + 1] * fx) * fy;
     };
     const TK = [0, 0.55, -0.55, 1.15, -1.15], WK = [1, 0.8, 0.8, 0.5, 0.5], WS = 3.6;
-    const det = m.useDet ? DET : null, dw = det ? det.w : 1, dh = det ? det.h : 1, dd = det ? det.d : null;
-    const ox = tx * T * S, oy = ty * T * S, out = new Uint8ClampedArray(N * N * 4);
+    const REF = m.ref, TAB = m.tab, out = new Uint8ClampedArray(N * N * 4);
+    // карта деталей: тексель k покрывает [k, k+1) в координатах детали; 128 = 1.0
+    const hiAt = (h, cx, cy) => {
+      const W2 = h.w, H2 = h.h, d = h.d; cx -= 0.5; cy -= 0.5;
+      const x0 = Math.floor(cx), y0 = Math.floor(cy), fx = cx - x0, fy = cy - y0;
+      const xa = ((x0 % W2) + W2) % W2, xb = (xa + 1) % W2, ya = ((y0 % H2) + H2) % H2, yb = (ya + 1) % H2;
+      return ((d[ya * W2 + xa] * (1 - fx) + d[ya * W2 + xb] * fx) * (1 - fy) + (d[yb * W2 + xa] * (1 - fx) + d[yb * W2 + xb] * fx) * fy) / 128;
+    };
     for (let Y = 0; Y < N; Y++) {
-      const v = P + (Y + 0.5) / S - 0.5, vi = Math.round(v), drow = dd ? (((oy + Y) % dh) + dh) % dh * dw : 0;
+      const v = P + (Y + 0.5) / S - 0.5, vi = Math.round(v), wy = ty * T + (Y + 0.5) / S;
       for (let X = 0; X < N; X++) {
         const u = P + (X + 0.5) / S - 0.5, li = vi * w + Math.round(u), o = (Y * N + X) * 4, co = CO[li];
         let sr, sg, sb, sa;
@@ -162,13 +171,14 @@ function hiresWorkerMain() {
         let a = sa < 0 ? 0 : sa > 1 ? 1 : sa; if (a <= 0.003) continue;
         let r = sr / a, g = sg / a, b = sb / a;
         if (co > 0.12) a = Math.max(0, Math.min(1, (a - 0.5) * 1.7 + 0.5));   // чёткий контур на фоне неба
-        if (dd) {   // мелкий рельеф материала: «перекрытие» по яркости
-          const h = dd[drow + (((ox + X) % dw) + dw) % dw];
-          r += h * (r < 0.5 ? 2 * r : 2 * (1 - r)); g += h * (g < 0.5 ? 2 * g : 2 * (1 - g)); b += h * (b < 0.5 ? 2 * b : 2 * (1 - b));
+        const rid = REF[li];
+        if (rid) {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
+          const e = TAB[rid], h = HI[e.name];
+          if (h) { const wx = tx * T + (X + 0.5) / S, q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
         }
         out[o] = r * 255; out[o + 1] = g * 255; out[o + 2] = b * 255; out[o + 3] = a * 255;
       }
     }
-    postMessage({ key: m.key, g: m.g, theme: m.theme, out: out.buffer }, [out.buffer]);
+    postMessage({ key: m.key, g: m.g, ep: m.ep, out: out.buffer }, [out.buffer]);
   };
 }

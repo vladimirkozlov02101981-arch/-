@@ -172,6 +172,7 @@ function texMean(T) {
 function texAt(T, x, y, o) {
   const tx = ((x | 0) % T.w + T.w) % T.w, ty = ((y | 0) % T.h + T.h) % T.h, j = (ty * T.w + tx) * 4, d = T.d;
   o.r = d[j]; o.g = d[j + 1]; o.b = d[j + 2];
+  o.tT = T; o.tsx = x; o.tsy = y;   // какая текстура и где взята — для чёткой карты при приближении (js/hires.js)
 }
 
 /** цвет материала в точке. Результат в o: r,g,b; свечение ga/gr/gg/gb; блеск spec */
@@ -179,7 +180,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
   const ty = (y & 255) << 8, ty2 = ((y >> 1) & 255) << 8, ty3 = ((y >> 2) & 255) << 8;
   const n1 = tl.t1[ty | (x & 255)], n2 = tl.t2[ty2 | ((x >> 1) & 255)], n3 = tl.t3[ty3 | ((x >> 2) & 255)];
-  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false; o.tex = false;
+  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false; o.tex = false; o.tT = null;
   let r, g, bl;
   if (t < capT) {
     // шапка (трава/снег/песок): светлая кромка, сочная середина, тёмная «губа» снизу
@@ -687,6 +688,14 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const tint = hex2rgb(theme.backTint || '#0a0e1a');
   const bounce = hex2rgb(theme.sky[2] || theme.sky[1]);
   const img = T.ctx.createImageData(W, H); const px = img.data;
+  // откуда взят цвет каждого пикселя (текстура и её сдвиг) — по этим ссылкам при приближении подставляются мелкие детали
+  const refF = new Uint8Array(W * H), refB = new Uint8Array(W * H), refTab = [null], refMap = new Map();
+  const texRefId = (o, x, y) => {
+    const T2 = o.tT, dx = ((Math.round(o.tsx - x) % T2.w) + T2.w) % T2.w, dy = ((Math.round(o.tsy - y) % T2.h) + T2.h) % T2.h, key = T2.name + ':' + dx + ':' + dy;
+    let id = refMap.get(key); if (id === undefined) { if (refTab.length > 254) return 0; id = refTab.length; refTab.push({ name: T2.name, dx, dy, w: T2.w, h: T2.h }); refMap.set(key, id); }
+    return id;
+  };
+  T.texRef = { F: refF, B: refB, tab: refTab };
   let hasBack = false; for (let i = 0; i < N; i++) if (back[i] && !m[i]) { hasBack = true; break; }
   const bimg = hasBack ? T.dctx.createImageData(W, H) : null; const bpx = bimg ? bimg.data : null;
   const gimg = T.gctx ? new Uint8ClampedArray(N * 4) : null;
@@ -732,7 +741,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
           else { o.r = 150; o.g = 104; o.b = 62; }
           if (t < 1.2) { o.r = o.r * 0.6 + 255 * 0.4; o.g = o.g * 0.6 + 236 * 0.4; o.b = o.b * 0.6 + 200 * 0.4; }   // освещённая кромка пола
           else if (t >= 6.5) { o.r *= 0.35; o.g *= 0.35; o.b *= 0.35; }   // тёмный шов между полом и перекрытием
-          o.tex = true;
+          o.tex = true; o.tT = null;
         }
         let r = o.r, g = o.g, bl = o.b;
         // объём: нормаль из размытой высоты
@@ -772,12 +781,14 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (dd < 50) { const kw = (1 - dd / 50) * (1 - shd) * 0.9; r *= 1 + kw * 0.08; g *= 1 + kw * 0.025; bl *= 1 - kw * 0.08; }
         if (o.emit) { r = o.r * 1.05; g = o.g * 1.02; bl = o.b; }                    // светящиеся окна не темнеют от теней и глубины
         const j = i * 4; px[j] = r; px[j + 1] = g; px[j + 2] = bl; px[j + 3] = 255;
+        if (o.tT && !o.emit) refF[i] = texRefId(o, x, y);
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
         const k = back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)) * caveAO(m, i, W, y, back[i], H) * (back[i] <= 2 ? 1.3 : 1); const j = i * 4;
         bpx[j] = o.r * k + tint[0] * 0.12; bpx[j + 1] = o.g * k + tint[1] * 0.12; bpx[j + 2] = o.b * k + tint[2] * 0.14; bpx[j + 3] = 255;
+        if (o.tT && !o.emit) refB[i] = texRefId(o, x, y);
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
     }
