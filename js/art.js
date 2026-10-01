@@ -48,7 +48,7 @@ const TexLib = {
   data: {},
   ready: null,
   hi: {},
-  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'rock_alien', 'rock_arctic', 'rock_canyon', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
+  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_canyon', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
   loadHi(n) {
     if (this.hi[n] !== undefined) return this.hi[n];

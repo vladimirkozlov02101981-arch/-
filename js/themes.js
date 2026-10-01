@@ -179,7 +179,7 @@ const THEMES = {
       strata: ['#3d3630', '#4a4038', '#352f2a', '#554a40'], band: 30, bandSharp: 0.3,
       rock: ['#4a4a52', '#3e3e46', '#56565e'],
       pebbles: ['#6a625a', '#58514a', '#7a7268'], smoothStones: true,
-      outline: '#07080d', rim: '#ff5ad8', rimK: 0.6, neonRim: ['#ff4fd0', '#40e0ff'], veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city' },
+      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [2.9, 2.6, 1.6] },
     },
     scatter: ['trash', 'tuft'],
     weather: 'rain', birds: false, ambient: '#aaa8cf', ambientSound: 'rain', glow: true,
