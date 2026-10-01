@@ -7,11 +7,40 @@ try {
         & npm.cmd ci --omit=dev --no-audit --no-fund
         if ($LASTEXITCODE -ne 0) { throw 'Не удалось установить зависимости.' }
     }
+    # Автообновление: при каждом запуске подтягиваем последнюю версию игры из репозитория
+    $updated = $false
+    if ((Test-Path -LiteralPath (Join-Path $PSScriptRoot '.git')) -and (Get-Command git -ErrorAction SilentlyContinue)) {
+        $prevPref = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try {
+            Write-Host 'Проверяем обновления игры...'
+            $before = (& git rev-parse HEAD 2>$null)
+            $branch = (& git rev-parse --abbrev-ref HEAD 2>$null)
+            & git fetch --quiet origin $branch 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                & git merge --ff-only --quiet "origin/$branch" 2>$null
+                if ($LASTEXITCODE -ne 0) { & git reset --hard --quiet "origin/$branch" 2>$null }
+            }
+            $after = (& git rev-parse HEAD 2>$null)
+            $updated = ($before -ne $after)
+            if ($updated) { Write-Host 'Игра обновлена до последней версии.' -ForegroundColor Green } else { Write-Host 'Установлена последняя версия.' }
+        } catch { Write-Host 'Не удалось проверить обновления — запускаем текущую версию.' }
+        $ErrorActionPreference = $prevPref
+    }
     $running = $false
     try {
         $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 2
         $running = $health.ok -and $health.transport -eq 'relay'
     } catch { }
+    if ($running -and $updated) {
+        # сервер старой версии — перезапускаем, чтобы и он был новым
+        $prevPref = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } } catch { }
+        $pidFile = Join-Path $PSScriptRoot 'dev/server.pid'
+        if (Test-Path -LiteralPath $pidFile) { try { Stop-Process -Id ([int](Get-Content -LiteralPath $pidFile -Raw)) -Force -ErrorAction SilentlyContinue } catch { } }
+        $ErrorActionPreference = $prevPref
+        Start-Sleep -Milliseconds 500
+        $running = $false
+    }
     if (-not $running) {
         $logDir = Join-Path $PSScriptRoot 'dev'
         [void](New-Item -ItemType Directory -Path $logDir -Force)
