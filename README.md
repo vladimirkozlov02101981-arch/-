@@ -100,6 +100,8 @@ npm run test:browser
 npm run test:audio
 node tests/tactics.cjs
 node tests/online.cjs
+node tests/hires.cjs
+python tests/test_texture_quilting.py
 node dev/navcheck.cjs --img
 ```
 
