@@ -26,7 +26,10 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     await guest.goto(file); await guest.waitForSelector('#s-main.show');
     await guest.click('[data-act="online"]'); await guest.waitForSelector('#s-online.show');
     assert.equal(await guest.locator('#srv-box').isVisible(), true, 'link field is shown in the file version');
-    await guest.fill('#srv-link', `${base}/#join=${code}`);
+    // PUBLIC=1 — ссылка из подсказки хоста (публичный адрес туннеля «Играть онлайн.cmd»), иначе — адрес тестового сервера
+    const invite = process.env.PUBLIC ? (note.match(/https:\/\/[\w.-]+\/#join=\w{5}/) || [])[0] : `${base}/#join=${code}`;
+    assert(invite, 'public invite link in the host note: ' + note);
+    await guest.fill('#srv-link', invite);
     await guest.click('[data-act="join"]');
     await guest.waitForFunction(() => UI.mode === 'guest' && UI.cur === 's-setup');
     await host.waitForFunction(() => UI.teamsCfg[1] && document.getElementById('peer-status').classList.contains('ok'));
@@ -43,9 +46,9 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     await guest.evaluate(() => { App.ctl.aimMode = 'keys'; App.ctl.send({ c: 'fire', aim: Math.PI / 2, pw: 0.22 }); });
     await host.waitForFunction(() => App.game.turn.team === 0 && App.game.turn.phase === 'aim', {}, { timeout: 60000 });
     const remembered = await guest.evaluate(() => localStorage.getItem('tw_server'));
-    assert.equal(remembered, new URL(base).origin, 'server remembered in the file version');
+    assert.equal(remembered, new URL(invite).origin, 'server remembered in the file version');
     assert(served.every(u => u.startsWith(base.replace(/\/$/, '')) === false || /\/room$/.test(u) || u.endsWith('/public')), 'guest loads no game files from the server: ' + served.join(', '));
     assert.deepEqual(errors, []);
-    console.log('Game file + invite link: lobby, battle, shots of both players over the relay PASS', { code, served: served.length });
+    console.log('Game file + invite link: lobby, battle, shots of both players over the relay PASS', { code, invite, served: served.length });
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exitCode = 1; });
