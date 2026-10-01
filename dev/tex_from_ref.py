@@ -6,13 +6,18 @@
 
 Запуск: python dev/tex_from_ref.py <эталон.png> <выход.png> <масштаб> <размер> x0,y0,x1,y1 [x0,y0,x1,y1 ...]
 """
-import sys, numpy as np
+import sys, os, numpy as np
+DESPECKLE = bool(os.environ.get('DESPECKLE'))
 from PIL import Image
 
 def load_sources(path, boxes, scale):
     im = Image.open(path).convert('RGB'); out = []
     for b in boxes:
         c = im.crop(b); w, h = c.size
+        if DESPECKLE:   # падающий снег/искры на эталоне: одиночные яркие точки заменяются медианой окрестности
+            from PIL import ImageFilter
+            a = np.asarray(c).astype(np.int16); med = np.asarray(c.filter(ImageFilter.MedianFilter(7))).astype(np.int16)
+            spot = (a.sum(2) - med.sum(2)) > 45; a[spot] = med[spot]; c = Image.fromarray(a.astype(np.uint8))
         c = c.resize((max(8, round(w * scale)), max(8, round(h * scale))), Image.LANCZOS)
         out.append(np.asarray(c).astype(np.float32))
     return out
