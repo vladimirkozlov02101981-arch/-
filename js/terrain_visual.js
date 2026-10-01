@@ -284,7 +284,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   } else if (mt === 2 && S.tx.rock) {
     // пласты породы из Blender; светящиеся швы (лава, кристаллы) идут в слой свечения
     texAt(S.tx.rock, x, y, o); r = o.r * S.texGain; g = o.g * S.texGain; bl = o.b * S.texGain; o.tex = true;
-    if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (r * G2[0] + g * G2[1] + bl * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(r, g, bl) + 1)), br = Math.max(r, g, bl);
+    if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (o.r * G2[0] + o.g * G2[1] + o.b * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(o.r, o.g, o.b) + 1)), br = Math.max(o.r, o.g, o.b);   /* свечение — по исходной текстуре, без усиления яркости */
       if (dot > 0.93 && br > 150) { o.ga = Math.min(255, (br - 150) * 2.4); o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, k = sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
     { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.08 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
