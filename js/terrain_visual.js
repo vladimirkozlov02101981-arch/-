@@ -209,7 +209,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = (o.r + o.g + o.b) / S.capMean; r *= q; g *= q; bl *= q; }   // зерно снега/песка/пепла из Blender
   } else if (mt === 1 && S.tx.dirt) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
-    const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.texGain; g = o.g * S.texGain; bl = o.b * S.texGain; o.tex = true;
+    const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
     if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
     { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
@@ -283,7 +283,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     }
   } else if (mt === 2 && S.tx.rock) {
     // пласты породы из Blender; светящиеся швы (лава, кристаллы) идут в слой свечения
-    texAt(S.tx.rock, x, y, o); r = o.r * S.texGain; g = o.g * S.texGain; bl = o.b * S.texGain; o.tex = true;
+    texAt(S.tx.rock, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
     if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (o.r * G2[0] + o.g * G2[1] + o.b * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(o.r, o.g, o.b) + 1)), br = Math.max(o.r, o.g, o.b);   /* свечение — по исходной текстуре, без усиления яркости */
       if (dot > 0.93 && br > 150) { o.ga = Math.min(255, (br - 150) * 2.4); o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, k = sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
@@ -348,7 +348,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     }
   } else if (mt === 12 && (S.tx.rock || S.tx.dirt || S.tx.cave)) {
     // задняя стена: та же порода, что и скала вокруг (в скальных картах), иначе — плиты пещеры
-    if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); const k = 1.05 * S.texGain; r = o.r * k; g = o.g * k; bl = o.b * k; o.ga = 0; }
+    if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); r = o.r * 1.05 * S.tgR; g = o.g * 1.05 * S.tgG; bl = o.b * 1.05 * S.tgB; o.ga = 0; }
     else if (S.tx.dirt) { texAt(S.tx.dirt, x + 257, y + 131, o); r = o.r * 0.7; g = o.g * 0.68; bl = o.b * 0.72; }   // земляная пещера: стена из того же грунта с камнями
     else { texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; }
     o.tex = true;
@@ -420,7 +420,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         break;
       }
       case 4: if (P.tex && TexLib.data[P.tex]) {
-        texAt(TexLib.data[P.tex], x, y - (prm ? prm.y0 : 0), o); r = o.r; g = o.g; bl = o.b; o.tex = true;
+        texAt(TexLib.data[P.tex], x, y - (prm ? prm.y0 : 0), o); { const kw = P.texK || 1, kr = Array.isArray(kw) ? kw : [kw, kw, kw]; r = o.r * kr[0]; g = o.g * kr[1]; bl = o.b * kr[2]; } o.tex = true;
         if (prm && prm.h > 60) { const k = 1.1 - 0.35 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h)); r *= k; g *= k; bl *= k; }
         if (S.glass && !isBack) {
           // корпус судна: железные полосы с заклёпками, мокрая тёмная полоса и водоросли у ватерлинии
@@ -672,7 +672,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[82, 102, 34], [60, 76, 24], [54, 42, 24]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: (G.tex && G.tex.gain) || 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? [[82, 102, 34], [60, 76, 24], [54, 42, 24]] : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null,
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
