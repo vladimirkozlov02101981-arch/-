@@ -15,6 +15,26 @@ function createServer() {
     if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end('{"ok":true,"transport":"relay"}'); return; }
     // публичный адрес туннеля «Играть онлайн.cmd» (бесплатный адрес иногда меняется — берём последний) — для приглашения другу
     if (url === '/public') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end(JSON.stringify({ url: publicUrl() })); return; }
+    // личные настройки игрока этого ПК (profile.json рядом с игрой): только с самого ПК — не через туннель для друга
+    if (url === '/profile') {
+      const host = String(req.headers.host || ''), local = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) && !req.headers['x-forwarded-for'];
+      const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Private-Network': 'true', 'Cache-Control': 'no-store' };
+      if (!local) { res.writeHead(403, cors).end(); return; }
+      if (req.method === 'OPTIONS') { res.writeHead(204, cors).end(); return; }
+      const file = path.join(root, 'profile.json');
+      if (req.method === 'GET') { fs.readFile(file, (e, b) => res.writeHead(200, Object.assign({ 'Content-Type': 'application/json' }, cors)).end(e ? '{}' : b)); return; }
+      if (req.method === 'POST') {
+        let body = ''; req.setEncoding('utf8');
+        req.on('data', (c) => { body += c; if (body.length > 600000) req.destroy(); });
+        req.on('end', () => {
+          let d; try { d = JSON.parse(body); } catch { d = null; }
+          if (!d || typeof d !== 'object' || !d.base) { res.writeHead(400, cors).end(); return; }
+          fs.writeFile(file + '.tmp', JSON.stringify(d), (e) => { if (e) { res.writeHead(500, cors).end(); return; } fs.rename(file + '.tmp', file, () => res.writeHead(204, cors).end()); });
+        });
+        return;
+      }
+      res.writeHead(405, cors).end(); return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     if (url === '/') url = '/index.html';
     if (url !== '/index.html' && !/^\/(js|css|assets)\/[\w./-]+$/.test(url)) { res.writeHead(404).end(); return; }

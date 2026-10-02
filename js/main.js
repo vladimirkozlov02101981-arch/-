@@ -3,11 +3,11 @@
    Точка входа: режимы игры, главный цикл, сетевой протокол
    ========================================================= */
 const DT = 1 / 60;
-const PREFS_KEY = 'tw_prefs_v1';
+/* запасные значения для проверки полей; настройки игрока и их значения по умолчанию — js/profile.js (Profile, FACTORY_SNAP) */
 const DEFAULT_PREFS = {
-  settings: { mapId: 'valley', perTeam: 4, hp: 100, turnTime: 45, wind: true, crates: false, sd: 0, arsenal: 'all', ai: 'normal', ammo: null },
-  teams: [{ name: 'Красные', color: '#ff4d4d', hat: 'helmet' }, { name: 'Синие', color: '#3d8bff', hat: 'beret' }],
-  bot: { name: 'Компьютер', color: '#3d8bff', hat: 'beret' },
+  settings: { mapId: 'arctic', perTeam: 4, hp: 100, turnTime: 0, wind: true, crates: false, sd: 0, arsenal: 'all', ai: 'normal', ammo: null, walk: 'limited', simul: false },
+  teams: [{ name: 'Красные', color: '#2fd6e0', hat: 'viking' }, { name: 'Синие', color: '#3d8bff', hat: 'beret' }],
+  bot: { name: 'Компьютер', color: '#ff8a2b', hat: 'ushanka' },
 };
 function sanitizeTeam(t, fb) {
   t = t && typeof t === 'object' ? t : {};
@@ -21,13 +21,23 @@ function sanitizeSettings(S) {
     hp: Number.isFinite(+S.hp) && +S.hp >= 1 ? clamp(Math.round(+S.hp), 1, 1000) : D.hp, turnTime: S.turnTime === 0 ? 0 : Number.isFinite(+S.turnTime) && +S.turnTime >= 5 ? clamp(Math.round(+S.turnTime), 5, 600) : D.turnTime,   // 0 — без ограничения
     wind: S.wind !== false, crates: false, sd: 0,   // ящиков с припасами и внезапной смерти в игре нет
     arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal', side: ['left', 'right', 'random'].includes(S.side) ? S.side : 'random', swap: !!S.swap, ammo: sanitizeAmmo(S.ammo),
+    walk: S.walk === 'free' ? 'free' : 'limited',   // ход бойца: ограничен дистанцией или на любую дистанцию
+    simul: !!S.simul,                                // непрерывный бой: обе команды ходят одновременно (по сети и против компьютера)
   };
 }
 
 const App = {
   mode: 'menu', sc: null, game: null, remote: null, ais: [], ctl: null, fx: new FX(), cam: new Camera(), ren: null,
   last: 0, acc: 0, t: 0, snapAcc: 0, teamsAcc: 0, netEv: [], waitReady: 0, paused: false, overShown: false,
-  myTeams: [], demo: false, lastTick: -1, prefs: null, lastSim: 0, guestTeam: null, lastCfg: null, lastLocalMode: null,
+  myTeams: [], demo: false, lastTick: -1, lastSim: 0, guestTeam: null, lastCfg: null, lastLocalMode: null,
+  /** основной (постоянный) набор игрока — для мест, которым нужны лишь его настройки боя и команды */
+  get prefs() { return Profile.base; },
+  savePrefs() { Profile.save(); },
+  /** звук включили/выключили или сменили громкость — это личная настройка: в основной набор и в набор на экране */
+  soundChanged() {
+    const s = { on: Sfx.enabled, volume: Sfx.volume }; Profile.base.sound = s; Profile.save();
+    if (UI.work) UI.work.sound = Object.assign({}, s);
+  },
   init() {
     this.cv = document.getElementById('game'); this.ren = new Renderer(this.cv); this.ren.resize();
     window.addEventListener('resize', () => this.ren.resize());
@@ -43,8 +53,10 @@ const App = {
     this.fx.onTurn = (ev) => this.onTurnEv(ev);
     this.fx.isLocalTeam = (t) => this.myTeams.includes(t);
     this.bindNet();
-    this.loadPrefs();
+    Profile.load();
     UI.init(this);
+    // на ПК с сервером «Играть» настройки общие для всех браузеров (файл profile.json рядом с игрой)
+    Profile.pull().then((changed) => { if (changed && UI.cur === 's-main') UI.featureMap(Profile.base.settings.mapId); });
     window.addEventListener('beforeunload', () => { if (Net.connected) Net.send({ t: 'bye' }); });
     const go = () => {
       this.startDemo(); UI.show('s-main');
@@ -57,12 +69,6 @@ const App = {
     requestAnimationFrame((t) => this.loop(t));
     setInterval(() => this.bgTick(), 40);
   },
-  loadPrefs() {
-    let p = null; try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null'); } catch (e) { p = null; }
-    p = p || {};
-    this.prefs = { settings: sanitizeSettings(p.settings), teams: [sanitizeTeam((p.teams || [])[0], DEFAULT_PREFS.teams[0]), sanitizeTeam((p.teams || [])[1], DEFAULT_PREFS.teams[1])], bot: sanitizeTeam(p.bot, DEFAULT_PREFS.bot) };
-  },
-  savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs)); } catch (e) { /* */ } },
   /* ---------- сцены ---------- */
   clearGame() {
     this.game = null; this.remote = null; this.sc = null; this.ais = []; this.ctl = null; this.fx.reset(null);
@@ -94,16 +100,16 @@ const App = {
     Promise.race([TexLib.load(), new Promise((r) => setTimeout(r, 3000))]).then(() => setTimeout(go, 40));
   },
   teamCfgs() { return UI.teamsCfg.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])); },
+  /** «В бой!»: бой идёт по набору на экране (UI.work); постоянные настройки игрока при этом не трогаются — их меняют
+      только правки набора, связанного с основным (галочка «по умолчанию»), и кнопки конфигураций */
   startFromSetup() {
     const S = sanitizeSettings(UI.readSettings());
-    this.prefs.settings = Object.assign({}, S);
     if (UI.mode === 'guest') return;
+    if (UI.mode === 'hotseat') S.simul = false;   // на одном экране ходят только по очереди
     S.swap = S.side === 'right' || (S.side === 'random' && Math.random() < 0.5);   // сторона первой команды: выбранная или случайная
-    if (UI.mode === 'host') { this.prefs.teams[0] = sanitizeTeam(UI.teamsCfg[0], DEFAULT_PREFS.teams[0]); this.savePrefs(); if (!Net.connected) { UI.setNote('Друг ещё не подключился — отправьте ему код комнаты'); Sfx.play('denied'); return; } this.startHostGame(S); return; }
+    Keys.set(UI.work.keys);   // клавиши этого набора действуют в бою
+    if (UI.mode === 'host') { if (!Net.connected) { UI.setNote('Друг ещё не подключился — отправьте ему код комнаты'); Sfx.play('denied'); return; } this.startHostGame(S); return; }
     const teams = this.teamCfgs();
-    if (UI.mode === 'hotseat') this.prefs.teams = teams.map(t => Object.assign({}, t)); else this.prefs.teams[0] = teams[0];
-    if (UI.mode === 'cpu') this.prefs.bot = Object.assign({}, teams[1]);
-    this.savePrefs();
     this.startLocal({ mapId: S.mapId, settings: S, teams }, UI.mode);
   },
   startLocal(cfg, kind) {
@@ -118,7 +124,7 @@ const App = {
   /* ---------- сеть ---------- */
   bindNet() {
     Net.on('hosting', (code) => {
-      UI.openSetup('host'); UI.setRoomCode(code); UI.setPeerStatus(false);
+      UI.openSetup('host', { simul: UI.wantSimul }); UI.setRoomCode(code); UI.setPeerStatus(false);
       // приглашение: на ПК хоста — публичный адрес туннеля «Играть онлайн.cmd», иначе адрес этого сервера;
       // бесплатный адрес меняется примерно раз в 15 минут — пока друг не подключился, подсказка обновляется
       clearInterval(this.inviteT);
@@ -126,7 +132,7 @@ const App = {
       show(); this.inviteT = setInterval(() => { if (Net.code !== code || UI.mode !== 'host') { clearInterval(this.inviteT); return; } show(); }, 20000);
     });
     Net.on('connected', () => {
-      if (Net.role === 'guest') { UI.status('Соединено! Ждём хоста…'); Net.send({ t: 'hello', v: NET_VERSION, team: this.prefs.teams[0] }); }
+      if (Net.role === 'guest') { UI.status('Соединено! Ждём хоста…'); Net.send({ t: 'hello', v: NET_VERSION, team: Profile.base.teams[0] }); }
     });
     Net.on('data', (d) => { if (Net.role === 'host') this.onNetHost(d); else this.onNetGuest(d); });
     Net.on('error', (e) => this.onNetError(e));
@@ -136,21 +142,11 @@ const App = {
   hostRoom() { UI.status('Создаём комнату…'); this.guestTeam = null; Net.host(); },
   joinRoom(code) { UI.status('Подключаемся…'); Net.join(code); },
   sendLobby() { if (Net.role === 'host' && Net.connected) Net.send({ t: 'lobby', settings: UI.settings, teams: UI.teamsCfg.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])) }); },
-  onLobbyChanged() { this.persistSetup(); if (UI.mode === 'host') this.sendLobby(); },
-  /** любые изменения в настройке сразу сохраняются: при следующем запуске игры всё будет как было */
-  persistSetup() {
-    if (!UI.settings || UI.mode === 'guest') return;
-    this.prefs.settings = sanitizeSettings(UI.readSettings());
-    const T = UI.teamsCfg || [];
-    if (UI.mode === 'hotseat') this.prefs.teams = T.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i]));
-    else if (T[0]) this.prefs.teams[0] = sanitizeTeam(T[0], DEFAULT_PREFS.teams[0]);
-    if (UI.mode === 'cpu' && T[1]) this.prefs.bot = sanitizeTeam(T[1], DEFAULT_PREFS.bot);
-    this.savePrefs();
-  },
+  onLobbyChanged() { UI.workChanged(); if (UI.mode === 'host') this.sendLobby(); },
   onTeamEdited(i) {
-    this.persistSetup();
-    if (UI.mode === 'guest' && i === 1) { const t = sanitizeTeam(UI.teamsCfg[1], DEFAULT_PREFS.teams[0]); this.prefs.teams[0] = t; this.savePrefs(); Net.send({ t: 'team', team: t }); }
-    else if (UI.mode === 'host' && i === 0) this.sendLobby();
+    if (UI.mode === 'guest' && i === 1) { const t = sanitizeTeam(UI.teamsCfg[1], DEFAULT_PREFS.teams[0]); UI.work.teams[0] = Object.assign({}, t); Net.send({ t: 'team', team: t }); }
+    UI.workChanged();
+    if (UI.mode === 'host' && i === 0) this.sendLobby();
     UI.drawPreviewAll && UI.drawPreviewAll();
   },
   /** команда гостя не должна совпадать с командой хоста ни цветом, ни названием */
@@ -190,8 +186,9 @@ const App = {
         if (!teams || teams.length < 2) return;
         if (!this.demo && (this.game || this.remote)) { this.clearGame(); this.startDemo(); }
         if (UI.cur !== 's-setup' || UI.mode !== 'guest') { UI.openSetup('guest'); UI.setRoomCode(Net.code); UI.setPeerStatus(true, '● подключено к хосту'); }
-        UI.settings = S; UI.applySettings(S); UI.markMap();
-        UI.teamsCfg = teams; UI.buildTeams();
+        // бой настраивает хост: его настройки — временный набор этого боя; свои настройки гостя не трогаются
+        UI.work.settings = S; UI.settings = S; UI.applySettings(S); UI.markMap();
+        UI.teamsCfg = teams; UI.buildTeams(); UI.refreshCfgBar();
         break;
       }
       case 'start': this.startGuestGame(d); break;
@@ -250,6 +247,8 @@ const App = {
     UI.show('s-main');
   },
   toMenu() { Net.close(); this.clearGame(); UI.hideScreens(); this.mode = 'menu'; this.startDemo(); UI.show('s-main'); },
+  /** вернулись к выбору режима: временный набор боя забыт, действуют постоянные настройки игрока */
+  leftToMain() { UI.work = null; Profile.forgetPrev(); Profile.applyDevice(Profile.base); },
   quitToMenu() { if (Net.connected) Net.send({ t: 'bye' }); this.toMenu(); },
   togglePause() {
     if (!this.sc || this.demo) return;
@@ -261,7 +260,7 @@ const App = {
     if (this.mode === 'guest') { Net.send({ t: 'rematch' }); document.getElementById('over-note').textContent = 'Запрос на реванш отправлен хосту'; return; }
     if (this.mode === 'host') {
       if (!Net.connected) { this.toMenu(); return; }
-      const code = Net.code; this.clearGame(); this.startDemo(); UI.openSetup('host'); UI.setRoomCode(code); UI.setPeerStatus(true);
+      const code = Net.code; this.clearGame(); this.startDemo(); UI.openSetup('host', { keep: true }); UI.setRoomCode(code); UI.setPeerStatus(true);   // реванш — тот же набор боя
       UI.teamsCfg[1] = Object.assign({}, this.guestTeam || UI.teamsCfg[1]); UI.buildTeams(); this.sendLobby(); return;
     }
     if (this.lastCfg) this.startLocal(this.lastCfg, this.lastLocalMode);
@@ -269,10 +268,11 @@ const App = {
   toggleTray() { if (!this.sc || this.demo || UI.cur) return; UI.setTray(!UI.trayOpen); },
   onTurnEv(ev) {
     if (this.demo) return;
+    if (this.sc && this.sc.simul && !this.myTeams.includes(ev.team)) return;   // одновременные ходы: ход соперника не трогает мой обзор
     UI.setTray(false); this.cam.free = 0;
     if (!(Input.drag && Input.drag.binoc)) this.cam.binoc = false;
     const sc = this.sc; const tm = sc.teams[ev.team]; const s = sc.soldiers.find(o => o.id === ev.sid);
-    if (tm) this.fx.banner(`Ход: ${s ? s.name : ''} («${tm.name}»)`, tm.color, this.myTeams.length > 1, 1.8);
+    if (tm) this.fx.banner(`Ход: боец №${s ? s.name : ''} («${tm.name}»)`, tm.color, this.myTeams.length > 1, 1.8);
   },
   onOver(ev) {
     if (this.demo) { setTimeout(() => { if (this.demo && this.mode === 'menu') this.startDemo(); }, 3500); return; }
@@ -280,8 +280,7 @@ const App = {
     setTimeout(() => { if (!this.sc || this.demo) return; UI.setTray(false); Sfx.play('victory'); UI.showOver(ev, this.sc, this.myTeams, true); }, 1700);
   },
   handleKeys() {
-    const P = Input.pressed;
-    if (P.Escape) {
+    if (Keys.hit('holster')) {
       const ctl = this.ctl, T = this.sc && this.sc.turn;
       if (UI.trayOpen) UI.setTray(false);
       else if (UI.cur === 's-help' || UI.cur === 's-online') this.back();
@@ -294,19 +293,19 @@ const App = {
         else if (this.holstered && this.holstered.key === key) ctl.select(this.holstered.id);
       }
     }
-    if (P.Backspace) this.togglePause();   // меню; заодно отпускает мышь
+    if (Keys.hit('menu')) this.togglePause();   // меню; заодно отпускает мышь
     // Tab: сначала отменяет взятое оружие (зарядку или выбранную точку), иначе открывает арсенал
-    if (P.Tab) {
+    if (Keys.hit('tray')) {
       const ctl = this.ctl, T = this.sc && this.sc.turn;
       if (ctl && ctl.charging) { ctl.cancelCharge(); Sfx.play('denied'); }
       else if (ctl && ctl.mine && T && T.target && T.phase === 'aim') { ctl.send({ c: 'untarget' }); ctl.pendingTarget = false; Sfx.play('denied'); }
       else this.toggleTray();
     }
-    if (P.KeyM) { Sfx.toggle(); UI.updateSoundIcon(); }
+    if (Keys.hit('sound')) { Sfx.toggle(); UI.updateSoundIcon(); this.soundChanged(); }
     if (!this.sc || this.demo) return;
-    if (P.KeyB) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }
-    if (P.KeyC) { this.cam.binoc = false; this.cam.free = 0; this.cam.userZ = null; this.cam.hold = false; }
-    if (P.KeyT && (this.mode === 'host' || this.mode === 'guest') && !UI.chatOpen) UI.openChat();
+    if (Keys.hit('binoc')) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }
+    if (Keys.hit('camera')) { this.cam.binoc = false; this.cam.free = 0; this.cam.userZ = null; this.cam.hold = false; }
+    if (Keys.hit('chat') && (this.mode === 'host' || this.mode === 'guest') && !UI.chatOpen) UI.openChat();
   },
   timerTick(turn) {
     if (!this.ctl || !this.ctl.mine || turn.phase !== 'aim' || !(this.sc.settings || this.sc.cfg.settings).turnTime) { this.lastTick = -1; return; }

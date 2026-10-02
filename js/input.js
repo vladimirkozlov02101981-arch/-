@@ -36,7 +36,7 @@ const Input = {
       else if (performance.now() - this.escLockT < 400) { e.preventDefault(); return; }   // этот Esc уже учтён по снятию захвата
       else this.escKeyT = performance.now();
       if (this.typing || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT'))) return;
-      if (this.GAME_KEYS.has(e.code)) e.preventDefault();
+      if (this.GAME_KEYS.has(e.code) || (typeof Keys !== 'undefined' && Keys.codes.has(e.code))) e.preventDefault();   // клавиши игры браузеру не отдаём
       if (!this.keys[e.code]) this.pressed[e.code] = true;
       this.keys[e.code] = true;
     });
@@ -59,7 +59,7 @@ const Input = {
     cv.addEventListener('mousedown', (e) => {
       Sfx.resume(); this.gestureT = performance.now();
       // бой без захвата (после Delete, паузы, Alt+Tab): этот клик только возвращает мышь в игру и не стреляет
-      if (this.wantLock && !this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
+      if (this.wantLock && !this.locked && this.lockable()) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
       if (this.wantLock && !document.fullscreenElement) this.enterFull();
       if (!this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; }
       this.mouse.inside = true;
@@ -78,13 +78,15 @@ const Input = {
   /** захват указателя: по свежему жесту пользователя (клик, клавиша) — так требует браузер; во весь экран можно и без жеста */
   lock() {
     const cv = this.cv, now = performance.now();
-    if (!cv || !cv.requestPointerLock || this.locked || this.lockPending || now - this.failT < 1000) return;
+    if (!this.lockable() || this.locked || this.lockPending || now - this.failT < 1000) return;
     if (now - this.gestureT > 4000 && !document.fullscreenElement) return;
     this.lockPending = true;
     try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => { this.lockPending = false; this.failT = performance.now(); }); }
     catch (e) { this.lockPending = false; this.failT = now; }
     if (now - this.gestureT <= 4000) this.enterFull();
   },
+  /** захват возможен (в автотестах мышь двигают событиями с координатами — без захвата) */
+  lockable() { return !!(this.cv && this.cv.requestPointerLock) && !(navigator.webdriver && !window.__allowLock); },
   unlock() { if (this.locked && document.exitPointerLock) { this.selfUnlock = true; document.exitPointerLock(); } },
   /** бой во весь экран: только так Chrome и Edge отдают Esc игре (Keyboard Lock) — Esc убирает оружие и не отпускает мышь.
       Где перехвата клавиш нет, полный экран не включается: Esc там отпускает мышь сам браузер (тогда подсказка onEscLost) */
@@ -185,10 +187,10 @@ class LocalController {
     const W = WEAPON[T.weapon] || WEAPON.bazooka; const phase = T.phase;
     const canAct = phase === 'aim' && !!WEAPON[T.weapon]; const jet = phase === 'use' && T.weapon === 'jetpack';
     const canMove = phase === 'aim' || phase === 'retreat' || jet;
-    const K = Input.keys, P = Input.pressed;
-    const left = !!(K.KeyA || K.ArrowLeft), right = !!(K.KeyD || K.ArrowRight);
+    // клавиши — по таблице Keys (настраиваются; по физической клавише, раскладка не важна)
+    const left = Keys.down('left'), right = Keys.down('right');
     // W/S — лазание по лестницам и тяга джетпака; стрелки ↑/↓ — только наклон ствола
-    const up = !!K.KeyW, down = !!K.KeyS, aimUp = !!K.ArrowUp, aimDown = !!K.ArrowDown;
+    const up = Keys.down('up'), down = Keys.down('down'), aimUp = Keys.down('aimUp'), aimDown = Keys.down('aimDown'), precise = Keys.down('precise');
     // мышь также выбирает точку для авиаудара, молнии и т. п.
     const pickPoint = W.mode === 'target' || W.mode === 'place' || (W.mode === 'tcharge' && !T.target);
     // цель дальнобойного оружия может быть за экраном: курсор у края экрана сам ведёт обзор (render.js, Camera.edgeDir)
@@ -198,7 +200,7 @@ class LocalController {
     if (sniperScope && this.scopeWeapon !== 'sniper') { this.scopeOn = true; this.aimMode = 'mouse'; }
     if (!sniperScope) this.scopeOn = false;
     this.scopeWeapon = sniperScope ? 'sniper' : null;
-    if (sniperScope && P.KeyE && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); P.KeyE = false; }
+    if (sniperScope && Keys.hit('next') && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); Keys.eat('next'); }
     // наведение мышью или стрелками ↑/↓ — работает то, чем пользовались последним, даже со скрытой оптикой
     if (Input.mouse.moved || (sniperScope && Input.mouse.clicked[0])) this.aimMode = 'mouse';
     if (aimUp || aimDown) this.aimMode = 'keys';
@@ -208,7 +210,7 @@ class LocalController {
       let face = Math.cos(this.base) >= 0 ? 1 : -1;
       if (left !== right && !jet) face = left ? -1 : 1;
       let elev = angNorm(face > 0 ? -this.base : this.base - Math.PI);
-      const sp = K.ShiftLeft || K.ShiftRight ? 0.35 : 1.3;
+      const sp = precise ? 0.35 : 1.3;
       if (aimUp) elev += dt * sp; if (aimDown) elev -= dt * sp;
       elev = clamp(elev, -1.55, 1.55);
       this.base = face > 0 ? -elev : Math.PI + elev;
@@ -217,7 +219,7 @@ class LocalController {
     let sway = 0;
     if (T.weapon === 'sniper' && canAct) {
       this.swayT = (this.swayT || 0) + dt;
-      const hold = !!(K.ShiftLeft || K.ShiftRight);
+      const hold = precise;
       if (hold && this.breath > 0) this.breath = Math.max(0, this.breath - dt);
       else if (!hold) this.breath = Math.min(2.5, this.breath + dt * 0.7);
       const amp = hold && this.breath > 0 ? 0.005 : this.breath <= 0.05 ? 0.058 : 0.03;
@@ -238,16 +240,17 @@ class LocalController {
       if (near || seen || (step < 1.2 && ps.t > 0.3) || ps.t > 1.1 || phase !== 'aim') { if (phase === 'aim') this.send(ps.cmd); this.pendingShot = null; }
     }
     if (phase === 'aim' && T.shots === 0 && !this.charging && !this.pendingShot) {
-      if (P.KeyQ) this.cycle(sc, T, -1); if (P.KeyE) this.cycle(sc, T, 1);
-      for (let i = 1; i <= 6; i++) if (P['Digit' + i]) this.category(sc, T, i - 1);
+      if (Keys.hit('prev')) this.cycle(sc, T, -1); if (Keys.hit('next')) this.cycle(sc, T, 1);
+      for (let i = 1; i <= 6; i++) if (Keys.hit('cat' + i)) this.category(sc, T, i - 1);
     }
-    if (P.KeyR && T.weapon === 'girder' && canAct) this.send({ c: 'rot', d: 1 });
-    if (P.KeyR && SPIN_WEAPONS.has(T.weapon) && canAct && !this.charging) { this.send({ c: 'spin' }); Sfx.play('select'); }
-    if (P.KeyP && (phase === 'aim' || phase === 'retreat')) this.send({ c: 'skip' });
-    if (P.Space && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
-    else if (P.Space && phase === 'use' && T.weapon === 'robot') this.send({ c: 'jump' });
+    if (Keys.hit('rotate') && T.weapon === 'girder' && canAct) this.send({ c: 'rot', d: 1 });
+    if (Keys.hit('rotate') && SPIN_WEAPONS.has(T.weapon) && canAct && !this.charging) { this.send({ c: 'spin' }); Sfx.play('select'); }
+    // быстрый пропуск хода (по умолчанию «Ё» слева от 1 и P): сделал всё, что хотел, — ход заканчивается сразу
+    if (Keys.hit('skip') && (phase === 'aim' || phase === 'retreat')) { this.cancelCharge(); this.pendingShot = null; this.send({ c: 'skip' }); }
+    if (Keys.hit('jump') && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
+    else if (Keys.hit('jump') && phase === 'use' && T.weapon === 'robot') this.send({ c: 'jump' });
     // в бинокль клик не стреляет: мышь ведёт обзор (кроме оружия с выбором точки)
-    const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = !!(P.Enter || P.KeyF);   // выстрел: ЛКМ, Enter или F
+    const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = Keys.hit('fire');   // выстрел: ЛКМ или клавиша выстрела (F, Enter)
     if (phase === 'use') {
       // авиаудар: сброс — ЛКМ, F или Enter; не сбросили — бомбы уходят сами, когда самолёт долетает до края экрана
       const jet = T.weapon === 'airstrike' ? sc.entities.find(e => e.k === 'jet' && !e.s && e.team === T.team) : null;
@@ -271,7 +274,7 @@ class LocalController {
           }
           if (!this.charging) { if (mFire || kFire) { this.charging = true; this.power = 0; this.chargeDir = 1; this.chargeByMouse = mFire; Sfx.chargeStart(); } }
           else {
-            const held = this.chargeByMouse ? Input.mouse.down[0] : !!(K.Enter || K.KeyF);
+            const held = this.chargeByMouse ? Input.mouse.down[0] : Keys.down('fire');
             // сила «пульсирует»: до максимума и обратно, пока кнопка зажата; выстрел — только при отпускании
             this.power += (this.chargeDir || 1) * dt / 1.15;
             const cap = s.armFactor ? s.armFactor() : s.wl ? [2, 3].reduce((f, i) => f * [1, 0.95, 0.85, 0.7][s.wl[i]], 1) : 1;   // раненые руки: предел силы
@@ -288,9 +291,9 @@ class LocalController {
           if (mFire || kFire) this.send({ c: 'fire', aim: this.aim, pw: 1, tx: Math.round(this.mouseW.x), ty: Math.round(this.mouseW.y) }); break;
       }
     }
-    const climbing = !jet && !(K.ShiftLeft || K.ShiftRight) && (sc.map.ladders || []).some(l => Math.abs(l.x-s.x)<19 && s.y>=l.y1-8 && s.y<=l.y2+8);
+    const climbing = !jet && !precise && (sc.map.ladders || []).some(l => Math.abs(l.x-s.x)<19 && s.y>=l.y1-8 && s.y<=l.y2+8);
     const steer = phase === 'use' && T.weapon === 'orbital';
-    const ctrl = { c: 'ctrl', l: (canMove || steer) && left, r: (canMove || steer) && right, u: canMove && (jet ? (up || !!K.Space) : climbing && up), d: canMove && climbing && down, aim: Math.round(this.aim * 1000) / 1000, pw: this.charging ? Math.round(this.power * 100) / 100 : -1 };
+    const ctrl = { c: 'ctrl', l: (canMove || steer) && left, r: (canMove || steer) && right, u: canMove && (jet ? (up || Keys.down('jump')) : climbing && up), d: canMove && climbing && down, aim: Math.round(this.aim * 1000) / 1000, pw: this.charging ? Math.round(this.power * 100) / 100 : -1 };
     const sig = ctrl.l + '|' + ctrl.r + '|' + ctrl.u + '|' + ctrl.aim + '|' + ctrl.pw;
     this.sendT -= dt;
     if (this.sendT <= 0) { this.send(ctrl); this.lastSig = sig; this.sendT = 1 / 30; }

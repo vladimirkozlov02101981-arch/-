@@ -19,10 +19,25 @@ class Game {
     this.teams = cfg.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(S.arsenal, S.ammo), next: 0, lastW: 'bazooka', dmg: 0, kills: 0, order: [] }));
     this.soldiers = []; this.entities = []; this.events = []; this.pending = [];
     this.nextId = 1; this.time = 0; this.round = 0; this.over = null; this.teamsDirty = true; this.sdStarted = false;
-    this.turn = { team: -1, sid: 0, time: 0, phase: 'wait', delay: 1.8, wind: 0, weapon: 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: 0 };
-    this.usage = null; this.ctrl = null;
+    // «на любую дистанцию» — запас хода не ограничен; «одновременно» — у каждой команды свой ход (своя «дорожка»):
+    // обе ходят сразу, после хода следующий по номеру боец той же команды начинает свой ход, не дожидаясь соперника
+    this.freeWalk = S.walk === 'free';
+    this.simul = !!S.simul && this.teams.length === 2;
+    this.cur = 0; this.viewLane = 0; this.wind = 0; this.windT = 0;
+    const fresh = (team, delay) => ({ team, sid: 0, time: 0, phase: 'wait', delay, wind: 0, weapon: 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: 0 });
+    if (this.simul) this.lanes = this.teams.map((t, i) => ({ turn: fresh(i, 1.8 + i * 0.35), usage: null, ctrl: null }));
+    else { this.turn = fresh(-1, 1.8); this.usage = null; this.ctrl = null; }
     this.spawnSoldiers();
   }
+  /* ход, действие оружия и управление — текущей «дорожки» (в обычном режиме она одна) */
+  get turn() { return this.simul ? this.lanes[this.cur].turn : this._turn; }
+  set turn(v) { if (this.simul) this.lanes[this.cur].turn = v; else this._turn = v; }
+  get usage() { return this.simul ? this.lanes[this.cur].usage : this._usage; }
+  set usage(v) { if (this.simul) this.lanes[this.cur].usage = v; else this._usage = v; }
+  get ctrl() { return this.simul ? this.lanes[this.cur].ctrl : this._ctrl; }
+  set ctrl(v) { if (this.simul) this.lanes[this.cur].ctrl = v; else this._ctrl = v; }
+  /** fn в контексте хода команды k (одновременный режим); текущая дорожка потом восстанавливается */
+  inLane(k, fn) { if (!this.simul) return fn(); const prev = this.cur; this.cur = k; try { return fn(); } finally { this.cur = prev; } }
   buildVisual() { buildTerrainVisual(this.terrain, this.theme, this.map, this.raster, this.waterY); this.raster = null; }
   /* ---------- расстановка ---------- */
   spawnCandidates() {
@@ -41,8 +56,7 @@ class Game {
     const S = this.cfg.settings; const n = S.perTeam; const total = n * this.teams.length;
     // Reproducible deployments: opposing sides, safe footing, spaced squad members.
     const rng = makeRng(this.map.seed + 404), all = this.spawnCandidates();
-    const names = SOLDIER_NAMES.slice();
-    let nameIndex = 0;
+    // бойцы пронумерованы по порядку хода: 1 … N в каждой команде — видно, кто ходит следующим
     for (const team of this.teams) {
       const left = (team.idx === 0) !== !!S.swap;   // S.swap — первая команда (я / хост) начинает справа
       const cands = shuffleArr(all.filter(c => left ? c.x < this.W * .44 : c.x > this.W * .56), rng);
@@ -55,7 +69,7 @@ class Game {
       }
       for (let i=0;i<n;i++) {
         const c=chosen[i] || all[(i*23)%Math.max(1,all.length)] || {x:this.W/2,y:100};
-        const soldier=new Soldier(this.nextId++,team.idx,names[nameIndex++%names.length],c.x,c.y,S.hp);
+        const soldier=new Soldier(this.nextId++,team.idx,String(i+1),c.x,c.y,S.hp);
         this.soldiers.push(soldier);team.order.push(soldier.id);
       }
     }
@@ -66,7 +80,7 @@ class Game {
   active() { return this.soldierById(this.turn.sid); }
   soldierById(id) { for (const s of this.soldiers) if (s.id === id) return s; return null; }
   fallbackWeapon(team) { return this.canUse(team, 'bazooka') ? 'bazooka' : (WEAPONS.find(w => this.canUse(team, w.id)) || WEAPON.skip).id; }
-  canUse(team, id) { const a = team.ammo[id]; const w = WEAPON[id]; return !!w && a !== undefined && a !== 0 && !(w.minRound && this.round < w.minRound); }
+  canUse(team, id) { const a = team.ammo[id]; const w = WEAPON[id], rd = this.simul ? this.lanes[team.idx].turn.round : this.round; return !!w && a !== undefined && a !== 0 && !(w.minRound && rd < w.minRound); }
   soldierAt(x, y, r, ignore) {
     for (const s of this.soldiers) {
       if (!s.alive || s === ignore) continue;
@@ -221,12 +235,17 @@ class Game {
   }
   heal(s, v) { if (!s.alive) return; const n = Math.min(v, s.maxHp - s.hp); if (n <= 0) return; s.hp += n; this.emit({ t: 'heal', id: s.id, v: n, x: R1(s.x), y: R1(s.y) }); }
   anyBusy() {
-    for (const s of this.soldiers) if (!s.gone && (s.st === 'air' || s.st === 'fly' || s.st === 'jet' || s.st === 'dead')) return true;
-    for (const e of this.entities) if (e.busy) return true;
+    const own = this.simul ? this.turn.team : -1;
+    for (const s of this.soldiers) if (!s.gone && (own < 0 || s.team === own) && (s.st === 'air' || s.st === 'fly' || s.st === 'jet' || s.st === 'dead')) return true;
+    for (const e of this.entities) if (e.busy && (own < 0 || e.team === own)) return true;
     return false;
   }
   /* ---------- команды игрока ---------- */
   cmd(team, c) {
+    if (this.simul) { if (!this.lanes[team]) return; return this.inLane(team, () => this.cmd1(team, c)); }
+    return this.cmd1(team, c);
+  }
+  cmd1(team, c) {
     const T = this.turn; if (!c || typeof c !== 'object' || this.over) return;
     if (T.team !== team) return;
     const s = this.active(); if (!s) return;
@@ -281,25 +300,45 @@ class Game {
     T.phase = 'retreat'; T.retreat = RETREAT_TIME; T.idle = 0;
   }
   /* ---------- цикл ---------- */
-  step(dt) {
-    this.time += dt;
-    const T = this.turn; const act = this.active();
+  /** активный боец дорожки и его управление в этом шаге */
+  laneControl() {
+    const T = this.turn, act = this.active();
     const ctrlOk = act && (T.phase === 'aim' || T.phase === 'retreat' || T.phase === 'use');
     // пока игрок ведёт орбитальный луч или ждёт самолёт, A/D не двигают бойца
     const lockFeet = T.phase === 'use' && (T.weapon === 'orbital' || T.weapon === 'airstrike');
-    const sctrl = lockFeet && this.ctrl ? { l: false, r: false, u: false, d: false } : this.ctrl;
-    for (const s of this.soldiers) s.update(this, dt, ctrlOk && s === act ? sctrl : null);
-    for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!e.dead) e.update(this, dt); }
+    return { act, ctrl: ctrlOk ? (lockFeet && this.ctrl ? { l: false, r: false, u: false, d: false } : this.ctrl) : null };
+  }
+  step(dt) {
+    this.time += dt;
+    if (this.simul) {
+      // общий ветер для обеих сторон: меняется раз в 25 с
+      this.windT -= dt;
+      if (this.windT <= 0) { this.windT = 25; this.wind = this.cfg.settings.wind ? Math.round(rand(-1, 1) * MAX_WIND) : 0; }
+      for (const ln of this.lanes) ln.turn.wind = this.wind;
+    }
+    const lanes = this.simul ? this.lanes.map((_, k) => this.inLane(k, () => this.laneControl())) : [this.laneControl()];
+    for (const s of this.soldiers) {
+      const k = lanes.findIndex(o => o.act === s);
+      if (k >= 0) this.inLane(k, () => s.update(this, dt, lanes[k].ctrl)); else this.inLane(this.simul ? s.team : 0, () => s.update(this, dt, null));
+    }
+    for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!e.dead) this.inLane(this.simul && e.team >= 0 && e.team < this.lanes.length ? e.team : this.cur, () => e.update(this, dt)); }
     if (this.pending.length) { const p = this.pending; this.pending = []; for (const [x, y, k] of p) { const B = BLAST[k]; this.explode(x, y, B.R, B.D, { knock: B.K, frag: k }); } }
     this.entities = this.entities.filter(e => !e.dead);
+    if (this.simul) { for (let k = 0; k < this.lanes.length; k++) this.inLane(k, () => this.turnTick(dt, lanes[k].act)); this.cur = this.viewLane; }
+    else this.turnTick(dt, lanes[0].act);
+  }
+  /** ход одной дорожки: оружие в руках, действие оружия, запас хода, таймеры и фазы */
+  turnTick(dt, act) {
+    const T = this.turn;
     // брошенное (робо-бомба, телепортер) в руках не остаётся, пока оно бежит или летит
-    for (const s of this.soldiers) s.wpn = (s === act && s.alive && (T.phase === 'aim' || (T.phase === 'use' && !THROWN_USE.has(T.weapon)))) ? T.weapon : null;
+    for (const s of this.soldiers) if (!this.simul || s.team === T.team) s.wpn = (s === act && s.alive && (T.phase === 'aim' || (T.phase === 'use' && !THROWN_USE.has(T.weapon)))) ? T.weapon : null;
     if (this.usage) {
       let done = false; try { done = this.usage.update(this, dt); } catch (e) { console.error(e); done = true; }
       if (done && T.phase === 'use') this.afterUse(); else if (done) this.usage = null;
     }
-    // запас хода — оставшийся радиус по горизонтали от точки начала хода
-    if (T.ox !== undefined && act && act.alive && (T.phase === 'aim' || T.phase === 'retreat')) T.walk = Math.max(0, WALK_BUDGET - Math.abs(act.x - T.ox));
+    // запас хода — оставшийся радиус по горизонтали от точки начала хода («на любую дистанцию» — без предела)
+    if (this.freeWalk) T.walk = WALK_BUDGET;
+    else if (T.ox !== undefined && act && act.alive && (T.phase === 'aim' || T.phase === 'retreat')) T.walk = Math.max(0, WALK_BUDGET - Math.abs(act.x - T.ox));
     const limited = this.cfg.settings.turnTime > 0;
     switch (T.phase) {
       case 'wait': T.delay -= dt; if (T.delay <= 0) this.beginTurn(); break;
@@ -349,8 +388,11 @@ class Game {
     const T = this.turn; const alive = this.aliveTeams();
     if (alive.length <= 1) { this.finish(alive[0] || null); return; }
     let ti = T.team;
-    for (let k = 0; k < this.teams.length; k++) { ti = (ti + 1) % this.teams.length; if (alive.includes(this.teams[ti])) break; }
-    if (T.team < 0 || ti <= T.team) this.round++;
+    if (this.simul) { T.round = (T.round || 0) + 1; this.round = Math.max(...this.lanes.map(l => l.turn.round || 0)); }   // свой счёт ходов у каждой команды
+    else {
+      for (let k = 0; k < this.teams.length; k++) { ti = (ti + 1) % this.teams.length; if (alive.includes(this.teams[ti])) break; }
+      if (T.team < 0 || ti <= T.team) this.round++;
+    }
     const team = this.teams[ti]; let s = null;
     for (let k = 0; k < team.order.length; k++) {
       const o = this.soldierById(team.order[(team.next + k) % team.order.length]);
@@ -362,13 +404,13 @@ class Game {
       this.waterY -= 16; this.emit({ t: 'water', y: this.waterY });
       if (!this.sdStarted) { this.sdStarted = true; this.emit({ t: 'msg', txt: 'ВНЕЗАПНАЯ СМЕРТЬ: вода поднимается!', c: '#4fc3ff', big: 1 }); }
     }
-    const wind = this.cfg.settings.wind ? Math.round(rand(-1, 1) * MAX_WIND) : 0;
-    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : this.fallbackWeapon(team), walk: WALK_BUDGET, ox: s.x, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: this.round, look: null });
+    const wind = this.simul ? this.wind : this.cfg.settings.wind ? Math.round(rand(-1, 1) * MAX_WIND) : 0;
+    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : this.fallbackWeapon(team), walk: WALK_BUDGET, ox: s.x, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: this.simul ? T.round : this.round, look: null });
     this.ctrl = null; this.usage = null;
     this.emit({ t: 'turn', team: ti, sid: s.id });
   }
   finish(team) {
-    this.turn.phase = 'over';
+    if (this.simul) for (const ln of this.lanes) { ln.turn.phase = 'over'; ln.usage = null; ln.ctrl = null; } else this.turn.phase = 'over';
     this.over = { win: team ? team.idx : -1 };
     this.emit({ t: 'over', win: this.over.win, stats: this.teams.map(t => ({ dmg: t.dmg, kills: t.kills, alive: this.soldiers.filter(s => s.team === t.idx && s.alive).length })) });
   }
@@ -380,14 +422,15 @@ class Game {
       soldiers: this.soldiers.map(s => [s.id, s.team, s.name, Math.round(s.x), Math.round(s.y), s.hp]),
     };
   }
-  turnSnap() {
-    const T = this.turn;
-    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.round, ro: T.rot, sp: T.spin | 0, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0, lk: T.look || 0 };
+  turnSnap(T = this.turn) {
+    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.simul ? T.round : this.round, ro: T.rot, sp: T.spin | 0, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0, lk: T.look || 0 };
   }
   teamsSnap() { return this.teams.map(t => ({ a: t.ammo, d: t.dmg, k: t.kills })); }
   snapshot() {
     const S = [];
     for (const s of this.soldiers) S.push(s.snap());
-    return { t: 's', ht: Math.round(this.time * 1000), S, E: this.entities.map(e => e.snap()), T: this.turnSnap() };
+    const m = { t: 's', ht: Math.round(this.time * 1000), S, E: this.entities.map(e => e.snap()), T: this.turnSnap(this.simul ? this.lanes[0].turn : this.turn) };
+    if (this.simul) m.TL = this.lanes.map(l => this.turnSnap(l.turn));   // ход каждой команды
+    return m;
   }
 }

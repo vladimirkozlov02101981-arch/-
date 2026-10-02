@@ -66,6 +66,7 @@ class Camera {
       else {
         let best = null, bp = 0;
         for (const e of sc.entities) {
+          if (sc.simul && e.team >= 0 && sc.turn && e.team !== sc.turn.team) continue;   // одновременные ходы: обзор следит за своими снарядами
           let p = CAM_PRI[e.k] || 0; if (e.k === 'mine' && e.s === 2) p = 2; if (e.k === 'crate' && e.v) p = 2;
           if (e.k === 'jet') p = e.s ? 0 : 3; if (e.k === 'storm') p = 3;   // улетающий после сброса самолёт камере не интересен — смотрим на взрывы
           // из одинаково важных — самый ранний снаряд (залп, очередь снарядов): камера ведёт первый, а не скачет к каждому новому
@@ -351,8 +352,8 @@ class Renderer {
   drawWorldAids(c, sc, ctl, t) {
     const T = sc.turn; if (T.phase !== 'aim') return;
     const s = sc.soldiers.find(o => o.id === T.sid); if (!s || !s.alive) return;
-    // границы запаса хода: радиус по горизонтали от точки начала хода
-    if (T.ox !== undefined) {
+    // границы запаса хода: радиус по горизонтали от точки начала хода (при ходе «на любую дистанцию» их нет)
+    if (T.ox !== undefined && !sc.freeWalk) {
       c.save(); c.setLineDash([6, 6]); c.lineWidth = 2;
       for (const bx of [T.ox - WALK_BUDGET, T.ox + WALK_BUDGET]) {
         const near = Math.abs(s.x - bx) < 160;
@@ -415,7 +416,7 @@ class Renderer {
       if (k > 0) { c.save(); rrect(c, x - w / 2 + 2, y - h / 2 + 2, w - 4, h - 4, 4.5); c.clip(); const gr = c.createLinearGradient(0, y - h / 2, 0, y + h / 2); gr.addColorStop(0, col); gr.addColorStop(1, colD); c.fillStyle = gr; c.fillRect(x - w / 2 + 2, y - h / 2 + 2, (w - 4) * k, h - 4); c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillRect(x - w / 2 + 2, y - h / 2 + 2, (w - 4) * k, 2.5); c.restore(); }
       c.strokeStyle = 'rgba(255,255,255,0.55)'; c.lineWidth = 1; rrect(c, x - w / 2 + 0.5, y - h / 2 + 0.5, w - 1, h - 1, 6); c.stroke();
       c.font = `700 11px ${FONT_UI}`; textOutlined(c, String(s.hp), x, y + 0.5, '#fff', 'rgba(0,0,0,0.85)', 3);
-      c.font = `600 11px ${FONT_UI}`; textOutlined(c, s.name, x, y - 14, col, 'rgba(0,0,0,0.85)', 3);
+      c.font = `700 12px ${FONT_TITLE}`; textOutlined(c, '№' + s.name, x, y - 15, col, 'rgba(0,0,0,0.85)', 3);   // номер бойца в порядке хода
       if (s.id === T.sid && (T.phase === 'aim' || T.phase === 'wait') && t - this.turnStart < 4) {
         const b = Math.abs(Math.sin((t - this.turnStart) * 5)) * 7;
         c.fillStyle = col; c.beginPath(); c.moveTo(x - 8, y - 42 - b); c.lineTo(x + 8, y - 42 - b); c.lineTo(x, y - 30 - b); c.closePath(); c.fill();
@@ -541,7 +542,7 @@ class Renderer {
       hudPanel(c, x, y, w, h, 14);
       c.fillStyle = team.color; rrect(c, x + 8, y + 8, 6, h - 16, 3); c.fill();
       c.textAlign = 'left'; c.font = `18px ${FONT_TITLE}`; c.fillStyle = '#fff';
-      c.fillText(act ? act.name : '—', x + 24, y + 21);
+      c.fillText(act ? `Боец №${act.name}` : '—', x + 24, y + 21);
       c.font = `13px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.7)';
       const phaseTxt = T.phase === 'retreat' ? 'Отступайте!' : T.phase === 'use' ? 'Действие…' : T.phase === 'settle' || T.phase === 'wait' ? 'Ожидание…' : T.phase === 'crate' ? 'Сброс припасов' : (ctl && ctl.mine ? 'Ваш ход' : 'Ход соперника');
       c.fillText(`${team.name} · ${phaseTxt}`, x + 24, y + 40);
@@ -566,6 +567,17 @@ class Renderer {
       }
       c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = `10px ${FONT_UI}`; c.textAlign = 'right'; c.fillText('ВЕТЕР', ax - 94, wy); c.textAlign = 'center';
       c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(ax - 0.5, wy - 7, 1, 14);
+      }
+      // непрерывный бой: что делает соперник (он ходит одновременно с вами)
+      const ot = sc.simul ? (sc.lanes ? sc.lanes[1 - T.team] && sc.lanes[1 - T.team].turn : sc.turns && sc.turns[1 - T.team]) : null;
+      if (ot && sc.teams[ot.team]) {
+        const os = sc.soldiers.find(o => o.id === ot.sid), otm = sc.teams[ot.team];
+        const ph = ot.phase === 'retreat' ? 'отступает' : ot.phase === 'use' ? 'действует' : ot.phase === 'aim' ? 'ходит' : 'ждёт';
+        const txt = `${otm.name}: ${os ? 'боец №' + os.name : '—'} ${ph}`, oy = y + h + ((sc.settings || sc.cfg.settings).wind !== false ? 44 : 16);
+        c.font = `12px ${FONT_UI}`; const tw = c.measureText(txt).width + 24;
+        hudPanel(c, sw / 2 - tw / 2, oy - 11, tw, 22, 9);
+        c.fillStyle = otm.color; c.beginPath(); c.arc(sw / 2 - tw / 2 + 11, oy, 3.5, 0, TAU); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.82)'; c.textAlign = 'center'; c.fillText(txt, sw / 2 + 5, oy + 0.5);
       }
     }
     // команды

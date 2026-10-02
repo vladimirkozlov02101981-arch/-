@@ -13,7 +13,7 @@ class RemoteGame {
     this.terrain = new Terrain(this.W, this.H, this.raster.mask);
     this.terrain.materials = this.raster.mat;
     this.props = resolveProps(this.terrain, map);
-    this.settings = start.settings;
+    this.settings = start.settings; this.simul = !!start.settings.simul; this.freeWalk = start.settings.walk === 'free'; this.viewLane = 1;
     this.teams = start.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(start.settings.arsenal, start.settings.ammo), dmg: 0, kills: 0 }));
     this.info = new Map(); this.sView = new Map();
     for (const [id, team, name, x, y, hp] of start.soldiers) {
@@ -40,7 +40,10 @@ class RemoteGame {
       S.set(a[0], { x: a[1] / 10, y: a[2] / 10, aim: a[3] / 100, face: a[4], hp: a[5], st: ST[a[6]] || 'stand', rot: a[7] / 100, wpn: a[8] >= 0 && WEAPONS[a[8]] ? WEAPONS[a[8]].id : null, alive: !!(fl & 1), gone: !!(fl & 2), thrust: !!(fl & 4), hurt: (fl & 8) ? 0.2 : 0, wl: [0, 1, 2, 3, 4, 5].map(i => ((a[10] | 0) >> (i * 2)) & 3) });
     }
     for (const a of m.E || []) E.set(a[0], { id: a[0], k: KINDS[a[1]], x: a[2] / 10, y: a[3] / 10, a: a[4] / 100, f: a[5] / 10, s: a[6], team: a[7], v: a[8] || 0 });
-    const turn = m.T ? this.decodeTurn(m.T) : null;
+    // одновременный режим: у каждой команды свой ход — показываем свой (viewLane), ход соперника — в turns
+    const turns = m.TL ? m.TL.map(t => this.decodeTurn(t)) : null;
+    const turn = turns ? turns[this.viewLane] || turns[0] : m.T ? this.decodeTurn(m.T) : null;
+    if (turns) this.turns = turns;
     if (turn) this.latestTurn = turn;
     if (m.TM) this.applyTeams(m.TM);
     this.buf.push({ ht: m.ht, S, E, T: turn, V: m.V || [], done: false });

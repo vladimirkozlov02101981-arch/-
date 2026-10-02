@@ -74,7 +74,7 @@ class FX {
         const nm = this.name(sc, ev.id);
         for (let i = 0; i < 10; i++) P.smoke(ev.x + rand(-8, 8), ev.y - rand(5, 25), rand(-20, 20), rand(-40, -10), rand(5, 9), rand(0.8, 1.5), '#9a9a9a', 2, 0.6);
         Sfx.play('die', ev);
-        if (nm) this.banner(ev.how === 'drown' ? `${nm} утонул!` : `${nm} выбывает!`, '#ff8a7a', false, 1.8);
+        if (nm) this.banner(ev.how === 'drown' ? `Боец №${nm} утонул!` : `Боец №${nm} выбывает!`, '#ff8a7a', false, 1.8);
         break;
       }
       case 'splash': this.splash(ev.x, sc.waterY, ev.s || 0, sc); break;

@@ -97,7 +97,9 @@ class AISearch {
 
 class AI {
   constructor(g, team, level) { this.g = g; this.team = team; this.L = AI_LEVELS[level] || AI_LEVELS.normal; this.key = null; }
-  update(dt) {
+  /** в одновременном режиме ИИ действует в ходе своей команды, не мешая ходу игрока */
+  update(dt) { return this.g.simul ? this.g.inLane(this.team, () => this.update0(dt)) : this.update0(dt); }
+  update0(dt) {
     const g = this.g, T = g.turn;
     if (g.over || T.team !== this.team) { this.key = null; return; }
     const s = g.active(); if (!s || !s.alive) return;

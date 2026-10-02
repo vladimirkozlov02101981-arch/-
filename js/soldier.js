@@ -21,7 +21,7 @@ function onGround(T, x, y) { return T.isSolid(x - 3, y) || T.isSolid(x, y) || T.
     крутой склон так не взять — впереди должна быть площадка */
 const MANTLE = 22;
 /** запас хода — радиус по горизонтали от точки начала хода: назад и по лестницам можно сколько угодно */
-function walkOk(g, s, nx) { const o = g.turn.ox, d = Math.abs(nx - o); return d <= WALK_BUDGET || d < Math.abs(s.x - o); }
+function walkOk(g, s, nx) { if (g.freeWalk) return true; const o = g.turn.ox, d = Math.abs(nx - o); return d <= WALK_BUDGET || d < Math.abs(s.x - o); }   // «на любую дистанцию» — без предела
 function mantleFrom(T, x, y, dir) {
   for (let up = MAX_CLIMB + 1; up <= MANTLE; up++) {
     if (!bodyFree(T, x, y - up)) return null;

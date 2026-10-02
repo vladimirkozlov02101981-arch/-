@@ -18,3 +18,5 @@ dev/blender/scenes/
 __pycache__/
 
 dev/cloudflared-*.txt
+profile.json
+profile.json.tmp

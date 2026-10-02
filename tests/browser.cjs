@@ -28,7 +28,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await guest.locator('[data-team="1"] .tc-name').pressSequentially(' онлайн',{delay:90});await host.waitForFunction(()=>UI.teamsCfg[1].name==='Друг онлайн');
     console.log('Lobby and editable team names PASS');
     assert.equal(await guest.locator('[data-team="1"] .tc-name').inputValue(),'Друг онлайн');
-    await host.selectOption('#o-perTeam','2');await host.fill('#o-turnTime','90');await host.dispatchEvent('#o-turnTime','change');
+    await host.selectOption('#o-perTeam','2');await host.uncheck('#o-turnInf');await host.fill('#o-turnTime','90');await host.dispatchEvent('#o-turnTime','change');
     await guest.waitForFunction(()=>UI.settings.perTeam===2&&UI.settings.turnTime===90);
     await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game.turn.phase==='aim',{timeout:60000});await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});
     await host.waitForTimeout(800);assert.equal(await mapHash(host),await mapHash(guest));

@@ -9,7 +9,7 @@ function fixture() {
     WEAPON: { sniper: { id: 'sniper', mode: 'instant' }, bazooka: { id: 'bazooka', mode: 'charge' } },
     WEAPONS: [], SPIN_WEAPONS: new Set(),
   });
-  for (const file of ['util.js', 'input.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
+  for (const file of ['util.js', 'profile.js', 'input.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
   const { Input, LocalController } = vm.runInContext('({Input,LocalController})', context), sent = [];
   const ctl = new LocalController(c => sent.push(c)); ctl.myTeams = [0];
   const s = { id: 1, x: 100, y: 124, aim: -0.4, alive: true }, T = { round: 1, sid: 1, team: 0, phase: 'aim', weapon: 'bazooka', shots: 0 };

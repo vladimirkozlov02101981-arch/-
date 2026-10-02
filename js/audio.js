@@ -281,5 +281,12 @@ const Sfx = (() => {
   function setScene(value) { scene=value;makeImpulse(); }
   function setVolume(value) {volume=clamp(Number(value)||0,0,1);try{localStorage.setItem('tw_volume',volume);}catch{}if(master)master.gain.setTargetAtTime(enabled?volume:0,ac.currentTime,.04);}
   function setListener(x, y, z, w) { listener.x = x; listener.y = y; listener.z = z; listener.w = w; }
-  return { init, resume, play, chargeStart, chargeSet, chargeStop, setAmbient, stopAmbient, toggle, setListener, setSilent, setScene, setVolume, get volume() { return volume; }, get enabled() { return enabled; } };
+  /** звук из набора настроек (конфигурация или основной набор): вкл/выкл и громкость */
+  function apply(s) {
+    if (!s) return; enabled = s.on !== false; volume = clamp(Number(s.volume) || 0, 0, 1);
+    try { localStorage.setItem('tw_sound', enabled ? '1' : '0'); localStorage.setItem('tw_volume', volume); } catch (e) { /* */ }
+    if (master && ac) master.gain.setTargetAtTime(enabled ? volume : 0, ac.currentTime, 0.05);
+    if (!enabled) chargeStop();
+  }
+  return { init, resume, play, chargeStart, chargeSet, chargeStop, setAmbient, stopAmbient, toggle, setListener, setSilent, setScene, setVolume, apply, get volume() { return volume; }, get enabled() { return enabled; } };
 })();

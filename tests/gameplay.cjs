@@ -44,8 +44,10 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
 
     // 2. Время хода без лимита: галочка, сохранение настроек, ход не кончается сам, ∞ на табло
     await page.check('#o-turnInf');
+    const DEFAULT_TURN_TIME = await page.evaluate(() => DEFAULT_PREFS.settings.turnTime);
     report.unlimited = await page.evaluate(() => ({ s: UI.settings.turnTime, disabled: document.getElementById('o-turnTime').disabled, kept: sanitizeSettings({ turnTime: 0 }).turnTime, missing: sanitizeSettings({}).turnTime }));
-    assert.deepEqual(report.unlimited, { s: 0, disabled: true, kept: 0, missing: 45 });
+    // пустое значение — запасное время хода из значений по умолчанию (сейчас: без лимита, как у игрока)
+    assert.deepEqual(report.unlimited, { s: 0, disabled: true, kept: 0, missing: DEFAULT_TURN_TIME });
     await page.click('#btn-start'); await page.waitForFunction(() => App.mode === 'hotseat' && App.game && App.game.turn.phase === 'aim', {}, { timeout: 60000 });
     report.unlimitedTurn = await page.evaluate(() => {
       const g = App.game, sid = g.turn.sid; for (let i = 0; i < 60 * 200; i++) g.step(1 / 60);
