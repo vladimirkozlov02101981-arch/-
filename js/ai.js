@@ -142,8 +142,18 @@ class AI {
         if (Math.abs(angNorm(this.goalAim - this.aim)) < 0.001 && this.t > 0.5) {
           const W = WEAPON[this.plan.w];
           if (W.mode === 'charge' || W.mode === 'tcharge') { this.state = 'charge'; this.pw = 0; }
-          else { send({ c: 'fire', aim: this.aim, pw: 1, tx: this.goalTx, ty: this.goalTy }); this.state = 'done'; }
+          else {
+            // быстрые пули: сперва обзор к месту попадания (как у игрока), потом очередь
+            const p = FAST_SHOT[W.id] ? predictShot(g, s, this.aim, W.id) : null;
+            if (p && Math.hypot(p.x - s.x, p.y - s.y) > 380) { send({ c: 'look', x: Math.round(p.x), y: Math.round(p.y) }); this.state = 'frame'; this.t = 0; }
+            else { send({ c: 'fire', aim: this.aim, pw: 1, tx: this.goalTx, ty: this.goalTy }); this.state = 'done'; }
+          }
         }
+        break;
+      }
+      case 'frame': {
+        send({ c: 'ctrl', l: false, r: false, aim: this.aim, pw: -1 });
+        if (this.t > 0.75) { send({ c: 'fire', aim: this.aim, pw: 1, tx: this.goalTx, ty: this.goalTy }); this.state = 'done'; this.t = 0; }
         break;
       }
       case 'charge': {

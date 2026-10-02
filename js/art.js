@@ -48,7 +48,7 @@ const TexLib = {
   data: {},
   ready: null,
   hi: {},
-  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'dirt_valley', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_canyon', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
+  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
   loadHi(n) {
     if (this.hi[n] !== undefined) return this.hi[n];
@@ -65,6 +65,39 @@ const TexLib = {
     im.onerror = () => {};
     im.src = `assets/tex/hi/${n}.webp`;
     return null;
+  },
+  /** родной цвет высокого разрешения: assets/tex/native/<имя>.webp в k раз подробнее малой текстуры, тот же период.
+      Малая текстура — точное уменьшение родной (dev/make_native.py), поэтому при приближении цвет берётся из родной,
+      а освещение, тени и подпалины карты переносятся отношением «нарисовано / малая текстура» (js/hires.js).
+      Загружается лениво — только для материалов карты, которую приближают; давно не нужные (другая карта) выгружаются */
+  native: {}, nativeUse: new Map(),
+  nativeAvail: new Map([['dirt_valley', 4], ['rock_canyon', 4]]),   // имя → k (обновляет dev/make_native.py)
+  loadNative(n) {
+    const have = this.native[n];
+    if (have !== undefined) { if (have) this.nativeUse.set(n, performance.now()); return have; }
+    this.native[n] = null; const k = this.nativeAvail.get(n); if (!k) return null;
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const low = this.data[n];
+        if (!low || im.naturalWidth !== low.w * k || im.naturalHeight !== low.h * k) return;   // не та пара — обычная отрисовка
+        const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
+        x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(c.width * c.height * 3);
+        for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) { rgb[i] = d[j]; rgb[i + 1] = d[j + 1]; rgb[i + 2] = d[j + 2]; }
+        c.width = c.height = 1;   // холст декодирования больше не нужен
+        this.native[n] = { name: n, w: im.naturalWidth, h: im.naturalHeight, k, d: rgb };
+        this.nativeUse.set(n, performance.now()); this.trimNative();
+      } catch (e) { /* без родного цвета */ }
+    };
+    im.onerror = () => {};
+    im.src = `assets/tex/native/${n}.webp`;
+    return null;
+  },
+  /** выгрузка: только то, что не использовалось 30 с (материалы прежней карты), и не больше восьми в памяти —
+      материалы текущей карты используются каждую секунду и не вытесняют друг друга */
+  trimNative(keep = 8, idleMs = 30000) {
+    const now = performance.now(), live = [...this.nativeUse.entries()].filter(([n]) => this.native[n]).sort((a, b) => b[1] - a[1]);
+    live.forEach(([n, t], i) => { if (now - t > idleMs || i >= keep) { delete this.native[n]; this.nativeUse.delete(n); } });
   },
   surfaceHi: {},
   fine: {},

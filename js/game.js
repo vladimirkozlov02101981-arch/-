@@ -236,7 +236,12 @@ class Game {
         if (isNum(c.aim) && (T.phase === 'aim' || T.phase === 'use' || T.phase === 'retreat')) s.setAim(c.aim);
         T.charge = (isNum(c.pw) && c.pw >= 0 && T.phase === 'aim') ? clamp(c.pw, 0, 1) : -1;
         break;
-      case 'jump': if (T.phase === 'aim' || T.phase === 'retreat') s.jump(this, c.d === -1 || c.d === 1 ? c.d : 0); break;
+      case 'jump':
+        if (T.phase === 'aim' || T.phase === 'retreat') s.jump(this, c.d === -1 || c.d === 1 ? c.d : 0);
+        else if (T.phase === 'use' && this.usage && this.usage.jump) this.usage.jump(this);   // робо-бомба: пробел — прыжок через своих и препятствия
+        break;
+      // быстрые пули: перед выстрелом обзор переходит к месту попадания (render.js, Camera); x, y — где пули встретят цель
+      case 'look': if (T.phase === 'aim' && isNum(c.x) && isNum(c.y)) T.look = [clamp(Math.round(c.x), -500, this.W + 500), clamp(Math.round(c.y), -1500, this.H), (T.look ? T.look[2] : this.round * 100) + 1]; break;
       case 'weapon':
         if (T.phase === 'aim' && T.shots === 0 && typeof c.id === 'string' && this.canUse(this.teams[team], c.id)) { T.weapon = c.id; T.target = null; }
         break;
@@ -287,7 +292,8 @@ class Game {
     for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!e.dead) e.update(this, dt); }
     if (this.pending.length) { const p = this.pending; this.pending = []; for (const [x, y, k] of p) { const B = BLAST[k]; this.explode(x, y, B.R, B.D, { knock: B.K, frag: k }); } }
     this.entities = this.entities.filter(e => !e.dead);
-    for (const s of this.soldiers) s.wpn = (s === act && s.alive && (T.phase === 'aim' || T.phase === 'use')) ? T.weapon : null;
+    // брошенное (робо-бомба, телепортер) в руках не остаётся, пока оно бежит или летит
+    for (const s of this.soldiers) s.wpn = (s === act && s.alive && (T.phase === 'aim' || (T.phase === 'use' && !THROWN_USE.has(T.weapon)))) ? T.weapon : null;
     if (this.usage) {
       let done = false; try { done = this.usage.update(this, dt); } catch (e) { console.error(e); done = true; }
       if (done && T.phase === 'use') this.afterUse(); else if (done) this.usage = null;
@@ -357,7 +363,7 @@ class Game {
       if (!this.sdStarted) { this.sdStarted = true; this.emit({ t: 'msg', txt: 'ВНЕЗАПНАЯ СМЕРТЬ: вода поднимается!', c: '#4fc3ff', big: 1 }); }
     }
     const wind = this.cfg.settings.wind ? Math.round(rand(-1, 1) * MAX_WIND) : 0;
-    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : this.fallbackWeapon(team), walk: WALK_BUDGET, ox: s.x, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: this.round });
+    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : this.fallbackWeapon(team), walk: WALK_BUDGET, ox: s.x, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: this.round, look: null });
     this.ctrl = null; this.usage = null;
     this.emit({ t: 'turn', team: ti, sid: s.id });
   }
@@ -376,7 +382,7 @@ class Game {
   }
   turnSnap() {
     const T = this.turn;
-    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.round, ro: T.rot, sp: T.spin | 0, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0 };
+    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.round, ro: T.rot, sp: T.spin | 0, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0, lk: T.look || 0 };
   }
   teamsSnap() { return this.teams.map(t => ({ a: t.ammo, d: t.dmg, k: t.kills })); }
   snapshot() {

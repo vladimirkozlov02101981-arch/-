@@ -2,7 +2,7 @@
 /* WebSocket relay. The host owns the simulation.
    Страница с сервера соединяется со своим сервером; файл игры (Territory-War.html) — с сервером из ссылки-приглашения:
    картинки грузятся из файла мгновенно, а через интернет идут только ходы. */
-const NET_VERSION = 6;
+const NET_VERSION = 7;
 const Net = {
   socket: null, role: null, code: null, h: {}, pingT: null, rtt: 0,
   lastData: 0, chunks: new Map(), joinTimer: null, linked: false, server: null, publicBase: null,

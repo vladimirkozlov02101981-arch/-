@@ -11,14 +11,24 @@ const AIM_RETICLE = 78;   // прицел оружия: расстояние о�
 /* Камера. Отдалиться до всей карты нельзя: масштаб ограничен рядом с базовым,
    а дальние участки осматриваются биноклем — вид плавно едет туда, куда ведут мышь. */
 class Camera {
-  constructor() { this.x = 1600; this.y = 900; this.z = 1; this.tz = 1; this.sx = 0; this.sy = 0; this.free = 0; this.userZ = null; this.inited = false; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; }
+  constructor() { this.x = 1600; this.y = 900; this.z = 1; this.tz = 1; this.sx = 0; this.sy = 0; this.free = 0; this.userZ = null; this.inited = false; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = 0; this.ly = 0; this.leadE = null; }
   toScreen(wx, wy, sw, sh) { return [(wx - this.x) * this.z + sw / 2 + this.sx, (wy - this.y) * this.z + sh / 2 + this.sy]; }
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
   /** на широких мониторах ширина обзора тоже ограничена (не больше ~2000 px карты) */
   baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 560, 0.9, 2.4), sw / 1500); }   // меньше увеличение — текстуры ближе к 1:1, резче
   zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.6, sw / 2300), b * 4]; }   // колесом можно приблизить в 4 раза
-  reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; }
+  reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = this.ly = 0; this.leadE = null; }
+  /** куда смотреть при выстреле быстрыми пулями: свой боец и место попадания вместе, если помещаются в кадр, иначе — место
+      попадания (чуть сдвинутое к стрелку, чтобы было видно, откуда летят пули) */
+  shotFrame(sx, sy, px, py, sw, sh) {
+    const vw = sw / this.z, vh = sh / this.z;
+    if (Math.abs(px - sx) < vw * 0.8 && Math.abs(py - sy) < vh * 0.72) return { x: (sx + px) / 2, y: (sy + py) / 2 - 20 };
+    const d = Math.hypot(px - sx, py - sy) || 1, k = Math.min(d, vw * 0.3) / d;
+    return { x: px - (px - sx) * k, y: py - (py - sy) * k };
+  }
+  /** точка в кадре с запасом m (доля экрана) */
+  sees(x, y, sw, sh, m = 0.08) { const [px, py] = this.toScreen(x, y, sw, sh); return px > sw * m && px < sw * (1 - m) && py > sh * m && py < sh * (1 - m); }
   update(dt, sc, fx, sw, sh, mouse) {
     if (!this.inited) { this.inited = true; this.x = sc.W / 2; this.y = sc.waterY - 420; this.z = this.tz = this.baseZoom(sh, sw); }
     const [zmin, zmax] = this.zoomLimits(sh, sw);
@@ -27,6 +37,16 @@ class Camera {
     // бинокль не приближает: он плавно ведёт обзор за мышью
     this.tz = this.userZ ?? this.baseZoom(sh, sw);
     let target = null;
+    const look = sc.turn && sc.turn.look;
+    if (look && look[2] !== this.lookId) {
+      this.lookId = look[2]; const a = sc.soldiers.find(s => s.id === sc.turn.sid);
+      if (a && !a.gone && !(this.sees(look[0], look[1], sw, sh) && this.sees(a.x, a.y - 20, sw, sh))) this.shot = Object.assign(this.shotFrame(a.x, a.y - 20, look[0], look[1], sw, sh), { t: 2.2 });
+    }
+    if (this.shot) {
+      // пока летят быстрые пули, кадр держится; после них — ещё немного, чтобы был виден результат
+      if (!sc.entities.some(e => e.k === 'bullet' || e.k === 'mini' || e.k === 'acid')) this.shot.t -= dt;
+      if (this.shot.t <= 0 || this.binoc) this.shot = null;
+    }
     {
       // дальнобойное оружие с выбором точки (авиаудар, молния, лазер, ядерный удар…): курсор у края экрана сам ведёт обзор,
       // и обзор остаётся там, куда его увели, пока оружие в руках — цель за экраном выбирается без бинокля
@@ -40,6 +60,7 @@ class Camera {
       } else if (pan) { const sp = 1500 / this.z; this.x += pan[0] * sp * dt; this.y += pan[1] * sp * dt; this.hold = true; }
       else if (this.hold) { /* обзор стоит там, куда его увели к цели */ }
       else if (this.free > 0) this.free -= dt;
+      else if (this.shot) target = this.shot;
       else {
         let best = null, bp = 0;
         for (const e of sc.entities) {
@@ -54,21 +75,39 @@ class Camera {
           const dir = Math.cos(best.a) >= 0 ? 1 : -1, vw = sw / this.z, vh = sh / this.z, gy = best.v || best.y + 430, span = gy - best.y;
           target = { x: best.f - dir * vw * 0.12, y: span < vh - 150 ? (best.y + gy) / 2 + 25 : gy - vh / 2 + 120 };
         }
+        else if (best && best.k === 'nukem') {
+          // ядерная ракета: обзор плавно идёт за ней (ракета около середины экрана, внизу видна земля), у земли
+          // останавливается над местом падения — ракета влетает в кадр и падает, без рывков
+          const vh = sh / this.z, gy = Math.min(sc.waterY, sc.terrain.findTop(clamp(Math.round(best.x), 0, sc.W - 1), 0));
+          target = { x: best.x, y: Math.min(best.y + vh * 0.3, gy - vh / 2 + 120) };
+        }
         else if (best && best.k === 'bomb') {
           // падающие бомбы и земля под ними — оба в кадре, видно, куда ляжет серия
           const vh = sh / this.z, gy = Math.min(sc.waterY, sc.terrain.findTop(clamp(Math.round(best.x), 0, sc.W - 1), 0)), span = gy - best.y;
           target = { x: best.x, y: span < vh - 150 ? (best.y + gy) / 2 + 25 : gy - vh / 2 + 120 };
         }
         else if (best && best.k === 'storm') target = { x: best.x, y: best.v ? (best.y + best.v) / 2 + 20 : best.y + 250 };   // туча и земля под ней — оба в кадре
-        else if (best && bp >= 2) target = { x: best.x, y: best.k === 'orbital' ? best.v : best.y };
+        else if (best && bp >= 2) {
+          // упреждение по скорости (сглаженное): быстрый снаряд не отстаёт к краю экрана, впереди видно, куда он летит
+          const vw = sw / this.z, vh = sh / this.z, L = this.leadE;
+          let vx = best.vx, vy = best.vy;
+          if (vx === undefined) { vx = L && L.id === best.id && dt > 0 ? (best.x - L.x) / dt : 0; vy = L && L.id === best.id && dt > 0 ? (best.y - L.y) / dt : 0; }   // снаряды друга по сети: скорость по сдвигу
+          this.leadE = { id: best.id, x: best.x, y: best.y };
+          const kk = 1 - Math.exp(-dt * 3);
+          this.lx += (clamp(vx * 0.2, -vw * 0.25, vw * 0.25) - this.lx) * kk; this.ly += (clamp(vy * 0.2, -vh * 0.22, vh * 0.22) - this.ly) * kk;
+          target = best.k === 'orbital' ? { x: best.x, y: best.v } : { x: best.x + this.lx, y: best.y + this.ly };
+        }
         else if (fx.focus) target = fx.focus;
         else { const a = sc.soldiers.find(s => s.id === sc.turn.sid); if (a && !a.gone) target = { x: a.x, y: a.y - 58 }; }
       }
     }
+    if (!target || this.shot === target) { this.lx *= Math.exp(-dt * 3); this.ly *= Math.exp(-dt * 3); this.leadE = null; }
     if (target) {
-      // снаряд у края или за экраном — камера догоняет его быстро, иначе плавно
-      const far = Math.abs(target.x - this.x) * this.z > sw * 0.3 || Math.abs(target.y - this.y) * this.z > sh * 0.3;
-      const k = 1 - Math.exp(-dt * (far ? 10 : 3.4)); this.x += (target.x - this.x) * k; this.y += (target.y - this.y) * k;
+      // снаряд у края или за экраном — камера догоняет его быстрее, иначе плавно. Скорость слежения растёт с отставанием
+      // постепенно: прежнее переключение «медленно/быстро» на границе дёргало быстрые снаряды туда-сюда
+      const off = Math.max(Math.abs(target.x - this.x) * this.z / sw, Math.abs(target.y - this.y) * this.z / sh);
+      const rate = target === this.shot ? 9 : 3.4 + 6.6 * clamp((off - 0.16) / 0.24, 0, 1);   // к месту попадания — быстро: выстрел ждёт
+      const k = 1 - Math.exp(-dt * rate); this.x += (target.x - this.x) * k; this.y += (target.y - this.y) * k;
     }
     // авиаудар: пока самолёт заходит и бомбы падают, обзор чуть шире (не дальше пределов колеса)
     if (sc.entities.some(e => (e.k === 'jet' && !e.s) || e.k === 'bomb')) this.tz = Math.max(zmin, Math.min(this.tz, this.baseZoom(sh, sw) * 0.78));
@@ -91,11 +130,14 @@ class Camera {
     const minY = -900 + hh, maxY = sc.waterY + 270 - hh; // запас снизу, чтобы бойцы у воды не прятались под нижним HUD
     this.y = minY > maxY ? maxY : clamp(this.y, minY, maxY);
   }
-  /** колесо мыши: только небольшое приближение/отдаление вокруг курсора */
+  /** колесо мыши: небольшое приближение/отдаление. Когда камера за кем-то следит (боец, снаряд, кадр выстрела), масштаб плавно
+      меняется вокруг середины экрана и слежение не прерывается; свободный обзор (бинокль, обзор у цели) — вокруг курсора */
   zoomAt(f, px, py, sw, sh) {
-    const [wx, wy] = this.toWorld(px, py, sw, sh); const [zmin, zmax] = this.zoomLimits(sh, sw);
-    this.userZ = clamp((this.userZ ?? this.baseZoom(sh, sw)) * f, zmin, zmax); this.z = this.tz = this.userZ;
-    const [wx2, wy2] = this.toWorld(px, py, sw, sh); this.x += wx - wx2; this.y += wy - wy2; this.free = Math.max(this.free, 2.5);
+    const [zmin, zmax] = this.zoomLimits(sh, sw), z = clamp((this.userZ ?? this.baseZoom(sh, sw)) * f, zmin, zmax);
+    this.userZ = z;
+    if (!(this.binoc || this.hold || this.free > 0)) { this.tz = z; return; }
+    const [wx, wy] = this.toWorld(px, py, sw, sh); this.z = this.tz = z;
+    const [wx2, wy2] = this.toWorld(px, py, sw, sh); this.x += wx - wx2; this.y += wy - wy2;
   }
 }
 
@@ -224,6 +266,7 @@ class Renderer {
     if (sc.terrain.glow) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.5 + 0.22 * Math.sin(t * 1.6); this.blit(c, sc.terrain.glow, v, sc); c.restore(); }
     drawProps(c, sc, t, false);
     this.drawWorldAids(c, sc, ctl, t);
+    drawAcidStream(c, sc, t);
     for (const e of sc.entities) if (e.x > v.x0 - 80 && e.x < v.x1 + 80) drawEntity(c, e, t, sc);
     for (const s of sc.soldiers) {
       if (s.gone) continue; const an = this.animFor(s, dt);
@@ -476,7 +519,6 @@ class Renderer {
   drawHUD(sc, cam, ctl, t, extra) {
     const c = this.c, sw = this.sw, sh = this.sh; const T = sc.turn;
     this.drawScope(c, sc, cam, ctl, sw, sh);
-    this.drawBinoculars(c, cam, sw, sh, t, sc);
     this.drawPowerBar(c, sc, ctl, sw, sh);
     c.save(); c.textBaseline = 'middle';
     const team = sc.teams[T.team]; const act = sc.soldiers.find(s => s.id === T.sid);
@@ -488,7 +530,7 @@ class Renderer {
       c.textAlign = 'left'; c.font = `18px ${FONT_TITLE}`; c.fillStyle = '#fff';
       c.fillText(act ? act.name : '—', x + 24, y + 21);
       c.font = `13px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.7)';
-      const phaseTxt = T.phase === 'retreat' ? 'Отступайте!' : T.phase === 'use' ? 'Действие...' : T.phase === 'settle' || T.phase === 'wait' ? 'Ожидание...' : T.phase === 'crate' ? 'Сброс припасов' : (ctl && ctl.mine ? 'Ваш ход' : 'Ход соперника');
+      const phaseTxt = T.phase === 'retreat' ? 'Отступайте!' : T.phase === 'use' ? 'Действие…' : T.phase === 'settle' || T.phase === 'wait' ? 'Ожидание…' : T.phase === 'crate' ? 'Сброс припасов' : (ctl && ctl.mine ? 'Ваш ход' : 'Ход соперника');
       c.fillText(`${team.name} · ${phaseTxt}`, x + 24, y + 40);
       // время хода 0 — без ограничения: полное кольцо и знак ∞ (отступление по-прежнему считается)
       const inf = T.phase !== 'retreat' && !((sc.settings || sc.cfg.settings).turnTime > 0);
@@ -499,8 +541,8 @@ class Renderer {
       c.beginPath(); c.arc(cx, cy, 20, -Math.PI / 2, -Math.PI / 2 + TAU * (inf ? 1 : clamp(val / max, 0, 1))); c.stroke();
       c.textAlign = 'center'; c.font = `${inf ? 24 : 18}px ${FONT_TITLE}`; c.fillStyle = low && Math.sin(t * 10) > 0 ? '#ff6b6b' : '#fff';
       c.fillText(inf ? '∞' : String(Math.ceil(Math.max(0, val))), cx, cy + 1);
-      // ветер
-      // стрелки растут от своей оси, подпись стоит слева от них и не перекрывается
+      // ветер (если он отключён в настройках, плашки нет); стрелки растут от своей оси, подпись слева от них
+      if ((sc.settings || sc.cfg.settings).wind !== false) {
       const wy = y + h + 16, ax = sw / 2 + 22;
       hudPanel(c, ax - 136, wy - 12, 231, 24, 10);
       const k = clamp(T.wind / MAX_WIND, -1, 1); const segs = 8;
@@ -511,6 +553,7 @@ class Renderer {
       }
       c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = `10px ${FONT_UI}`; c.textAlign = 'right'; c.fillText('ВЕТЕР', ax - 94, wy); c.textAlign = 'center';
       c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(ax - 0.5, wy - 7, 1, 14);
+      }
     }
     // команды
     let by = sh - 16 - sc.teams.length * 30;
@@ -525,26 +568,6 @@ class Renderer {
       c.fillStyle = '#fff'; c.font = `11px ${FONT_UI}`; c.textAlign = 'right'; c.fillText(`${alive}`, 250, by + 1);
       by += 30;
     }
-    // оружие
-    if (ctl && ctl.mine && (T.phase === 'aim' || T.phase === 'use' || T.phase === 'retreat')) {
-      const W = WEAPON[T.weapon]; const tm = sc.teams[T.team];
-      const w = 390, h = 64, x = sw / 2 - w / 2, y = sh - h - 14;
-      hudPanel(c, x, y, w, h, 14);
-      if (W) {
-        c.drawImage(weaponIcon(W.id, 48), x + 10, y + 8);
-        c.textAlign = 'left'; c.font = `17px ${FONT_TITLE}`; c.fillStyle = '#fff'; c.fillText(W.name, x + 66, y + 20);
-        const am = tm && tm.ammo[W.id]; c.font = `13px ${FONT_UI}`; c.fillStyle = '#ffd166';
-        c.textAlign = 'right'; c.fillText(am < 0 ? '∞' : `×${am}`, x + w - 14, y + 20);
-        c.textAlign = 'left'; c.fillStyle = 'rgba(255,255,255,0.72)'; c.font = `12px ${FONT_UI}`;
-        c.fillText(ctl.hint(sc, T), x + 66, y + 40);
-      } else {
-        c.textAlign = 'left'; c.font = `17px ${FONT_TITLE}`; c.fillStyle = '#fff'; c.fillText('Руки пусты', x + 66, y + 20);
-        c.fillStyle = 'rgba(255,255,255,0.72)'; c.font = `12px ${FONT_UI}`; c.fillText('Tab — арсенал, Q/E или 1–6 — взять оружие, Esc — пауза', x + 66, y + 40);
-      }
-      const wk = clamp(T.walk / WALK_BUDGET, 0, 1);
-      c.fillStyle = 'rgba(255,255,255,0.12)'; rrect(c, x + 66, y + 51, w - 80, 5, 2.5); c.fill();
-      c.fillStyle = wk > 0.25 ? '#6fd0ff' : '#ff7a4a'; rrect(c, x + 66, y + 51, (w - 80) * wk, 5, 2.5); c.fill();
-    }
     // подсказки внизу справа
     // подсказка про бинокль — на подложке и только пока игрок им ни разу не пользовался
     if (cam.binocK > 0.5) this.binocUsed = true;
@@ -554,7 +577,6 @@ class Renderer {
     if (extra && extra.ping !== undefined) { c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillText(`пинг ${extra.ping} мс`, sw - 106, sh - 34); }
     c.restore();
   }
-  /** оверлей бинокля: две линзы, шкала и затемнение по краям */
   /** оптический прицел снайперки: линза ×3 на линии ствола в точке курсора, сетка с дальномерными метками */
   drawScope(c, sc, cam, ctl, sw, sh) {
     const T = sc.turn; if (T.weapon !== 'sniper' || T.phase !== 'aim' || !ctl || !ctl.mine || !ctl.scopeOn || cam.binocK > 0.5) return;
@@ -579,60 +601,6 @@ class Renderer {
     c.lineWidth = 7; c.strokeStyle = '#0c0e10'; c.beginPath(); c.arc(cx, cy, R + 3, 0, TAU); c.stroke();
     c.lineWidth = 1.5; c.strokeStyle = 'rgba(180,200,220,0.35)'; c.beginPath(); c.arc(cx, cy, R + 6.5, -2.6, -0.9); c.stroke();
     c.font = `11px ${FONT_TITLE}`; c.fillStyle = 'rgba(220,235,255,0.8)'; c.textAlign = 'left'; c.fillText(`×${Z}  ${Math.round(Math.hypot(ctl.mouseW.x - s.x, ctl.mouseW.y - s.y) / 10)} м`, cx + R * 0.45, cy + R * 0.82);
-    c.restore();
-  }
-  drawBinoculars(c, cam, sw, sh, t, sc) {
-    const k = cam.binocK; if (k < 0.02) return;
-    const R = Math.min(sh * 0.47, sw * 0.29);
-    if (!this.binMask || this.binMask.w !== sw || this.binMask.h !== sh) {
-      const cv = makeCanvas(sw, sh); const m = cv.getContext('2d');
-      m.fillStyle = '#05070a'; m.fillRect(0, 0, sw, sh);
-      m.globalCompositeOperation = 'destination-out';
-      for (const cx of [sw / 2 - R * 0.6, sw / 2 + R * 0.6]) {
-        const g = m.createRadialGradient(cx, sh / 2, R * 0.82, cx, sh / 2, R);
-        g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-        m.fillStyle = g; m.beginPath(); m.arc(cx, sh / 2, R, 0, TAU); m.fill();
-      }
-      m.globalCompositeOperation = 'source-over';
-      const tint = m.createRadialGradient(sw / 2, sh / 2, R * 0.2, sw / 2, sh / 2, R * 1.6);
-      tint.addColorStop(0, 'rgba(120,170,220,0)'); tint.addColorStop(1, 'rgba(40,70,110,0.28)');
-      m.fillStyle = tint; m.fillRect(0, 0, sw, sh);
-      this.binMask = cv; cv.w = sw; cv.h = sh;
-    }
-    c.save(); c.globalAlpha = k; c.drawImage(this.binMask, 0, 0, sw, sh);
-    c.strokeStyle = 'rgba(210,235,255,0.35)'; c.lineWidth = 1;
-    const cx = sw / 2, cy = sh / 2;
-    c.beginPath(); c.moveTo(cx - R * 0.9, cy); c.lineTo(cx + R * 0.9, cy); c.moveTo(cx, cy - R * 0.55); c.lineTo(cx, cy + R * 0.55); c.stroke();
-    for (let i = -8; i <= 8; i++) { if (!i) continue; const x = cx + i * R * 0.1; const h = i % 4 ? 4 : 9; c.beginPath(); c.moveTo(x, cy - h); c.lineTo(x, cy + h); c.stroke(); }
-    c.font = `12px ${FONT_TITLE}`; c.fillStyle = 'rgba(210,235,255,0.6)'; c.textAlign = 'left'; c.fillText('×8', cx + R * 0.62, cy - R * 0.62);
-    // оправа линз: тёмный металл с бликом сверху, только по внешнему контуру «восьмёрки»
-    const lx = [cx - R * 0.6, cx + R * 0.6];
-    lx.forEach((ex, i) => {
-      const ox = lx[1 - i];
-      c.save(); c.beginPath(); c.rect(0, 0, sw, sh); c.arc(ox, cy, R * 0.93, 0, TAU, true); c.clip('evenodd');
-      c.lineWidth = R * 0.07; c.strokeStyle = 'rgba(8,10,14,0.9)'; c.beginPath(); c.arc(ex, cy, R * 0.955, 0, TAU); c.stroke();
-      const rim = c.createLinearGradient(ex, cy - R, ex, cy + R);
-      rim.addColorStop(0, 'rgba(160,178,196,0.55)'); rim.addColorStop(0.35, 'rgba(60,68,80,0.35)'); rim.addColorStop(1, 'rgba(20,24,30,0.2)');
-      c.lineWidth = 2; c.strokeStyle = rim; c.beginPath(); c.arc(ex, cy, R * 0.92, 0, TAU); c.stroke();
-      c.restore();
-      // отсвет стекла
-      c.save(); c.beginPath(); c.arc(ex, cy, R * 0.9, 0, TAU); c.clip();
-      const gl = c.createLinearGradient(ex - R, cy - R, ex + R * 0.2, cy + R * 0.2);
-      gl.addColorStop(0, 'rgba(255,255,255,0.10)'); gl.addColorStop(0.45, 'rgba(255,255,255,0.025)'); gl.addColorStop(0.5, 'rgba(255,255,255,0)');
-      c.fillStyle = gl; c.fillRect(ex - R, cy - R, R * 2, R * 2); c.restore();
-    });
-    // дальномер: расстояние и направление до активного бойца, чтобы не потеряться в бинокле
-    const a = sc && sc.soldiers.find(s => s.id === sc.turn.sid);
-    if (a && !a.gone) {
-      const dx = a.x - cam.x, dy = a.y - cam.y, d = Math.hypot(dx, dy);
-      c.font = `13px ${FONT_TITLE}`; c.textAlign = 'center'; c.fillStyle = 'rgba(210,235,255,0.75)';
-      c.fillText(`${Math.round(d / 10)} м`, cx, cy + R * 0.62);
-      if (d > 120) {
-        const ang = Math.atan2(dy, dx), px = cx + Math.cos(ang) * R * 0.78, py = cy + Math.sin(ang) * R * 0.5;
-        c.save(); c.translate(px, py); c.rotate(ang); c.fillStyle = sc.teams[a.team]?.color || '#fff'; c.globalAlpha *= 0.85;
-        c.beginPath(); c.moveTo(10, 0); c.lineTo(-6, -7); c.lineTo(-2, 0); c.lineTo(-6, 7); c.closePath(); c.fill(); c.restore();
-      }
-    }
     c.restore();
   }
 }

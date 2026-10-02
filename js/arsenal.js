@@ -39,7 +39,7 @@ class AcidShot extends Ent {
     const steps = Math.max(1, Math.ceil(Math.hypot(this.x - x0, this.y - y0) / 3));
     for (let i = 1; i <= steps; i++) {
       const o = g.soldierAt(x0 + (this.x - x0) * i / steps, y0 + (this.y - y0) * i / steps, 3, null);
-      if (o && !this.hit.has(o.id)) { this.hit.add(o.id); g.damage(o, 15, this.owner); o.vx += this.vx * 0.08; o.vy -= 40; }
+      if (o && !this.hit.has(o.id)) { this.hit.add(o.id); g.damage(o, 25, this.owner); o.vx += this.vx * 0.08; o.vy -= 40; }
     }
     if (this.y > g.waterY) { g.splash(this.x, 0); this.dead = true; return; }
     // дальность ограничена: струя распадается примерно через 280 px
@@ -109,7 +109,16 @@ Object.assign(FIRE, {
     g.carveLine(x0,y0,x0+dx*38,y0+dy*38,19); g.emit({t:'dig',x:R1(x0+dx*20),y:R1(y0+dy*20)});
     const h=hitscan(g,s.x,s.y-15,p.aim,34,s); if(h.type==='soldier'){g.damage(h.s,10,s);h.s.vx+=dx*160;h.s.vy+=dy*160-60;h.s.fly();}
   },
-  acid(g,s,p) { const hit = new Set([s.id]); for (let i = 0; i < 24; i++) g.spawn(new AcidShot(g, s, p.aim + (Math.random() - 0.5) * 0.02, i * 0.02, hit)); g.emit({t:'acidSpray',x:R1(s.x),y:R1(s.y)}); },   // сплошная струя из 24 капель, урон один раз на бойца
+  // сплошная струя из 24 капель за полсекунды: боец держит кислотомёт, пока бьёт струя, и может вести ею, как шлангом; урон один раз на бойца.
+  // Капли выходят ровно через 0,02 с (с поправкой внутри шага игры) — струя без разрывов и слипшихся капель
+  acid(g,s,p) {
+    const hit = new Set([s.id]); let t = 0, n = 0; g.emit({t:'acidSpray',x:R1(s.x),y:R1(s.y)});
+    return { usage: { update(gg, dt) {
+      t += dt;
+      while (n < 24 && t >= n * 0.02) { const e = new AcidShot(gg, s, s.aim + (Math.random() - 0.5) * 0.02, 0, hit), lead = t - n * 0.02; e.x += e.vx * lead; e.y += e.vy * lead; e.age = lead; gg.spawn(e); n++; }
+      return (n >= 24 && t > 0.55) || !s.alive;
+    } } };
+  },
   tpgrenade(g,s,p) {
     const m=muzzle(s,p.aim,10), sp=780*p.pw, e=new TpGrenade(g,m.x,m.y,Math.cos(p.aim)*sp+s.vx*.3,Math.sin(p.aim)*sp,s);
     e.spin=p.spin|0; g.spawn(e); g.emit({t:'launch',x:R1(m.x),y:R1(m.y),w:'throw'});

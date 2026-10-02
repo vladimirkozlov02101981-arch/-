@@ -6,16 +6,30 @@ const Input = {
   keys: {}, pressed: {}, mouse: { x: 0, y: 0, down: [false, false, false], clicked: [false, false, false], moved: false, inside: false },
   wheel: 0, typing: false, drag: null, onClickRight: null, onBinoc: null, onWheel: null,
   // захват указателя в бою: системная стрелка скрыта и не уходит за край окна, мышь двигает внутренний курсор.
-  // Отпускают: клавиша Windows / Alt+Tab (окно теряет фокус), Esc, пауза, панель оружия; клик или клавиша — снова захват
-  cv: null, locked: false, wantLock: false, lockPending: false, gestureT: -1e9,
-  GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'KeyF']),
+  // Esc мышь не отпускает — он только убирает оружие: в Chrome/Edge бой идёт во весь экран, там браузер отдаёт Esc игре.
+  // Отпускают: Delete (повторно — снова захват; выходит и из полного экрана), клавиша Windows / Alt+Tab, пауза, панель оружия;
+  // клик по полю — снова захват
+  cv: null, locked: false, wantLock: false, lockPending: false, gestureT: -1e9, free: false, selfUnlock: false, escKeyT: -1e9, escLockT: -1e9, failT: -1e9,
+  fsWanted: true, fsOurs: false, leavingFs: false,
+  GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'KeyF', 'Backspace']),
   init(cv) {
     this.cv = cv;
-    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === cv; this.lockPending = false; if (this.locked) this.mouse.inside = true; });
-    document.addEventListener('pointerlockerror', () => { this.locked = false; this.lockPending = false; });
+    document.addEventListener('pointerlockchange', () => {
+      const was = this.locked; this.locked = document.pointerLockElement === cv; this.lockPending = false;
+      if (this.locked) this.mouse.inside = true;
+      // захват снял браузер по Esc (окно без полного экрана, браузер без перехвата клавиш): это тоже нажатие Esc — убрать оружие.
+      // Проверка чуть позже: при Alt+Tab и клавише Windows окно теряет фокус — это не Esc
+      else if (was && !this.selfUnlock) setTimeout(() => { if (document.hasFocus() && !document.hidden && performance.now() - this.escKeyT > 400) { this.pressed.Escape = true; this.escLockT = performance.now(); } }, 120);
+      this.selfUnlock = false;
+    });
+    document.addEventListener('pointerlockerror', () => { this.locked = false; this.lockPending = false; this.failT = performance.now(); });
+    // полный экран закрыли не мы (удержание Esc, F11) — до конца сеанса больше не навязываем его
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && this.fsOurs) { this.fsOurs = false; if (!this.leavingFs) this.fsWanted = false; } this.leavingFs = false; });
     document.addEventListener('mousedown', () => { this.gestureT = performance.now(); }, true);   // клик по кнопке «В бой!», «Продолжить», оружию — тоже жест
     window.addEventListener('keydown', (e) => {
-      if (e.code !== 'Escape') this.gestureT = performance.now();   // Esc жестом не считается: им как раз отпускают мышь
+      if (e.code !== 'Escape') this.gestureT = performance.now();   // Esc браузер жестом не считает
+      else if (performance.now() - this.escLockT < 400) { e.preventDefault(); return; }   // этот Esc уже учтён по снятию захвата
+      else this.escKeyT = performance.now();
       if (this.typing || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT'))) return;
       if (this.GAME_KEYS.has(e.code)) e.preventDefault();
       if (!this.keys[e.code]) this.pressed[e.code] = true;
@@ -39,8 +53,9 @@ const Input = {
     });
     cv.addEventListener('mousedown', (e) => {
       Sfx.resume(); this.gestureT = performance.now();
-      // бой без захвата (после Esc, паузы, Alt+Tab): этот клик только возвращает мышь в игру и не стреляет
-      if (this.wantLock && !this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
+      // бой без захвата (после Delete, паузы, Alt+Tab): этот клик только возвращает мышь в игру и не стреляет
+      if (this.wantLock && !this.locked) { this.free = false; this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
+      if (this.wantLock && !document.fullscreenElement) this.enterFull();
       if (!this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; }
       this.mouse.inside = true;
       this.mouse.down[e.button] = true; if (e.button === 0) this.mouse.clicked[0] = true;
@@ -55,14 +70,36 @@ const Input = {
     });
     cv.addEventListener('wheel', (e) => { e.preventDefault(); if (this.onWheel) this.onWheel(e.deltaY, this.locked ? this.mouse.x : e.clientX, this.locked ? this.mouse.y : e.clientY); }, { passive: false });
   },
-  /** захват указателя: только по свежему жесту пользователя (клик, клавиша) — так требует браузер */
+  /** захват указателя: по свежему жесту пользователя (клик, клавиша) — так требует браузер; во весь экран можно и без жеста */
   lock() {
-    const cv = this.cv; if (!cv || !cv.requestPointerLock || this.locked || this.lockPending || performance.now() - this.gestureT > 4000) return;
+    const cv = this.cv, now = performance.now();
+    if (!cv || !cv.requestPointerLock || this.locked || this.lockPending || this.free || now - this.failT < 1000) return;
+    if (now - this.gestureT > 4000 && !document.fullscreenElement) return;
     this.lockPending = true;
-    try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => { this.lockPending = false; }); }
-    catch (e) { this.lockPending = false; }
+    try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => { this.lockPending = false; this.failT = performance.now(); }); }
+    catch (e) { this.lockPending = false; this.failT = now; }
+    if (now - this.gestureT <= 4000) this.enterFull();
   },
-  unlock() { if (this.locked && document.exitPointerLock) document.exitPointerLock(); },
+  unlock() { if (this.locked && document.exitPointerLock) { this.selfUnlock = true; document.exitPointerLock(); } },
+  /** бой во весь экран: только так Chrome и Edge отдают Esc игре (Keyboard Lock) — Esc убирает оружие и не отпускает мышь.
+      Где перехвата клавиш нет, полный экран не включается: Esc там отпускает мышь сам браузер */
+  enterFull(force = false) {
+    const el = document.documentElement;
+    if (navigator.webdriver && !force) return;   // автотесты: окно не разворачиваем
+    if (!this.fsWanted || document.fullscreenElement || !el.requestFullscreen || !(navigator.keyboard && navigator.keyboard.lock)) return;
+    try {
+      el.requestFullscreen({ navigationUI: 'hide' }).then(() => { this.fsOurs = true; return navigator.keyboard.lock(['Escape']); }).catch(() => {});
+    } catch (e) { /* полный экран недоступен (встроенное окно) */ }
+  },
+  leaveFull() {
+    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* */ }
+    if (document.fullscreenElement && document.exitFullscreen) { this.leavingFs = true; document.exitFullscreen().catch(() => {}); }
+  },
+  /** Delete: отпустить мышь за пределы окна (и выйти из полного экрана); повторно в бою — снова захват */
+  toggleFree(inBattle) {
+    if (this.locked || document.fullscreenElement || !inBattle) { this.free = inBattle; this.unlock(); this.leaveFull(); return; }
+    this.free = false; this.lock();
+  },
   /** отпускание ПКМ: бинокль выключается всегда (даже включённый клавишей B); короткий клик без бинокля — арсенал */
   releaseRight(click = false) {
     const d = this.drag; this.drag = null;
@@ -98,7 +135,7 @@ class LocalController {
     const W = WEAPON[T.weapon]; if (!W) return '';
     if (T.phase === 'retreat') return 'Отступайте! A/D — ходьба, Пробел — прыжок';
     if (T.phase === 'use') {
-      if (T.weapon === 'robot') return 'ЛКМ / Enter — взорвать робота';
+      if (T.weapon === 'robot') return 'Пробел — прыжок робота, ЛКМ / Enter — взорвать';
       if (T.weapon === 'jetpack') return 'W / Пробел — тяга, A/D — в стороны, ЛКМ — выключить';
       if (T.weapon === 'airstrike') return 'ЛКМ / F — сброс на глаз с упреждением: бомбы летят вперёд. Не успели — у края экрана';
       if (T.weapon === 'orbital') return 'A / D — ведите луч к цели';
@@ -108,7 +145,7 @@ class LocalController {
     if (W.id === 'airstrike') return 'Кликните по цели: самолёт пройдёт над ней, сброс — ЛКМ или F';
     if (W.id === 'lightning') return 'Кликните: туча уйдёт по ветру и ударит в самую высокую точку';
     if (W.id === 'orbital') return 'Кликните: спутник наведётся с ошибкой, луч доводите клавишами A/D';
-    if (W.id === 'nuke') return 'Кликните по району: разброс и снос ветром — целься с поправкой';
+    if (W.id === 'nuke') return 'Кликните по району: ракету сносит ветром, есть разброс — цельтесь с поправкой';
     switch (W.mode) {
       case 'charge': return '↑/↓ — прицел. Зажмите F или ЛКМ и отпустите для выстрела';
       case 'tcharge': return T.target ? 'Цель захвачена с ошибкой. Зажмите ЛКМ для выстрела' : 'Кликните по цели на карте';
@@ -122,6 +159,15 @@ class LocalController {
     return '';
   }
   cancelCharge() { if (this.charging) { this.charging = false; Sfx.chargeStop(); } }
+  /** скорострельное оружие с быстрыми пулями: камера за ними не успевает, поэтому сначала обзор переходит туда, куда они
+      попадут, а потом выстрел. Если и свой боец, и место попадания уже в кадре — камера стоит, выстрел сразу */
+  fireFast(sc, cam, sw, sh, s, cmd, id) {
+    const p = predictShot(sc, s, cmd.aim, id);
+    if (!p || (cam.sees(p.x, p.y, sw, sh) && cam.sees(s.x, s.y - 20, sw, sh))) { this.send(cmd); return; }
+    this.send({ c: 'look', x: Math.round(p.x), y: Math.round(p.y) });
+    cam.shot = Object.assign(cam.shotFrame(s.x, s.y - 20, p.x, p.y, sw, sh), { t: 2.2 });   // свой экран не ждёт ответа хоста
+    this.pendingShot = { cmd, t: 0, f: cam.shot, p };
+  }
   suspend() {
     this.cancelCharge();
     if (this.suspended) return;
@@ -135,7 +181,7 @@ class LocalController {
     this.mine = !!(s && s.alive && !s.gone && this.myTeams.includes(T.team) && T.phase !== 'over');
     if (!this.mine) { this.cancelCharge(); this.key = null; this.scopeOn = false; this.scopeWeapon = null; this.edgePan = false; return; }
     const key = T.round + ':' + T.sid;
-    if (this.key !== key) { this.scopeOn = false; this.scopeWeapon = null; this.key = key; this.aim = this.base = s.aim; this.power = 0; this.cancelCharge(); this.pendingTarget = false; this.lastSig = ''; this.breath = 2.5; }
+    if (this.key !== key) { this.scopeOn = false; this.scopeWeapon = null; this.key = key; this.aim = this.base = s.aim; this.power = 0; this.cancelCharge(); this.pendingTarget = false; this.lastSig = ''; this.breath = 2.5; this.pendingShot = null; }
     if (this.base === undefined) this.base = this.aim;
     if (T.target) this.pendingTarget = false;
     const W = WEAPON[T.weapon] || WEAPON.bazooka; const phase = T.phase;
@@ -184,7 +230,16 @@ class LocalController {
     const aw = s.wl ? Math.max(s.wl[2], s.wl[3]) : 0;
     if (aw && canAct) { this.woundT = (this.woundT || 0) + dt; sway += [0, 0.012, 0.03, 0.055][aw] * (Math.sin(this.woundT * 2.3) * 0.7 + Math.sin(this.woundT * 5.1 + 0.7) * 0.4); }
     this.aim = this.base + sway;
-    if (phase === 'aim' && T.shots === 0 && !this.charging) {
+    // выстрел быстрыми пулями ждёт, пока обзор дойдёт до места попадания; ствол всё это время смотрит туда же
+    if (this.pendingShot) {
+      const ps = this.pendingShot, f = ps.f; ps.t += dt; this.aim = this.base = ps.cmd.aim;
+      const step = ps.cx !== undefined ? Math.hypot(cam.x - ps.cx, cam.y - ps.cy) * cam.z : 1e9; ps.cx = cam.x; ps.cy = cam.y;
+      // обзор дошёл: место попадания уже хорошо видно и камера почти остановилась (или упёрлась в край карты)
+      const near = Math.abs(cam.x - f.x) * cam.z < 26 && Math.abs(cam.y - f.y) * cam.z < 26;
+      const seen = cam.sees(ps.p.x, ps.p.y, sw, sh, 0.14) && step < 7;
+      if (near || seen || (step < 1.2 && ps.t > 0.3) || ps.t > 1.1 || phase !== 'aim') { if (phase === 'aim') this.send(ps.cmd); this.pendingShot = null; }
+    }
+    if (phase === 'aim' && T.shots === 0 && !this.charging && !this.pendingShot) {
       if (P.KeyQ) this.cycle(sc, T, -1); if (P.KeyE) this.cycle(sc, T, 1);
       for (let i = 1; i <= 6; i++) if (P['Digit' + i]) this.category(sc, T, i - 1);
     }
@@ -192,6 +247,7 @@ class LocalController {
     if (P.KeyR && SPIN_WEAPONS.has(T.weapon) && canAct && !this.charging) { this.send({ c: 'spin' }); Sfx.play('select'); }
     if (P.KeyP && (phase === 'aim' || phase === 'retreat')) this.send({ c: 'skip' });
     if (P.Space && (phase === 'aim' || phase === 'retreat') && !this.charging) this.send({ c: 'jump', d: left ? -1 : right ? 1 : 0 });
+    else if (P.Space && phase === 'use' && T.weapon === 'robot') this.send({ c: 'jump' });
     // в бинокль клик не стреляет: мышь ведёт обзор (кроме оружия с выбором точки)
     const mFire = Input.mouse.clicked[0] && (!this.binoc || pickPoint), kFire = !!(P.Enter || P.KeyF);   // выстрел: ЛКМ, Enter или F
     if (phase === 'use') {
@@ -228,7 +284,8 @@ class LocalController {
           break;
         }
         case 'instant': case 'drop': case 'self': case 'active':
-          if (mFire || kFire) this.send({ c: 'fire', aim: this.aim, pw: 1 }); break;
+          if ((mFire || kFire) && !this.pendingShot) { const cmd = { c: 'fire', aim: this.aim, pw: 1 }; if (typeof FAST_SHOT !== 'undefined' && FAST_SHOT[W.id] && cam.sees) this.fireFast(sc, cam, sw, sh, s, cmd, W.id); else this.send(cmd); }
+          break;
         case 'target': case 'place':
           if (mFire || kFire) this.send({ c: 'fire', aim: this.aim, pw: 1, tx: Math.round(this.mouseW.x), ty: Math.round(this.mouseW.y) }); break;
       }

@@ -28,7 +28,7 @@
       <div class="menu-facts"><div><strong>41</strong><span>вида оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока.<br>один победитель.</span></div></div>
     </div>
     <div class="featured-map"><span class="eyebrow">ВЫБЕРИ СВОЁ ПОЛЕ БОЯ</span><div class="featured-title"><span id="featured-number">01 / 08</span><h2 id="featured-name">Зелёная долина</h2><div><button class="arrow-btn" data-act="map-prev" aria-label="Предыдущая карта">←</button><button class="arrow-btn" data-act="map-next" aria-label="Следующая карта">→</button></div></div><p id="featured-desc">Мельница на холме, пруд с мостом и тоннель под большим холмом</p><div class="map-dots" id="map-dots"></div><div class="static-label">◇ Фиксированная карта · Разрушаемое окружение</div></div>
-    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.02-17</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.02-18</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
   </section>
 
   <!-- Онлайн -->
@@ -79,8 +79,8 @@
             <label>Арсенал (заготовка)<select id="o-arsenal"><option value="all" selected>Все 41 вид</option><option value="classic">Классический</option><option value="tw3">Как в Territory War 3</option></select></label>
             <label id="o-ai-wrap">Сложность компьютера<select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
           </div>
-          <details class="ammo-box" id="ammo-box"><summary>Атаки и их количество <span class="small muted">— одинаково для обеих команд; пусто = без ограничения, 0 или снятая галочка = оружия нет в бою</span></summary>
-            <div class="ammo-tools"><button type="button" class="btn secondary small" id="ammo-all" title="Включить всё оружие с обычным запасом">Включить все</button><button type="button" class="btn secondary small" id="ammo-none" title="Выключить всё оружие — затем отметьте нужное">Снять все</button><button type="button" class="btn secondary small" id="ammo-reset" title="Вернуть набор и количество из выбранной заготовки «Арсенал (заготовка)» — ваши правки списка отменятся">Сбросить к заготовке</button><span class="muted small">Заготовка — готовый набор из списка «Арсенал»: все 41 вид, классический или как в Territory War 3. Ниже его можно поправить вручную.</span></div>
+          <details class="ammo-box" id="ammo-box"><summary>Атаки и их количество <span class="small muted">— одинаково для обеих команд. Пустое поле — без ограничения, 0 или снятая галочка — этого оружия в бою нет</span></summary>
+            <div class="ammo-tools"><button type="button" class="btn secondary small" id="ammo-all" title="Включить всё оружие с обычным запасом">Включить все</button><button type="button" class="btn secondary small" id="ammo-none" title="Выключить всё оружие — затем отметьте нужное">Снять все</button><button type="button" class="btn secondary small" id="ammo-reset" title="Вернуть набор и количество из выбранной заготовки «Арсенал (заготовка)» — ваши правки списка отменятся">Сбросить к заготовке</button><span class="muted small">Заготовка — готовый набор из списка «Арсенал (заготовка)»: все 41 вид, классический или как в Territory War 3. Ниже его можно поправить вручную.</span></div>
             <div class="ammo-grid" id="ammo-grid"></div>
           </details>
         </div>
@@ -106,20 +106,21 @@
             <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти, пробел — отпрыгнуть</td></tr>
             <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Прицел (<kbd>Shift</kbd> — точнее). У снайперки <kbd>E</kbd> включает и выключает оптику, в оптике наводите мышью</td></tr>
             
-            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: сила — на шкале слева и на кольце прицела. Прицел стоит на коротком расстоянии строго по направлению ствола</td></tr>
-            <tr><td>Мышь в бою</td><td>Захвачена игрой: стрелки не видно, за край окна она не уходит. Отпустить — клавиша <kbd>Windows</kbd> (или <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Esc</kbd>, пауза); вернуть в игру — клик по полю боя</td></tr>
+            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: сила — на шкале слева и на кольце прицела. Прицел стоит на коротком расстоянии строго по направлению ствола.</td></tr>
+            <tr><td>Мышь в бою</td><td>Захвачена игрой: стрелки не видно, за край экрана она не уходит; в Chrome и Edge бой идёт во весь экран. Отпустить мышь — <kbd>Delete</kbd> (выходит и из полного экрана), а также <kbd>Windows</kbd> / <kbd>Alt</kbd>+<kbd>Tab</kbd>; вернуть в игру — снова <kbd>Delete</kbd> или клик по полю боя</td></tr>
             <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия</td></tr>
             <tr><td><kbd>Q</kbd> <kbd>E</kbd>, <kbd>1</kbd>–<kbd>6</kbd></td><td>Сменить оружие / категорию</td></tr>
-            <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: вид плавно едет туда, куда ведёте мышь</td></tr>
+            <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: обзор плавно едет туда, куда ведёте мышь</td></tr>
             <tr><td>Колесо / <kbd>C</kbd></td><td>Немного приблизить или отдалить / вернуть камеру к бойцу</td></tr>
             <tr><td><kbd>R</kbd></td><td>Повернуть балку / подкрутка гранаты</td></tr>
             <tr><td><kbd>P</kbd></td><td>Пропустить ход</td></tr>
             <tr><td><kbd>T</kbd></td><td>Чат (в онлайне)</td></tr>
-            <tr><td><kbd>M</kbd> / <kbd>Esc</kbd></td><td>Звук / меню</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Убрать оружие из рук (мышь остаётся в игре)</td></tr>
+            <tr><td><kbd>M</kbd> / <kbd>Backspace</kbd></td><td>Звук / меню (пауза)</td></tr>
           </table>
           <h3>Правила</h3>
           <p class="muted">Команды ходят по очереди. Перемещение, прыжки и подъём по лестницам расходуют запас движения. За ход — одна атака (дробовик: 2 выстрела, револьвер: 3). После атаки есть 3 секунды для отступления. Вода и лава смертельны.</p>
-          <h3>Рельеф решает</h3><p class="muted">Все восемь карт постоянные, шириной 6400 пикселей; на востоке каждой — укреплённый район с многоэтажной крепостью, подвалом, подземным ходом, бункером и вышкой. Тоннели позволяют обойти высоты, стены поглощают взрывную волну. Металл и бетон труднее разрушить; лёд сильнее отражает гранаты. У пуль есть скорость и падение, ветер сильнее влияет на ракеты. Всю карту сразу не увидеть: осматривайте поле боя в бинокль, а с оружием, которому выбирают точку на карте, просто ведите курсор к краю экрана — обзор поедет сам. Бомбы самолёта сбрасываете сами, на глаз (ЛКМ или F): по инерции они летят вперёд, так что нужно упреждение, а не успели — сброс у края экрана; молнию сносит туча, орбитальный луч надо довести, у ракет есть разброс.</p>
+          <h3>Рельеф решает</h3><p class="muted">Все восемь карт постоянные, шириной 6400 пикселей; на востоке каждой — укреплённый район с многоэтажной крепостью, подвалом, подземным ходом, бункером и вышкой. Тоннели позволяют обойти высоты, стены поглощают взрывную волну. Металл и бетон труднее разрушить; лёд сильнее отражает гранаты. У пуль есть скорость и падение, ветер сильнее влияет на ракеты. Всю карту сразу не увидеть: осматривайте поле боя в бинокль, а с оружием, которому выбирают точку на карте, просто ведите курсор к краю экрана — обзор поедет сам. Бомбы самолёта сбрасываете сами, на глаз (ЛКМ или F): по инерции они летят вперёд, так что нужно упреждение, а не успели — сброс у края экрана; тучу молнии сносит ветром, орбитальный луч надо довести, у ракет есть разброс.</p>
         </div>
         <div>
           <h3>Арсенал</h3>
@@ -165,7 +166,7 @@
   <!-- В игре -->
   <div id="hud-btns" class="hud-btns hidden">
     <button class="icon-btn" data-act="tray" title="Оружие (Tab / ПКМ)">⚔</button>
-    <button class="icon-btn" data-act="pause" title="Меню (Esc)">☰</button>
+    <button class="icon-btn" data-act="pause" title="Меню (Backspace)">☰</button>
   </div>
   <div id="tray" class="tray hidden"><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
   <div id="chat" class="chat hidden"><div id="chat-log" class="chat-log"></div><input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Сообщение… (Enter — отправить)"></div>

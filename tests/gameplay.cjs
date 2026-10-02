@@ -205,7 +205,7 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
       for (let i = 0; i < 30; i++) game.dispatchEvent(new MouseEvent('mousemove', { movementX: -400, movementY: 900, bubbles: true }));
       const clamped = [Input.mouse.x, Input.mouse.y, game.clientHeight];
       delete document.pointerLockElement; Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => null });
-      document.dispatchEvent(new Event('pointerlockchange'));
+      Input.selfUnlock = true; document.dispatchEvent(new Event('pointerlockchange'));
       return { cats, rows: rows.length, described, calls, moved, clamped, unlocked: !Input.locked };
     });
     const V = report.v17;
@@ -213,6 +213,74 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
     assert(V.calls.bazooka > 4 && V.calls.grenade > 4 && V.calls.shotgun > 4 && V.calls.airstrike === 0 && V.calls.medkit === 0, 'reticle only for aimed weapons ' + JSON.stringify(V.calls));
     assert.deepEqual(V.moved, [325, 290]); assert(V.clamped[0] === 0 && V.clamped[1] === V.clamped[2] - 1 && V.unlocked, 'locked cursor stays inside ' + JSON.stringify(V));
     console.log('Version 17: weapon reticle, ammo by class with descriptions, pointer lock PASS', V);
+
+    // 8. Версия 18: Esc убирает и возвращает оружие (меню — только Backspace), Delete отпускает мышь; робот прыгает по пробелу;
+    // брошенное не остаётся в руках; кислота 25; быстрые пули — обзор к месту попадания до выстрела; масштаб не прерывает слежение
+    await page.evaluate(() => { const g = App.game; g.usage = null; g.entities.length = 0; Object.assign(g.turn, { phase: 'aim', shots: 0, weapon: 'bazooka' }); g.teams[g.turn.team].ammo.bazooka = -1; App.paused = false; UI.hideScreens(); App.fx.focus = null; App.cam.free = 0; App.cam.hold = false; App.cam.binoc = false; });
+    const key = async (code) => { await page.evaluate((code) => { Input.pressed[code] = true; }, code); await page.waitForTimeout(120); };
+    await key('Escape'); const esc1 = await page.evaluate(() => ({ w: App.game.turn.weapon, pause: UI.cur }));
+    await key('Escape'); const esc2 = await page.evaluate(() => ({ w: App.game.turn.weapon, pause: UI.cur }));
+    await key('Backspace'); const bs = await page.evaluate(() => UI.cur);
+    await key('Escape'); const bsEsc = await page.evaluate(() => UI.cur);
+    await page.evaluate(() => { Input.locked = true; });   // как будто мышь захвачена
+    await key('Delete'); const del = await page.evaluate(() => { const f = Input.free; Input.locked = false; return f; });
+    await key('Delete'); const del2 = await page.evaluate(() => Input.free);
+    assert.deepEqual(esc1, { w: null, pause: null }, 'first Esc only holsters'); assert.deepEqual(esc2, { w: 'bazooka', pause: null }, 'second Esc returns the weapon');
+    assert.equal(bs, 's-pause', 'Backspace opens the menu'); assert.equal(bsEsc, null, 'Esc closes the menu');
+    assert.equal(del, true, 'Delete frees the mouse'); assert.equal(del2, false, 'Delete again captures it');
+    report.v18 = await page.evaluate((arena) => {
+      const out = {};
+      // робот: пробел — прыжок с земли; бомба уже не в руках
+      { const g = eval(arena); g.turn.weapon = 'robot'; const s = g.active(); g.fire(s, { aim: 0, pw: 1 }); const r = g.entities.find(e => e.k === 'robot');
+        for (let i = 0; i < 40; i++) g.step(1 / 60);
+        const before = { air: r.air, y: r.y }; g.cmd(0, { c: 'jump' }); const vy = r.vy; let top = r.y; for (let i = 0; i < 40; i++) { g.step(1 / 60); top = Math.min(top, r.y); }
+        out.robot = { phase: g.turn.phase, held: s.wpn, grounded: !before.air, vy, rise: before.y - top }; }
+      // телепортер в полёте — руки пустые
+      { const g = eval(arena); g.turn.weapon = 'tpgrenade'; const s = g.active(); g.fire(s, { aim: -0.6, pw: 0.6 }); g.step(1 / 60); out.tp = { phase: g.turn.phase, held: s.wpn }; }
+      // кислотомёт: 25 урона цели на пути струи
+      { const g = eval(arena); g.turn.weapon = 'acid'; const s = g.active(), b = g.soldiers[1]; b.x = s.x + 120; b.y = s.y; const hp = b.hp; g.fire(s, { aim: -0.06, pw: 1 }); for (let i = 0; i < 90; i++) g.step(1 / 60); out.acid = hp - b.hp; }
+      // предсказание попадания быстрых пуль
+      { const g = eval(arena); const s = g.active(), b = g.soldiers[1]; const a = Math.atan2(b.y - 15 - (s.y - GUN_Y), b.x - s.x); const p = predictShot(g, s, a, 'sniper'); out.predict = p && [Math.round(p.x), Math.round(p.y), b.x]; out.none = predictShot(g, s, -1.2, 'uzi'); }
+      return out;
+    }, arena);
+    const R18 = report.v18;
+    assert(R18.robot.phase === 'use' && R18.robot.held === null && R18.robot.grounded && R18.robot.vy < -300 && R18.robot.rise > 60, 'robot jumps on Space, not held ' + JSON.stringify(R18.robot));
+    assert(R18.tp.phase === 'use' && R18.tp.held === null, 'thrown teleporter not held ' + JSON.stringify(R18.tp));
+    assert.equal(R18.acid, 25, 'acid deals 25');
+    assert(R18.predict && Math.abs(R18.predict[0] - R18.predict[2]) <= 8 && R18.none === null, 'fast shot impact prediction ' + JSON.stringify(R18));
+    // камера: снайперка по далёкой цели — сначала обзор к цели, выстрел после; цель рядом — выстрел сразу
+    report.frame = await page.evaluate(async () => {
+      const g = App.game, T = g.turn, s = g.active(), cam = App.cam, sw = App.ren.sw, sh = App.ren.sh, wait = (ms) => new Promise(r => setTimeout(r, ms));
+      g.usage = null; g.entities.length = 0; Object.assign(T, { phase: 'aim', shots: 0, weapon: 'sniper' }); g.teams[T.team].ammo.sniper = 5;
+      const far = g.soldiers.filter(o => o.team !== s.team && o.alive).sort((a, b) => Math.abs(b.x - s.x) - Math.abs(a.x - s.x))[0];
+      // прямая видимость не обязательна: проверяем порядок «обзор → выстрел» по точке, которую вернёт предсказание
+      const sent = []; const send = App.ctl.send; App.ctl.send = (c) => { sent.push({ c: c.c, t: performance.now() }); return send(c); };
+      const aim = Math.atan2(far.y - 15 - (s.y - GUN_Y), far.x - s.x), real = predictShot;
+      const p = { x: s.x + (far.x > s.x ? 1500 : -1500), y: s.y - 15 };   // попадание далеко за экраном
+      predictShot = () => p;
+      const visible = cam.sees(p.x, p.y, sw, sh) && cam.sees(s.x, s.y - 20, sw, sh);
+      try {
+        App.ctl.fireFast(App.sc, cam, sw, sh, s, { c: 'fire', aim, pw: 1 }, 'sniper');
+        const t0 = performance.now(); while (App.ctl.pendingShot && performance.now() - t0 < 2500) await wait(30);
+      } finally { predictShot = real; App.ctl.send = send; }
+      const look = sent.find(x => x.c === 'look'), fire = sent.find(x => x.c === 'fire');
+      const seen = cam.sees(p.x, p.y, sw, sh, 0.02); cam.shot = null;
+      return { p: !!p, visible, look: !!look, delay: look && fire ? Math.round(fire.t - look.t) : 0, fired: !!fire, seen };
+    });
+    const F = report.frame;
+    assert(F.fired && !F.visible && F.look && F.delay >= 150 && F.seen, 'camera reaches the impact before the shot ' + JSON.stringify(F));
+    // масштаб колесом при слежении: камера не замирает
+    report.zoom = await page.evaluate(() => { const cam = App.cam; cam.free = 0; cam.hold = false; cam.binoc = false; const z0 = cam.tz; cam.zoomAt(1.2, 100, 100, App.ren.sw, App.ren.sh); return { free: cam.free, tz: cam.tz > z0 }; });
+    assert(report.zoom.free === 0 && report.zoom.tz, 'zoom keeps tracking ' + JSON.stringify(report.zoom));
+    // в бою нет нижней панели оружия; плашки ветра нет, если ветер выключен
+    report.hud = await page.evaluate(() => {
+      const c = App.ren.c, texts = []; const ft = c.fillText; c.fillText = function (s) { texts.push(String(s)); return ft.apply(this, arguments); };
+      const S = App.sc.settings || App.sc.cfg.settings, wind = S.wind;
+      try { S.wind = false; App.ren.drawHUD(App.sc, App.cam, App.ctl, 1, null); const off = texts.includes('ВЕТЕР'); texts.length = 0; S.wind = true; App.ren.drawHUD(App.sc, App.cam, App.ctl, 1, null); return { off, on: texts.includes('ВЕТЕР'), panel: texts.some(s => s === 'Руки пусты' || s === WEAPON.sniper.name) }; }
+      finally { S.wind = wind; c.fillText = ft; }
+    });
+    assert(!report.hud.off && report.hud.on && !report.hud.panel, 'HUD: wind only when enabled, no weapon panel ' + JSON.stringify(report.hud));
+    console.log('Version 18: Esc/Backspace/Delete, robot jump, thrown not held, acid 25, shot framing, zoom tracking, HUD PASS', report.v18, report.frame, report.zoom, report.hud);
 
     assert.deepEqual(errors, []);
     fs.writeFileSync('test-results/gameplay.json', JSON.stringify({ passed: true, ...report, date: new Date().toISOString() }, null, 2));

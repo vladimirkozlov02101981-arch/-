@@ -65,6 +65,7 @@ const App = {
   clearGame() {
     this.game = null; this.remote = null; this.sc = null; this.ais = []; this.ctl = null; this.fx.reset(null);
     UI.showHud(false); Sfx.stopAmbient(); Sfx.chargeStop(); this.paused = false; this.overShown = false; this.waitReady = 0; this.netEv = []; this.acc = 0;
+    Input.free = false; this.holstered = null;   // новый бой: мышь снова захватывается, убранное оружие прошлого боя забыто
   },
   setScene(sc) {
     Sfx.setScene(sc);
@@ -230,7 +231,7 @@ const App = {
   peerLeft(msg) {
     const inRoom = this.mode === 'host' || this.mode === 'guest' || (UI.cur === 's-setup' && (UI.mode === 'host' || UI.mode === 'guest')) || UI.cur === 's-over';
     if (!inRoom) { Net.close(); return; }
-    if (UI.mode === 'host' && this.demo && UI.cur === 's-setup') { this.guestTeam = null; UI.setPeerStatus(false, '○ друг отключился — ждём снова…'); return; }
+    if (UI.mode === 'host' && this.demo && UI.cur === 's-setup') { this.guestTeam = null; UI.setPeerStatus(false, '○ друг отключился — ждём, пока он вернётся…'); return; }
     Net.close(); UI.dialog(msg, () => this.toMenu());
   },
   chat(teamIdx, txt) {
@@ -282,10 +283,17 @@ const App = {
       const ctl = this.ctl, T = this.sc && this.sc.turn;
       if (UI.trayOpen) UI.setTray(false);
       else if (UI.cur === 's-help' || UI.cur === 's-online') this.back();
-      // Esc: сначала полностью убирает оружие из рук (зарядку, цель), повторный Esc — пауза
-      else if (!UI.cur && ctl && ctl.mine && T && T.phase === 'aim' && T.shots === 0 && T.weapon) { ctl.cancelCharge(); ctl.pendingTarget = false; ctl.send({ c: 'holster' }); Sfx.play('denied'); }
-      else this.togglePause();
+      else if (UI.cur === 's-pause') this.resume();
+      // Esc в бою только убирает оружие из рук (зарядку, цель), повторный Esc возвращает убранное. Мышь он не отпускает
+      // (это Delete), меню открывается только Backspace
+      else if (!UI.cur && ctl && ctl.mine && T && T.phase === 'aim' && T.shots === 0) {
+        const key = T.round + ':' + T.sid;
+        if (T.weapon) { this.holstered = { key, id: T.weapon }; ctl.cancelCharge(); ctl.pendingTarget = false; ctl.send({ c: 'holster' }); Sfx.play('denied'); }
+        else if (this.holstered && this.holstered.key === key) ctl.select(this.holstered.id);
+      }
     }
+    if (P.Backspace) this.togglePause();
+    if (P.Delete) Input.toggleFree(!!(this.sc && !this.demo && !UI.cur));
     // Tab: сначала отменяет взятое оружие (зарядку или выбранную точку), иначе открывает арсенал
     if (P.Tab) {
       const ctl = this.ctl, T = this.sc && this.sc.turn;

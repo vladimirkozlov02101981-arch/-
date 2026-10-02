@@ -43,6 +43,11 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
   if (fs.existsSync(fineDir)) for (const f of fs.readdirSync(fineDir)) if (f.endsWith('.webp')) {
     const p = 'assets/tex/fine/' + f; assets[p] = dataUri(p);
   }
+  // родной цвет высокого разрешения: WebP как есть, без повторного сжатия
+  const nativeDir = path.join(root, 'assets/tex/native');
+  if (fs.existsSync(nativeDir)) for (const f of fs.readdirSync(nativeDir)) if (f.endsWith('.webp')) {
+    const p = 'assets/tex/native/' + f; assets[p] = dataUri(p);
+  }
   const surfaceDir = path.join(root, 'assets/tex/surface');
   if (fs.existsSync(surfaceDir)) for (const f of fs.readdirSync(surfaceDir)) if (f.endsWith('.png')) {
     const p = 'assets/tex/surface/' + f; assets[p] = dataUri(p);
@@ -57,7 +62,7 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
   html = html.replace(/<link rel="icon" href="assets\/favicon.svg"[^>]*>/, `<link rel="icon" href="${dataUri('assets/favicon.svg')}" type="image/svg+xml">`);
   // пути к ресурсам → встроенные данные
   const patch = {
-    'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.png`', 'im.src = ASSET(`assets/tex/${n}.png`)'], ['im.src = `assets/tex/hi/${n}.webp`', 'im.src = ASSET(`assets/tex/hi/${n}.webp`)'], ['im.src = `assets/tex/fine/${n}.webp`', 'im.src = ASSET(`assets/tex/fine/${n}.webp`)'], ['im.src = `assets/tex/surface/${n}.png`', 'im.src = ASSET(`assets/tex/surface/${n}.png`)']],
+    'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.png`', 'im.src = ASSET(`assets/tex/${n}.png`)'], ['im.src = `assets/tex/hi/${n}.webp`', 'im.src = ASSET(`assets/tex/hi/${n}.webp`)'], ['im.src = `assets/tex/fine/${n}.webp`', 'im.src = ASSET(`assets/tex/fine/${n}.webp`)'], ['im.src = `assets/tex/native/${n}.webp`', 'im.src = ASSET(`assets/tex/native/${n}.webp`)'], ['im.src = `assets/tex/surface/${n}.png`', 'im.src = ASSET(`assets/tex/surface/${n}.png`)']],
     'js/ui.js': [['url("assets/maps/${m.id}.png")', 'url("${ASSET(`assets/maps/${m.id}.png`)}")'], ['img.src = `assets/maps/${m.id}-thumb.webp`', 'img.src = ASSET(`assets/maps/${m.id}-thumb.webp`)']],
     'js/audio.js': [['fetch(`assets/sfx/${n}.ogg`)', 'fetch(ASSET(`assets/sfx/${n}.ogg`))']],
   };

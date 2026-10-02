@@ -4,7 +4,10 @@
    Видимые участки (плитки 128×128) по мере надобности пересчитываются в 4 раза крупнее:
    1) края (границы слоёв, контур земли) сглаживаются вдоль своего направления — ступеньки превращаются в ровные линии,
       поперёк края добавляется резкость, контур на фоне неба остаётся чётким;
-   2) поверх накладывается мелкий рельеф материала из фото-текстуры (4 текселя на единицу) — меняется только светотень.
+   2) поверх накладывается мелкий рельеф материала из фото-текстуры (4 текселя на единицу) — меняется только светотень;
+   3) если у материала есть родной цвет высокого разрешения (TexLib.native), цвет берётся из него, а освещение карты
+      переносится отношением L = «нарисованный пиксель» / «пиксель малой текстуры» — так резкими становятся сами края
+      камней, швы и трещины, а не только зерно поверх.
    Плитки кэшируются и пересчитываются только там, где ландшафт изменился (взрыв, балка). */
 const HIRES_T = 128, HIRES_S = 4, HIRES_P = 3, HIRES_G = 1, HIRES_BUDGET = 160 * 1048576;
 
@@ -19,7 +22,10 @@ class HiResTerrain {
   hiCount(terr) {
     const tab = terr.texRef ? terr.texRef.tab : [], names = new Set(); let n = 0;
     for (let i = 1; i < tab.length; i++) if (tab[i]) names.add(tab[i].name);
-    for (const nm of names) { if (TexLib.loadHi(nm) || TexLib.hi[nm]) n++; if (TexLib.loadFine(nm) || TexLib.fine[nm]) n++; }
+    for (const nm of names) {
+      if (TexLib.loadNative && TexLib.loadNative(nm)) { n += 100; continue; }   // родной цвет заменяет старые детали
+      if (TexLib.loadHi(nm) || TexLib.hi[nm]) n++; if (TexLib.loadFine(nm) || TexLib.fine[nm]) n++;
+    }
     return n;
   }
   sync(terr, scale = this.scale) {
@@ -59,23 +65,36 @@ class HiResTerrain {
     sx.clearRect(0, 0, w, w); sx.drawImage(terr.decor, x0, y0, w, w, 0, 0, w, w); sx.drawImage(terr.canvas, x0, y0, w, w, 0, 0, w, w);
     const src = sx.getImageData(0, 0, w, w).data;
     // ссылки на текстуры: какой пиксель из какой текстуры (перед — твёрдое, иначе задняя стена)
-    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {};
+    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {}, transfer = [src.buffer, ref.buffer];
+    let LF = null;
     if (R) for (let y = 0; y < w; y++) {
       const gy = y0 + y; if (gy < 0 || gy >= H) continue;
       for (let x = 0; x < w; x++) {
         const gx = x0 + x; if (gx < 0 || gx >= W) continue;
         const i = gy * W + gx, id = terr.mask[i] ? R.F[i] : R.B[i]; if (!id) continue;
-        const e = R.tab[id], hi = e && TexLib.hi[e.name], fine = e && TexLib.fine[e.name]; if (!hi && !fine) continue;
+        const e = R.tab[id]; if (!e) continue;
+        const nat = TexLib.native && TexLib.native[e.name], low = nat && TexLib.data[e.name];
+        // старая серая деталь (hi) была для прежней малой текстуры — с родным цветом не нужна; фото-зерно fine независимо и остаётся
+        const hi = !nat && TexLib.hi[e.name], fine = TexLib.fine[e.name]; if (!hi && !fine && !low) continue;
         ref[y * w + x] = id;
         if (!tab[id]) {
-          tab[id] = { name: e.name, dx: e.dx, dy: e.dy, k: hi ? hi.w / e.w : 0 };
+          tab[id] = { name: e.name, dx: e.dx, dy: e.dy, k: hi ? hi.w / e.w : 0, nk: low ? nat.k : 0 };
+          if (low) { const crop = nativeCrop(nat, tx, ty, e.dx, e.dy); tab[id].crop = crop; transfer.push(crop.d.buffer); }
           if (hi && !wk.hiSent.has(e.name)) { wk.postMessage({ hi }); wk.hiSent.add(e.name); }
           if (fine && !wk.fineSent.has(e.name)) { wk.postMessage({ fine }); wk.fineSent.add(e.name); }
         }
+        if (low) {
+          // освещение карты в этом пикселе: нарисованный цвет / цвет малой текстуры (то же место, тот же сдвиг)
+          if (!LF) { LF = new Float32Array(w * w * 3); transfer.push(LF.buffer); }
+          const j = (y * w + x) * 4, u = ((gx + e.dx) % e.w + e.w) % e.w, v = ((gy + e.dy) % e.h + e.h) % e.h, q = (v * low.w + u) * 4, o = (y * w + x) * 3, dd = low.d;
+          const lc = src[j] * 0.3 + src[j + 1] * 0.59 + src[j + 2] * 0.11, ld = Math.max(8, dd[q] * 0.3 + dd[q + 1] * 0.59 + dd[q + 2] * 0.11);
+          for (let c = 0; c < 3; c++) { const D = dd[q + c], l = D >= 8 ? src[j + c] / D : lc / ld; LF[o + c] = l > 6 ? 6 : l; }   // тёмный канал — по яркости, без выбросов
+        }
       }
     }
+    // поле освещения не сглаживается: в нём и резкость запекания карты (местный контраст), без неё родной цвет выглядит плоским
     wk.idle = false; this.pending.add(key);
-    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: this.scale, P, G: HIRES_G, src, ref, tab }, [src.buffer, ref.buffer]);
+    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: this.scale, P, G: HIRES_G, src, ref, tab, LF }, transfer);
     return true;
   }
   done(wk, m) {
@@ -121,6 +140,34 @@ class HiResTerrain {
       for (const [key, tile] of old) { if (this.bytes <= HIRES_BUDGET) break; this.tiles.delete(key); this.bytes -= tile.bytes; }
     }
     return true;
+  }
+}
+
+/** вырезка родной текстуры для плитки tx,ty (с запасом под билинейную выборку); текстура периодическая — копия по кругу */
+function nativeCrop(nat, tx, ty, dx, dy) {
+  const k = nat.k, T = HIRES_T, G = HIRES_G;
+  const x0 = Math.floor((tx * T - G + dx) * k - 0.5) - 1, y0 = Math.floor((ty * T - G + dy) * k - 0.5) - 1;
+  const cw = Math.ceil((T + 2 * G) * k) + 4, ch = cw, W2 = nat.w, H2 = nat.h, s = nat.d, d = new Uint8Array(cw * ch * 3);
+  for (let y = 0; y < ch; y++) {
+    const sy = (((y0 + y) % H2) + H2) % H2;
+    for (let x = 0; x < cw;) {
+      const sx = (((x0 + x) % W2) + W2) % W2, run = Math.min(cw - x, W2 - sx), a = (sy * W2 + sx) * 3;
+      d.set(s.subarray(a, a + run * 3), (y * cw + x) * 3); x += run;
+    }
+  }
+  return { x0, y0, w: cw, h: ch, d };
+}
+/** лёгкое сглаживание поля освещения (1-2-1) внутри одного материала: убирает остаток резкости запекания, не размывая тени */
+function smoothLight(LF, ref, w) {
+  const src = LF.slice(), K = [1, 2, 1];
+  for (let y = 1; y < w - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x, id = ref[i]; if (!id) continue;
+    let r = 0, g = 0, b = 0, s = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const j = i + dy * w + dx; if (ref[j] !== id) continue;
+      const k = K[dx + 1] * K[dy + 1]; r += src[j * 3] * k; g += src[j * 3 + 1] * k; b += src[j * 3 + 2] * k; s += k;
+    }
+    LF[i * 3] = r / s; LF[i * 3 + 1] = g / s; LF[i * 3 + 2] = b / s;
   }
 }
 
@@ -194,6 +241,19 @@ function hiresWorkerMain() {
       const a = (ya * W2 + xa) * 3 + channel, b = (ya * W2 + xb) * 3 + channel, c = (yb * W2 + xa) * 3 + channel, e = (yb * W2 + xb) * 3 + channel;
       return ((d[a] * (1 - fx) + d[b] * fx) * (1 - fy) + (d[c] * (1 - fx) + d[e] * fx) * fy) / 128;
     };
+    // освещение карты в точке окна: билинейно по соседям того же материала (на границе материалов не смешивается)
+    const LF = m.LF, LRGB = new Float64Array(3), NRGB = new Float64Array(3);
+    const lightAt = (u, v, rid) => {
+      const xi = Math.floor(u), yi = Math.floor(v), fx = u - xi, fy = v - yi;
+      let s = 0; LRGB[0] = LRGB[1] = LRGB[2] = 0;
+      for (let dy = 0; dy <= 1; dy++) for (let dx = 0; dx <= 1; dx++) {
+        const xx = xi + dx, yy = yi + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= w) continue;
+        const i = yy * w + xx; if (REF[i] !== rid) continue;
+        const k = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy); LRGB[0] += LF[i * 3] * k; LRGB[1] += LF[i * 3 + 1] * k; LRGB[2] += LF[i * 3 + 2] * k; s += k;
+      }
+      if (s > 1e-4) { LRGB[0] /= s; LRGB[1] /= s; LRGB[2] /= s; return; }
+      const i = Math.round(v) * w + Math.round(u); LRGB[0] = LF[i * 3]; LRGB[1] = LF[i * 3 + 1]; LRGB[2] = LF[i * 3 + 2];
+    };
     for (let Y = 0; Y < N; Y++) {
       const v = P - pad + (Y + 0.5) / S - 0.5, vi = Math.round(v), wy = ty * T - pad + (Y + 0.5) / S;
       for (let X = 0; X < N; X++) {
@@ -220,10 +280,28 @@ function hiresWorkerMain() {
         let r = sr / a, g = sg / a, b = sb / a;
         if (co > 0.12) a = Math.max(0, Math.min(1, (a - 0.5) * 1.7 + 0.5));   // чёткий контур на фоне неба
         const rid = REF[li];
-        if (rid) {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
-                    const e = TAB[rid], h = HI[e.name], fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine, wx = tx * T - pad + (X + 0.5) / S;
-          if (h) { const q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
-          if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; r *= fineAt(f, cx, cy, 0); g *= fineAt(f, cx, cy, 1); b *= fineAt(f, cx, cy, 2); }
+        if (rid) {
+          const e = TAB[rid], wx = tx * T - pad + (X + 0.5) / S;
+          if (e.crop) {
+            // родной цвет высокого разрешения × освещение карты; на кромке на фоне неба — прежний путь (сглаженный контур)
+            if (co <= 0.12 && a >= 0.999) {
+              const cr = e.crop, hx = (wx + e.dx) * e.nk - 0.5 - cr.x0, hy = (wy + e.dy) * e.nk - 0.5 - cr.y0;
+              const xi = Math.floor(hx), yi = Math.floor(hy), fx = hx - xi, fy = hy - yi, cd = cr.d, cw = cr.w;
+              const p00 = (yi * cw + xi) * 3, p01 = p00 + 3, p10 = p00 + cw * 3, p11 = p10 + 3;
+              lightAt(u, v, rid);
+              for (let c = 0; c < 3; c++) {
+                const nv = ((cd[p00 + c] * (1 - fx) + cd[p01 + c] * fx) * (1 - fy) + (cd[p10 + c] * (1 - fx) + cd[p11 + c] * fx) * fy) / 255;
+                NRGB[c] = nv * LRGB[c];
+              }
+              r = NRGB[0]; g = NRGB[1]; b = NRGB[2];
+              const fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;   // фото-поры мельче текселя родной текстуры
+              if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; r *= fineAt(f, cx, cy, 0); g *= fineAt(f, cx, cy, 1); b *= fineAt(f, cx, cy, 2); }
+            }
+          } else {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
+            const h = HI[e.name], fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;
+            if (h) { const q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
+            if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; r *= fineAt(f, cx, cy, 0); g *= fineAt(f, cx, cy, 1); b *= fineAt(f, cx, cy, 2); }
+          }
         }
         out[o] = r * 255; out[o + 1] = g * 255; out[o + 2] = b * 255; out[o + 3] = a * 255;
       }

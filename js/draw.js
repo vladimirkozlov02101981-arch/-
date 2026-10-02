@@ -300,11 +300,10 @@ function drawEntityBody(c, e, t, held) {
       c.save(); c.shadowColor='#73eaff'; c.shadowBlur=18; c.fillStyle='#80e6ff'; circ(c,0,0,6); c.fillStyle='#fff'; circ(c,-1,-1,3);
       c.strokeStyle='#ba9bff';c.lineWidth=1.5;c.beginPath();c.ellipse(0,0,10,4,t*6,0,TAU);c.stroke();c.restore();break;
     case 'acid': {
-      if (!e.f) break;                                      // капля ещё в стволе
-      c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(150,240,60,0.35)';
-      c.beginPath(); c.ellipse(-4, 0, 13, 4.2, 0, 0, TAU); c.fill(); c.restore();
-      c.save(); c.fillStyle = '#8fe032'; c.beginPath(); c.ellipse(-3, 0, 11, 2.1, 0, 0, TAU); c.fill();   // вытянутая капля: соседние сливаются в струю
-      c.fillStyle = 'rgba(232,255,176,0.9)'; c.beginPath(); c.ellipse(-1, -0.7, 6, 0.7, 0, 0, TAU); c.fill(); c.restore(); break;
+      if (!e.f || !e.loose) break;                          // капля ещё в стволе или часть сплошной струи (drawAcidStream)
+      c.fillStyle = '#5c9e1c'; c.beginPath(); c.ellipse(0, 0, 2.6, 1.7, 0, 0, TAU); c.fill();   // оторвавшаяся капля
+      c.fillStyle = '#a6e43e'; c.beginPath(); c.ellipse(0.2, -0.3, 1.7, 1, 0, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(245,255,215,0.9)'; c.beginPath(); c.arc(0.7, -0.7, 0.55, 0, TAU); c.fill(); break;
     }
     case 'tpg': {
       const g = c.createRadialGradient(-1.2, -1.4, 0.4, 0, 0, 4.8); g.addColorStop(0, '#f4e2ff'); g.addColorStop(0.55, '#a45cff'); g.addColorStop(1, '#3c1470');
@@ -427,6 +426,46 @@ function drawEntityBody(c, e, t, held) {
   }
 }
 const ADDITIVE_KINDS = new Set(['fire', 'flame', 'bhole', 'orbital']);
+/** струя кислотомёта: капли одного выстрела (вылетают друг за другом) соединяются в сплошную жидкую ленту — плотную у ствола,
+    тоньше к концу, где она рвётся на отдельные капли. Слои: полупрозрачная кромка, тёмное тело, светлая сердцевина и блик сверху */
+function drawAcidStream(c, sc, t) {
+  const A = sc.entities.filter(e => e.k === 'acid'), D = A.filter(e => e.f);
+  if (!D.length) return;
+  D.sort((a, b) => a.id - b.id);
+  // капли выходят каждые 0,02 с, а шаг игры 1/60 с: соседние капли бывают и в 16, и в 32 единицах друг от друга — это ещё одна струя
+  const chains = []; let cur = [];
+  for (const e of D) { const p = cur[cur.length - 1]; e.loose = false; if (p && Math.hypot(e.x - p.x, e.y - p.y) > 40) { chains.push(cur); cur = []; } cur.push(e); }
+  if (cur.length) chains.push(cur);
+  // кислота ещё идёт из ствола: струя тянется до самого дула
+  let mz = null; for (const e of A) if (!e.f && (!mz || e.id < mz.id)) mz = e;
+  const sh = sc.soldiers.find(o => o.wpn === 'acid' && !o.gone);
+  if (!mz && sh && sc.turn && sc.turn.phase === 'use') mz = Object.assign(muzzle(sh, sh.aim, 22), { id: 1e9 });
+  const last = chains[chains.length - 1], tip = last && last[last.length - 1];
+  if (mz && tip && Math.hypot(mz.x - tip.x, mz.y - tip.y) < 48) last.push({ x: mz.x, y: mz.y, id: mz.id });
+  c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+  for (const ch of chains) {
+    const n = ch.length;
+    if (n < 2) { ch[0].loose = true; continue; }
+    // начало цепочки (самые старые капли) — распавшийся конец струи: там капли рисуются отдельно
+    const tail = Math.min(n - 2, Math.max(1, Math.round(n * 0.18)));
+    for (let i = 0; i < tail; i++) ch[i].loose = true;
+    const W = (i) => { const u = i / (n - 1); return (1.3 + 2.9 * Math.min(1, u * 1.5)) * (1 + 0.14 * Math.sin(t * 38 + ch[i].id * 1.7)); };
+    const layer = (col, wk, oy) => {
+      c.strokeStyle = col;
+      for (let i = tail; i < n; i++) {
+        const a = ch[i - 1] || ch[i], b = ch[i]; if (a === b) continue;
+        c.lineWidth = Math.max(0.4, (W(i - 1) + W(i)) * 0.5 * wk);
+        c.beginPath(); c.moveTo(a.x, a.y + oy * W(i - 1)); c.lineTo(b.x, b.y + oy * W(i)); c.stroke();
+      }
+    };
+    layer('rgba(160,235,70,0.2)', 2.2, 0.12);    // мокрый ореол брызг
+    layer('rgba(28,52,8,0.55)', 1.22, 0.05);     // тёмный край: струя читается и на траве
+    layer('rgba(96,170,28,0.94)', 1, 0);         // тело струи
+    layer('rgba(176,236,72,0.9)', 0.55, -0.12);  // светлая сердцевина
+    layer('rgba(246,255,214,0.9)', 0.14, -0.32); // блик сверху
+  }
+  c.restore();
+}
 function drawEntity(c, e, t, sc) {
   if (ADDITIVE_KINDS.has(e.k)) return;
   c.save(); c.translate(e.x, e.y);

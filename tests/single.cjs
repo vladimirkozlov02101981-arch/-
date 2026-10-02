@@ -33,7 +33,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
    return {netVersion:NET_VERSION,coefficients,erased};
   });
   assert.deepEqual(report.materials.coefficients,[1,1.12,.8,.76,1.1,.56,.36,.8,.72,.72]);
-  assert(report.materials.erased.soil>report.materials.erased.rock&&report.materials.erased.rock>report.materials.erased.concrete&&report.materials.erased.concrete>report.materials.erased.metal);assert.equal(report.materials.netVersion,6);
+  assert(report.materials.erased.soil>report.materials.erased.rock&&report.materials.erased.rock>report.materials.erased.concrete&&report.materials.erased.concrete>report.materials.erased.metal);assert.equal(report.materials.netVersion,7);
   await page.evaluate(()=>App.ctl.select('sniper'));await page.waitForFunction(()=>App.game.turn.weapon==='sniper'&&App.ctl.scopeOn);
   report.sniper={aim:[]};
   async function aimAt(x,y,scope){await page.mouse.move(x,y);await page.waitForTimeout(120);const r=await page.evaluate(()=>{const s=App.game.active();return {base:App.ctl.base,expected:Math.atan2(App.ctl.mouseW.y-(s.y-GUN_Y),App.ctl.mouseW.x-s.x),scopeOn:App.ctl.scopeOn,mode:App.ctl.aimMode};});assert(Math.abs(r.base-r.expected)<1e-8);assert.equal(r.scopeOn,scope);assert.equal(r.mode,'mouse');report.sniper.aim.push({x,y,...r});}

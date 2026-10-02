@@ -16,3 +16,5 @@ dist/
 dev/pbr/
 dev/blender/scenes/
 __pycache__/
+
+dev/cloudflared-*.txt

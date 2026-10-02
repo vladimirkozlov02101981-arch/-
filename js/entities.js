@@ -102,6 +102,25 @@ function hitscan(g, x0, y0, ang, range, ignore) {
   return { type: 'none', x: x0 + dx * range, y: y0 + dy * range };
 }
 
+/** быстрые пули (дальность, ед.): камера за ними не успевает — перед выстрелом обзор переходит к месту попадания */
+const FAST_SHOT = { assault: 1200, revolver: 1500, magnum: 1700, uzi: 900, shotgun: 650, sniper: 2600, minigun: 900, tesla: 500, railgun: 2800, autocannon: 1500 };
+/** брошенное оружие, у которого после броска идёт фаза действия: в руках его уже нет */
+const THROWN_USE = new Set(['robot', 'tpgrenade']);
+/** куда попадут быстрые пули: первая земля, вода или боец на линии ствола (для камеры; работает и на сцене друга по сети).
+    null — пули уйдут в пустоту */
+function predictShot(sc, s, aim, id) {
+  const R = FAST_SHOT[id]; if (!R || !s || !sc.terrain) return null;
+  const m = muzzle(s, aim, 10), dx = Math.cos(aim), dy = Math.sin(aim), pierce = id === 'railgun', T = sc.terrain;
+  for (let d = 0; d <= R; d += 3) {
+    const x = m.x + dx * d, y = m.y + dy * d;
+    if (y > sc.waterY) return { x, y };
+    if (!pierce && T.isSolid(x, y)) return { x, y };
+    for (const o of sc.soldiers) if (o !== s && o.alive !== false && !o.gone && Math.abs(o.x - x) < 8 && y > o.y - 30 && y < o.y + 2) return { x: o.x, y: o.y - 15 };
+    if (x < -300 || x > sc.W + 300 || y < -1500) break;
+  }
+  return null;
+}
+
 /* ---------- базовая сущность ---------- */
 class Ent {
   constructor(g, k, x, y, vx = 0, vy = 0) {
@@ -288,6 +307,12 @@ class Robot extends Ent {
     if (this.f <= 0) this.boom(g);
   }
   push(vx, vy) { this.vx += vx; this.vy += vy; this.air = true; }
+  /** прыжок по команде игрока (пробел): только с земли — через своих бойцов, ящики и уступы */
+  jump(g) {
+    if (this.dead || this.air) return;
+    this.air = true; this.vx = this.dir * 125; this.vy = -360; this.y -= 1; this.jumps = 0;
+    g.emit({ t: 'jump', x: R1(this.x), y: R1(this.y) });
+  }
   boom(g) { if (this.dead) return; this.dead = true; const B = BLAST.robot; g.explode(this.x, this.y - 6, B.R, B.D, { owner: this.owner, knock: B.K, frag: 'robot' }); }
 }
 
@@ -672,7 +697,7 @@ const FIRE = {
   mine(g, s, p) { g.spawn(new Mine(g, s.x + s.face * 9, s.y - 8, s.face * 90, -110, s)); g.emit({ t: 'launch', x: R1(s.x), y: R1(s.y - 10), w: 'throw' }); },
   robot(g, s, p) {
     const r = new Robot(g, s.x + s.face * 12, s.y - 2, s.face, s); g.spawn(r);
-    return { usage: { update() { return r.dead; }, fire(gg) { r.boom(gg); } } };
+    return { usage: { update() { return r.dead; }, fire(gg) { r.boom(gg); }, jump(gg) { r.jump(gg); } } };
   },
   bat(g, s, p) {
     const cx = s.x + s.face * 12, cy = s.y - 14; let hitAny = false;

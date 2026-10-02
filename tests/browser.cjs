@@ -35,13 +35,14 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),41);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
     // A real input action and pause must neutralize movement on the authoritative host.
     await host.keyboard.down('KeyD');await host.waitForTimeout(160);await host.keyboard.press('Escape');await host.keyboard.up('KeyD');
-    // First Esc holsters the weapon (empty hands, guest sees it too); second Esc opens pause.
+    // Esc holsters the weapon (empty hands, guest sees it too); second Esc returns it; the menu opens only with Backspace.
     await host.waitForFunction(()=>App.game.turn.weapon===null);await guest.waitForFunction(()=>App.remote.turn.weapon===null);
-    await host.keyboard.press('Escape');await host.waitForSelector('#s-pause.show');assert.equal(await host.evaluate(()=>!!App.game.ctrl?.r),false);await host.click('[data-act="resume"]');
+    await host.keyboard.press('Escape');await host.waitForFunction(()=>App.game.turn.weapon!==null);assert.equal(await host.evaluate(()=>UI.cur),null);
+    await host.keyboard.press('Backspace');await host.waitForSelector('#s-pause.show');assert.equal(await host.evaluate(()=>!!App.game.ctrl?.r),false);await host.click('[data-act="resume"]');
     await guest.keyboard.press('KeyT');await guest.fill('#chat-input','Проверка связи');await guest.keyboard.press('Enter');await host.waitForFunction(()=>document.getElementById('chat-log').textContent.includes('Проверка связи'));
     const before=await mapHash(host);
     // Fire via the normal game command path. Vertical downward rocket must change terrain.
-    await host.keyboard.press('Digit1');await host.waitForFunction(()=>!!App.game.turn.weapon);
+    await host.keyboard.press('Escape');await host.waitForFunction(()=>App.game.turn.weapon===null);await host.keyboard.press('Digit1');await host.waitForFunction(()=>!!App.game.turn.weapon);
     await host.evaluate(()=>{App.ctl.aimMode='keys';App.ctl.aim=Math.PI/2;App.ctl.send({c:'fire',aim:Math.PI/2,pw:.22});});
     await host.waitForFunction(()=>App.game.turn.phase==='settle'||App.game.turn.team===1,{timeout:20000});await host.waitForTimeout(350);
     assert.notEqual(await mapHash(host),before);assert.equal(await mapHash(host),await mapHash(guest));
@@ -82,7 +83,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
       }
       // механика Territory War 3
       const tw=makeAmmo('tw3');const tw3Set=Object.keys(tw).length===11&&tw.magnum===-1&&tw.grenade===-1;
-      const ac=arena();for(let y=250;y<420;y++)for(let x=300;x<320;x++)ac.terrain.mask[y*ac.W+x]=1;ac.turn.weapon='acid';ac.fire(ac.active(),{aim:-.02,pw:1});for(let i=0;i<90;i++)ac.step(1/60);const acidThrough=ac.soldiers[1].hp<100&&ac.soldiers[1].hp>=80;
+      const ac=arena();for(let y=250;y<420;y++)for(let x=300;x<320;x++)ac.terrain.mask[y*ac.W+x]=1;ac.turn.weapon='acid';ac.fire(ac.active(),{aim:-.02,pw:1});for(let i=0;i<90;i++)ac.step(1/60);const acidThrough=ac.soldiers[1].hp===75;   // кислотомёт: 25 урона сквозь стену
       const tp=arena();tp.turn.weapon='tpgrenade';tp.fire(tp.active(),{aim:-.8,pw:.45});for(let i=0;i<480&&tp.turn.sid===1&&tp.turn.phase==='use';i++)tp.step(1/60);const tpMoved=Math.abs(tp.soldiers[0].x-200)>40&&bodyFree(tp.terrain,tp.soldiers[0].x,tp.soldiers[0].y);
       const bt=arena();bt.soldiers[1].x=215;bt.turn.weapon='boot';bt.fire(bt.active(),{aim:0,pw:1});const bootKick=bt.soldiers[1].vx>400&&bt.soldiers[1].vy>-300&&bt.soldiers[1].hp===85;
       const mo=arena();for(let y=200;y<420;y++)for(let x=320;x<340;x++)mo.terrain.mask[y*mo.W+x]=1;mo.turn.weapon='mortar';mo.fire(mo.active(),{aim:-.1,pw:.5});let mortarBounced=0;for(let i=0;i<240;i++){mo.step(1/60);for(const e of mo.entities)if(e.k==='mortar')mortarBounced=Math.max(mortarBounced,e.bn|0);}

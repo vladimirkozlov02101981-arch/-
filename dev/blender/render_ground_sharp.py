@@ -51,7 +51,7 @@ except Exception:
 # свет: (r, g, b, сила). Слишком тёплые солнце и заполнение окрашивали всё в оранжевый (насыщенность ~0.7) —
 # серые камни эталона нейтральны, поэтому солнце лишь слегка тёплое, заполнение почти нейтральное и мягкое
 SUN = (1.0, 0.94, 0.86, 4.2)
-FILL = (0.68, 0.66, 0.62, 0.5)
+FILL = (0.68, 0.66, 0.62, 0.62)
 
 
 def find(asset, kind):
@@ -146,8 +146,8 @@ def previews():
 # цветокоррекция фото на материал: насыщенность и яркость (HSV), контраст, линейный множитель RGB.
 # Подобрана замером по маске почва/камень (dev/tools/ground_palette.py) к принятому грунту долины
 GRADE = {
-    'soil': {'sat': 0.65, 'val': 0.95, 'contrast': 0.25, 'tint': (0.86, 0.93, 1.12)},
-    'rock': {'sat': 0.35, 'val': 1.55, 'contrast': 0.10, 'tint': (1.0, 1.0, 1.04)},
+    'soil': {'sat': 0.60, 'val': 0.74, 'contrast': 0.0, 'tint': (1.0, 0.95, 0.95)},   # контраст по каналам повышал насыщенность — рельеф почвы даёт геометрия
+    'rock': {'sat': 0.30, 'val': 1.60, 'contrast': 0.10, 'tint': (1.0, 1.0, 1.03)},
 }
 
 
@@ -368,7 +368,7 @@ def ground_scene(source):
     amp = 0.16
     source.height_plane('dirt', height, amp, np.full((n, n, 3), 0.3))
     print('STAGE materials', flush=True)
-    soil = photo_material(bpy, 'soil', 2 / (PERIOD / 100), 0.8, 0.004, grade=GRADE['soil'])
+    soil = photo_material(bpy, 'soil', 2 / (PERIOD / 100), 1.4, 0.006, grade=GRADE['soil'])
     mats = {}
     for role, _ in ROCK_MATS:
         mats[role] = photo_material(bpy, role, 3.0 if role != 'basalt' else 6.0, 0.45, 0.002, tone=True, grade=GRADE['rock'])

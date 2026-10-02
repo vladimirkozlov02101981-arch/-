@@ -3,7 +3,7 @@
    Эффекты: обработка игровых событий (у хоста и у гостя),
    частицы, освещение, всплывающий урон, баннеры, тряска
    ========================================================= */
-const TRAIL_RATE = { rocket: 0.012, mini: 0.02, homing: 0.012, nukem: 0.008, drill: 0.02, mortar: 0.03, frag: 0.05, bomb: 0.035, bomblet: 0.05, dynamite: 0.03, fire: 0.07, bhole: 0.008, jet: 0.02, orbital: 0.02, molotov: 0.04 };
+const TRAIL_RATE = { acid: 0.045, rocket: 0.012, mini: 0.02, homing: 0.012, nukem: 0.008, drill: 0.02, mortar: 0.03, frag: 0.05, bomb: 0.035, bomblet: 0.05, dynamite: 0.03, fire: 0.07, bhole: 0.008, jet: 0.02, orbital: 0.02, molotov: 0.04 };
 const ENT_LIGHT = { rocket: ['#ffae3a', 70], homing: ['#9fd8ff', 70], mini: ['#ffae3a', 45], nukem: ['#ffd070', 120], fire: ['#ff7a1a', 60], flame: ['#ffa22a', 40], bhole: ['#a060ff', 160], molotov: ['#ffa22a', 40], orbital: ['#ff5ae0', 200], dynamite: ['#ffd35a', 26], jet: ['#ffa23a', 50] };
 
 TRAIL_RATE.plasma = .014; ENT_LIGHT.plasma = ['#80e6ff', 95];
@@ -266,7 +266,16 @@ class FX {
         P.fire(bx, by, -Math.cos(e.a) * 60, -Math.sin(e.a) * 60, rand(3, 5) * k, 0.16); break;
       }
       case 'mortar': case 'frag': case 'bomb': case 'bomblet': P.smoke(e.x, e.y, 0, 0, 2.5, 0.5, '#9a9a9a', 2, 0.35); break;
-      case 'acid': for (let i = 0; i < 2; i++) P.glow(e.x + rand(-3, 3), e.y + rand(-2, 2), rand(-25, 25), rand(10, 60), rand(2, 3.5), rand(0.25, 0.5), pick(['#b8ff3a', '#7ad62a', '#e8ffb0'])); break;
+      case 'acid': {
+        if (!e.f) break;
+        // кислота разъедает землю: едкий пар и шипящие брызги там, где струя входит в породу; в воздухе с неё срываются капли
+        const ca = Math.cos(e.a || 0), sa = Math.sin(e.a || 0);
+        if (sc.terrain.isSolid(e.x + ca * 6, e.y + sa * 6)) {
+          P.smoke(e.x, e.y, rand(-14, 14), rand(-45, -15), rand(2.5, 4.2), rand(0.7, 1.2), pick(['#c3dc7a', '#9cbf55', '#e0eeb0']), 2.8, 0.42);
+          if (Math.random() < 0.6) P.glow(e.x, e.y, rand(-70, 70), rand(-110, -30), rand(1, 1.7), rand(0.2, 0.4), '#dcff86', 420);
+        } else if (Math.random() < 0.28) P.glow(e.x + rand(-2, 2), e.y + rand(0, 2), (e.vx || 0) * 0.05 + rand(-10, 10), rand(20, 70), rand(1, 1.6), rand(0.35, 0.6), pick(['#8fd432', '#b9ec52']), 720);
+        break;
+      }
       case 'tpg': if (Math.random() < 0.5) P.glow(e.x, e.y, rand(-20, 20), rand(-30, 0), 2, 0.4, pick(['#e0b0ff', '#b06cff'])); break;
       case 'dynamite': P.spark(e.x + 3.5, e.y - 9.5, rand(-60, 60), rand(-100, -20), 0.25, '#ffd35a'); break;
       case 'molotov': P.fire(e.x, e.y - 8, rand(-10, 10), rand(-30, -10), 3, 0.25); break;

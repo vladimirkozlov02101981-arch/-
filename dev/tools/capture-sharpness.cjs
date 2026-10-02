@@ -22,12 +22,12 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
       await MapArt.get(App.sc.map.id).decode();
       App.paused = true;
       window.__sharpNames=[...new Set(App.sc.terrain.texRef.tab.filter(Boolean).map(e=>e.name))];
-      for(const n of window.__sharpNames){TexLib.loadHi(n);if(TexLib.loadFine)TexLib.loadFine(n);}
+      for(const n of window.__sharpNames){TexLib.loadHi(n);if(TexLib.loadFine)TexLib.loadFine(n);if(TexLib.loadNative)TexLib.loadNative(n);}
       const s = App.sc.soldiers.find(o => o.id === App.game.turn.sid);
       App.cam.inited = true; App.cam.free = 999; App.cam.x = s.x;
       App.cam.y = s.y - 115; App.cam.sx = App.cam.sy = 0;
     });
-    await page.waitForFunction(()=>window.__sharpNames.every(n=>(!TexLib.hiAvail.has(n)||TexLib.hi[n])&&(!TexLib.fineAvail?.has(n)||TexLib.fine[n])),null,{timeout:60000});
+    await page.waitForFunction(()=>window.__sharpNames.every(n=>(!TexLib.hiAvail.has(n)||TexLib.hi[n])&&(!TexLib.fineAvail?.has(n)||TexLib.fine[n])&&(!TexLib.nativeAvail?.has(n)||TexLib.native[n])),null,{timeout:60000});
     fs.mkdirSync('test-results/sharpness', {recursive:true});
     const views = [];
     for (const zoom of [2.5, 6.35]) {

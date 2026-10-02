@@ -260,6 +260,18 @@ const UI = {
         g.appendChild(it);
       }
     });
+    this.fitTrayInfo();
+  },
+  /** поле описания высотой по самому длинному описанию: при наведении на другое оружие список не прыгает вверх-вниз */
+  fitTrayInfo() {
+    const inf = $('tray-info'), w = inf.clientWidth; if (!w || this.trayInfoW === w) return;
+    const keep = [...inf.childNodes]; let h = 0; inf.style.minHeight = '0px';
+    for (const wp of WEAPONS) {
+      inf.textContent = ''; const b = document.createElement('b'); b.textContent = wp.name;
+      inf.appendChild(b); inf.appendChild(document.createElement('br')); inf.appendChild(document.createTextNode(wp.desc)); h = Math.max(h, inf.offsetHeight);
+    }
+    inf.textContent = ''; for (const n of keep) inf.appendChild(n);
+    inf.style.minHeight = h + 'px'; this.trayInfoW = w;
   },
   /* ---------- чат ---------- */
   openChat() { this.chatOpen = true; Input.typing = true; const i = $('chat-input'); i.classList.remove('hidden'); i.focus(); },
@@ -277,7 +289,7 @@ const UI = {
     if (!win) { title.textContent = 'Ничья!'; title.style.color = '#fff'; }
     else { title.textContent = (myTeams.length === 1 ? (myTeams[0] === ev.win ? 'Победа! ' : 'Поражение… ') : '') + `Победили «${win.name}»`; title.style.color = win.color; }
     const st = $('over-stats'); st.innerHTML = '';
-    const head = document.createElement('div'); head.className = 'over-row muted'; head.innerHTML = '<span>Команда</span><span>Урон</span><span>Убийства</span><span>Живы</span>'; st.appendChild(head);
+    const head = document.createElement('div'); head.className = 'over-row muted'; head.innerHTML = '<span>Команда</span><span>Урон</span><span>Убийства</span><span>Живых</span>'; st.appendChild(head);
     (ev.stats || []).forEach((s, i) => {
       const tm = sc.teams[i]; if (!tm) return; const row = document.createElement('div'); row.className = 'over-row';
       const n = document.createElement('b'); n.textContent = tm.name; n.style.color = tm.color; row.appendChild(n);
