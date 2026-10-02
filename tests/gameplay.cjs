@@ -184,6 +184,36 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
     assert(A.sent === 1 && Math.abs(A.sx - edge) <= 24 && A.booms === 5 && A.camDev < 260, 'auto drop at the screen edge ' + JSON.stringify(A));
     console.log('Airstrike with real input: F drop, auto drop at the screen edge PASS', report.manual, report.auto);
 
+    // 8. Версия 17: прицел у оружия, список атак по классам с описаниями, захват мыши в бою
+    await page.waitForFunction(() => App.game.turn.phase === 'aim' && App.game.active() && App.game.active().alive, {}, { timeout: 60000 });
+    report.v17 = await page.evaluate(() => {
+      const cats = [...document.querySelectorAll('#ammo-grid .ammo-cat')].map(e => e.textContent);
+      const rows = [...document.querySelectorAll('#ammo-grid .ammo-row')];
+      const described = rows.filter(r => r.querySelector('.ammo-desc').textContent.length > 10).length;
+      // прицел: рисуется для оружия с направлением, не рисуется для ударов с воздуха
+      const T = App.game.turn, saved = T.weapon, cv = makeCanvas(400, 300), c = cv.getContext('2d');
+      const calls = {}; const spy = (w) => { T.weapon = w; let n = 0; const arc = c.arc; c.arc = function () { n++; return arc.apply(this, arguments); }; App.ren.drawAimReticle(c, App.sc, App.cam, App.ctl, 1, 400, 300); c.arc = arc; return n; };
+      for (const w of ['bazooka', 'grenade', 'shotgun', 'airstrike', 'medkit']) calls[w] = spy(w);
+      T.weapon = saved;
+      // захват указателя: внутренний курсор от относительных сдвигов, упирается в край поля
+      const game = document.getElementById('game');
+      Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => game });
+      document.dispatchEvent(new Event('pointerlockchange'));
+      Input.mouse.x = 300; Input.mouse.y = 300;
+      game.dispatchEvent(new MouseEvent('mousemove', { clientX: 1, clientY: 1, movementX: 25, movementY: -10, bubbles: true }));
+      const moved = [Input.mouse.x, Input.mouse.y];
+      for (let i = 0; i < 30; i++) game.dispatchEvent(new MouseEvent('mousemove', { movementX: -400, movementY: 900, bubbles: true }));
+      const clamped = [Input.mouse.x, Input.mouse.y, game.clientHeight];
+      delete document.pointerLockElement; Object.defineProperty(document, 'pointerLockElement', { configurable: true, get: () => null });
+      document.dispatchEvent(new Event('pointerlockchange'));
+      return { cats, rows: rows.length, described, calls, moved, clamped, unlocked: !Input.locked };
+    });
+    const V = report.v17;
+    assert.equal(V.cats.length, 6, 'six weapon classes'); assert.equal(V.rows, 41); assert(V.described >= 40, 'descriptions under weapons');
+    assert(V.calls.bazooka > 4 && V.calls.grenade > 4 && V.calls.shotgun > 4 && V.calls.airstrike === 0 && V.calls.medkit === 0, 'reticle only for aimed weapons ' + JSON.stringify(V.calls));
+    assert.deepEqual(V.moved, [325, 290]); assert(V.clamped[0] === 0 && V.clamped[1] === V.clamped[2] - 1 && V.unlocked, 'locked cursor stays inside ' + JSON.stringify(V));
+    console.log('Version 17: weapon reticle, ammo by class with descriptions, pointer lock PASS', V);
+
     assert.deepEqual(errors, []);
     fs.writeFileSync('test-results/gameplay.json', JSON.stringify({ passed: true, ...report, date: new Date().toISOString() }, null, 2));
     console.log('Gameplay requests: all PASS');

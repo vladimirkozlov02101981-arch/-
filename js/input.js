@@ -5,9 +5,17 @@
 const Input = {
   keys: {}, pressed: {}, mouse: { x: 0, y: 0, down: [false, false, false], clicked: [false, false, false], moved: false, inside: false },
   wheel: 0, typing: false, drag: null, onClickRight: null, onBinoc: null, onWheel: null,
+  // захват указателя в бою: системная стрелка скрыта и не уходит за край окна, мышь двигает внутренний курсор.
+  // Отпускают: клавиша Windows / Alt+Tab (окно теряет фокус), Esc, пауза, панель оружия; клик или клавиша — снова захват
+  cv: null, locked: false, wantLock: false, lockPending: false, gestureT: -1e9,
   GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'KeyF']),
   init(cv) {
+    this.cv = cv;
+    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === cv; this.lockPending = false; if (this.locked) this.mouse.inside = true; });
+    document.addEventListener('pointerlockerror', () => { this.locked = false; this.lockPending = false; });
+    document.addEventListener('mousedown', () => { this.gestureT = performance.now(); }, true);   // клик по кнопке «В бой!», «Продолжить», оружию — тоже жест
     window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Escape') this.gestureT = performance.now();   // Esc жестом не считается: им как раз отпускают мышь
       if (this.typing || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT'))) return;
       if (this.GAME_KEYS.has(e.code)) e.preventDefault();
       if (!this.keys[e.code]) this.pressed[e.code] = true;
@@ -20,15 +28,21 @@ const Input = {
     window.addEventListener('contextmenu', (e) => { if (this.drag || this.binocOn) e.preventDefault(); });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('mousemove', (e) => {
-      const dx = e.clientX - this.mouse.x, dy = e.clientY - this.mouse.y;
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.moved = true; this.mouse.inside = true;
+      // при захвате указателя координаты не меняются — внутренний курсор ведут относительные сдвиги, он не выходит за поле
+      const nx = this.locked ? clamp(this.mouse.x + (e.movementX || 0), 0, cv.clientWidth - 1) : e.clientX;
+      const ny = this.locked ? clamp(this.mouse.y + (e.movementY || 0), 0, cv.clientHeight - 1) : e.clientY;
+      const dx = nx - this.mouse.x, dy = ny - this.mouse.y;
+      this.mouse.x = nx; this.mouse.y = ny; this.mouse.moved = true; this.mouse.inside = true;
       // кнопку отпустили там, где событие не дошло (за окном, над интерфейсом) — бинокль всё равно выключаем
       if (this.drag && this.drag.btn === 2 && !(e.buttons & 2)) { this.releaseRight(); return; }
       if (this.drag) { this.drag.dist += Math.abs(dx) + Math.abs(dy); this.checkBinoc(); }
     });
     cv.addEventListener('mousedown', (e) => {
-      Sfx.resume();
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true;
+      Sfx.resume(); this.gestureT = performance.now();
+      // бой без захвата (после Esc, паузы, Alt+Tab): этот клик только возвращает мышь в игру и не стреляет
+      if (this.wantLock && !this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
+      if (!this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; }
+      this.mouse.inside = true;
       this.mouse.down[e.button] = true; if (e.button === 0) this.mouse.clicked[0] = true;
       // ПКМ: короткий клик — арсенал, удержание — бинокль
       if (e.button === 2) { this.drag = { btn: 2, dist: 0, t0: performance.now(), binoc: false }; e.preventDefault(); }
@@ -39,8 +53,16 @@ const Input = {
       if (e.button === 2) this.releaseRight(true);
       else if (this.drag && this.drag.btn === e.button) this.drag = null;
     });
-    cv.addEventListener('wheel', (e) => { e.preventDefault(); if (this.onWheel) this.onWheel(e.deltaY, e.clientX, e.clientY); }, { passive: false });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); if (this.onWheel) this.onWheel(e.deltaY, this.locked ? this.mouse.x : e.clientX, this.locked ? this.mouse.y : e.clientY); }, { passive: false });
   },
+  /** захват указателя: только по свежему жесту пользователя (клик, клавиша) — так требует браузер */
+  lock() {
+    const cv = this.cv; if (!cv || !cv.requestPointerLock || this.locked || this.lockPending || performance.now() - this.gestureT > 4000) return;
+    this.lockPending = true;
+    try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => { this.lockPending = false; }); }
+    catch (e) { this.lockPending = false; }
+  },
+  unlock() { if (this.locked && document.exitPointerLock) document.exitPointerLock(); },
   /** отпускание ПКМ: бинокль выключается всегда (даже включённый клавишей B); короткий клик без бинокля — арсенал */
   releaseRight(click = false) {
     const d = this.drag; this.drag = null;

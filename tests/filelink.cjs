@@ -26,8 +26,8 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     await guest.goto(file); await guest.waitForSelector('#s-main.show');
     await guest.click('[data-act="online"]'); await guest.waitForSelector('#s-online.show');
     assert.equal(await guest.locator('#srv-box').isVisible(), true, 'link field is shown in the file version');
-    // PUBLIC=1 — ссылка из подсказки хоста (публичный адрес туннеля «Играть онлайн.cmd»), иначе — адрес тестового сервера
-    const invite = process.env.PUBLIC ? (note.match(/https:\/\/[\w.-]+\/#join=\w{5}/) || [])[0] : `${base}/#join=${code}`;
+    // TW_PUBLIC_LINK=1 — ссылка из подсказки хоста (публичный адрес туннеля «Играть онлайн.cmd»), иначе — адрес тестового сервера
+    const invite = process.env.TW_PUBLIC_LINK ? (note.match(/https:\/\/[\w.-]+\/#join=\w{5}/) || [])[0] : `${base}/#join=${code}`;
     assert(invite, 'public invite link in the host note: ' + note);
     await guest.fill('#srv-link', invite);
     await guest.click('[data-act="join"]');

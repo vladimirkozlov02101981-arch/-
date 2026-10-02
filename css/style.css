@@ -201,8 +201,13 @@ kbd { font-family: var(--ui); font-size: 12px; background: rgba(255, 255, 255, 0
 .ammo-box summary{cursor:pointer;font:500 13px var(--ui);color:#dfedab}
 .ammo-tools{display:flex;gap:8px;margin:10px 0}
 .ammo-tools .btn.small{padding:5px 10px;font-size:12px}
-.ammo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 14px;max-height:260px;overflow:auto;padding-right:6px}
-.ammo-row{display:grid;grid-template-columns:18px 1fr 54px;align-items:center;gap:6px;font-size:12px;color:#d8e2d8}
+.ammo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px 14px;max-height:430px;overflow:auto;padding-right:6px}
+.ammo-cat{grid-column:1/-1;font:500 12px var(--ui);color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin:10px 0 2px;padding-bottom:4px;border-bottom:1px solid #a5b6a32e}
+.ammo-cat:first-child{margin-top:2px}
+.ammo-row{display:grid;grid-template-columns:18px 1fr 54px;align-items:center;gap:3px 6px;font-size:12px;color:#d8e2d8;padding:6px 8px;border-radius:5px;background:#ffffff07}
+.ammo-row .ammo-name{font-weight:500}
+.ammo-row .ammo-desc{grid-column:2/4;font-size:11px;line-height:1.35;color:#9fb3a8}
+.ammo-tools{flex-wrap:wrap;align-items:center}.ammo-tools .muted{flex:1 1 260px;line-height:1.35}
 .ammo-row input[type=number]{width:54px;padding:3px 5px;border-radius:4px;border:1px solid #a5b6a32e;background:#162629;color:#fff;font-size:12px;box-sizing:border-box}
 .ammo-row.off{opacity:.45}
-@media(max-width:800px){.ammo-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:800px){.ammo-grid{grid-template-columns:1fr}}

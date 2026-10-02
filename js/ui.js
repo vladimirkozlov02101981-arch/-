@@ -129,15 +129,23 @@ const UI = {
   /** редактор атак: галочка — оружие есть в бою, число — сколько раз его можно применить (пусто — без ограничения) */
   buildAmmo() {
     const g = $('ammo-grid'); g.innerHTML = '';
-    for (const w of WEAPONS) {
-      const row = document.createElement('label'); row.className = 'ammo-row'; row.dataset.w = w.id; row.title = w.desc || w.name;
-      row.innerHTML = '<input type="checkbox"><span></span><input type="number" min="0" max="99" placeholder="∞">';
-      row.querySelector('span').textContent = w.name;
-      const cb = row.querySelector('input[type=checkbox]'), num = row.querySelector('input[type=number]');
-      cb.addEventListener('change', () => { if (cb.checked && num.value === '0') num.value = String(w.ammo > 0 ? w.ammo : ''); row.classList.toggle('off', !cb.checked); this.onSettingsChanged(); });
-      num.addEventListener('input', () => { if (num.value === '0') { cb.checked = false; row.classList.add('off'); } else if (!cb.checked) { cb.checked = true; row.classList.remove('off'); } this.onSettingsChanged(); });
-      g.appendChild(row);
+    // по классам (как в панели оружия в бою); под названием — что делает оружие
+    for (let ci = 0; ci < WEAPON_CATS.length; ci++) {
+      const list = WEAPONS.filter(w => w.cat === ci); if (!list.length) continue;
+      const head = document.createElement('div'); head.className = 'ammo-cat'; head.textContent = `${WEAPON_CATS[ci]} · ${list.length}`; g.appendChild(head);
+      for (const w of list) this.ammoRow(g, w);
     }
+  },
+  /** строка редактора атак: галочка, название, количество и описание того, что делает оружие */
+  ammoRow(g, w) {
+    const row = document.createElement('label'); row.className = 'ammo-row'; row.dataset.w = w.id;
+    row.innerHTML = '<input type="checkbox"><span class="ammo-name"></span><input type="number" min="0" max="99" placeholder="∞"><small class="ammo-desc"></small>';
+    row.querySelector('.ammo-name').textContent = w.name;
+    row.querySelector('.ammo-desc').textContent = w.desc || '';
+    const cb = row.querySelector('input[type=checkbox]'), num = row.querySelector('input[type=number]');
+    cb.addEventListener('change', () => { if (cb.checked && num.value === '0') num.value = String(w.ammo > 0 ? w.ammo : ''); row.classList.toggle('off', !cb.checked); this.onSettingsChanged(); });
+    num.addEventListener('input', () => { if (num.value === '0') { cb.checked = false; row.classList.add('off'); } else if (!cb.checked) { cb.checked = true; row.classList.remove('off'); } this.onSettingsChanged(); });
+    g.appendChild(row);
   },
   fillAmmo(m) {
     for (const row of document.querySelectorAll('#ammo-grid .ammo-row')) {

@@ -28,7 +28,7 @@
       <div class="menu-facts"><div><strong>41</strong><span>вида оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока.<br>один победитель.</span></div></div>
     </div>
     <div class="featured-map"><span class="eyebrow">ВЫБЕРИ СВОЁ ПОЛЕ БОЯ</span><div class="featured-title"><span id="featured-number">01 / 08</span><h2 id="featured-name">Зелёная долина</h2><div><button class="arrow-btn" data-act="map-prev" aria-label="Предыдущая карта">←</button><button class="arrow-btn" data-act="map-next" aria-label="Следующая карта">→</button></div></div><p id="featured-desc">Мельница на холме, пруд с мостом и тоннель под большим холмом</p><div class="map-dots" id="map-dots"></div><div class="static-label">◇ Фиксированная карта · Разрушаемое окружение</div></div>
-    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.01-16</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.02-17</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
   </section>
 
   <!-- Онлайн -->
@@ -80,7 +80,7 @@
             <label id="o-ai-wrap">Сложность компьютера<select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
           </div>
           <details class="ammo-box" id="ammo-box"><summary>Атаки и их количество <span class="small muted">— одинаково для обеих команд; пусто = без ограничения, 0 или снятая галочка = оружия нет в бою</span></summary>
-            <div class="ammo-tools"><button type="button" class="btn secondary small" id="ammo-all">Включить все</button><button type="button" class="btn secondary small" id="ammo-none">Снять все</button><button type="button" class="btn secondary small" id="ammo-reset">По заготовке</button></div>
+            <div class="ammo-tools"><button type="button" class="btn secondary small" id="ammo-all" title="Включить всё оружие с обычным запасом">Включить все</button><button type="button" class="btn secondary small" id="ammo-none" title="Выключить всё оружие — затем отметьте нужное">Снять все</button><button type="button" class="btn secondary small" id="ammo-reset" title="Вернуть набор и количество из выбранной заготовки «Арсенал (заготовка)» — ваши правки списка отменятся">Сбросить к заготовке</button><span class="muted small">Заготовка — готовый набор из списка «Арсенал»: все 41 вид, классический или как в Territory War 3. Ниже его можно поправить вручную.</span></div>
             <div class="ammo-grid" id="ammo-grid"></div>
           </details>
         </div>
@@ -106,7 +106,8 @@
             <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти, пробел — отпрыгнуть</td></tr>
             <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Прицел (<kbd>Shift</kbd> — точнее). У снайперки <kbd>E</kbd> включает и выключает оптику, в оптике наводите мышью</td></tr>
             
-            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: сила — на шкале слева</td></tr>
+            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: сила — на шкале слева и на кольце прицела. Прицел стоит на коротком расстоянии строго по направлению ствола</td></tr>
+            <tr><td>Мышь в бою</td><td>Захвачена игрой: стрелки не видно, за край окна она не уходит. Отпустить — клавиша <kbd>Windows</kbd> (или <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Esc</kbd>, пауза); вернуть в игру — клик по полю боя</td></tr>
             <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия</td></tr>
             <tr><td><kbd>Q</kbd> <kbd>E</kbd>, <kbd>1</kbd>–<kbd>6</kbd></td><td>Сменить оружие / категорию</td></tr>
             <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: вид плавно едет туда, куда ведёте мышь</td></tr>

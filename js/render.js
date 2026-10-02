@@ -6,6 +6,7 @@
 const CAM_PRI = { rocket: 3, homing: 3, mortar: 3, drill: 3, mini: 2, grenade: 3, cluster: 3, sticky: 3, molotov: 3, bholeg: 3, bhole: 3, dynamite: 2, robot: 3, bomb: 2, nukem: 4, orbital: 3, jet: 1, frag: 1, bomblet: 1 };
 
 CAM_PRI.plasma = 3; CAM_PRI.bullet = 2;   // камера следит и за пулями
+const AIM_RETICLE = 78;   // прицел оружия: расстояние от плеча по линии ствола, игровых единиц (около двух ростов бойца)
 
 /* Камера. Отдалиться до всей карты нельзя: масштаб ограничен рядом с базовым,
    а дальние участки осматриваются биноклем — вид плавно едет туда, куда ведут мышь. */
@@ -365,7 +366,8 @@ class Renderer {
         c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 1.5; c.stroke();
       }
     }
-    // прицела у бойца нет: направление видно по оружию в руках; сила броска — шкала слева в HUD
+    // прицел оружия: на постоянном коротком расстоянии от ствола строго по направлению прицеливания (мышь его не двигает)
+    this.drawAimReticle(c, sc, cam, ctl, t, sw, sh);
     if (T.target && T.phase !== 'over') {
       const [x, y] = cam.toScreen(T.target.x, T.target.y, sw, sh); brightCross(c, x, y, t, '#ff6a3a', 1.2);   // захваченная цель самонаводки
     }
@@ -413,6 +415,41 @@ class Renderer {
         c.font = `600 10px ${FONT_UI}`; textOutlined(c, `${Math.round(Math.hypot(s.x - cam.x, s.y - cam.y) / 10)} м`, ax - Math.cos(a) * 22, ay - Math.sin(a) * 22, '#fff', 'rgba(0,0,0,0.85)', 3);
       }
     }
+    c.restore();
+  }
+  /** прицел у каждого оружия, которое целится направлением (ракеты, гранаты, огнестрел…): кольцо на расстоянии AIM_RETICLE
+      от плеча по линии ствола. Во время зарядки кольцо заполняется по силе броска. Оружию с выбором точки на карте,
+      установке и «применить на себя» направление не нужно — у них свой прицел или его нет */
+  drawAimReticle(c, sc, cam, ctl, t, sw, sh) {
+    const T = sc.turn; if (T.phase !== 'aim') return;
+    const W = WEAPON[T.weapon]; if (!W || !(W.mode === 'charge' || W.mode === 'instant' || (W.mode === 'tcharge' && T.target))) return;
+    const s = sc.soldiers.find(o => o.id === T.sid); if (!s || !s.alive || s.gone) return;
+    const mine = ctl && ctl.mine;
+    if (W.id === 'sniper' && mine && ctl.scopeOn) return;                 // в оптике свой прицел
+    const aim = mine ? ctl.aim : s.aim, D = AIM_RETICLE, ca = Math.cos(aim), sa = Math.sin(aim);
+    const [x, y] = cam.toScreen(s.x + ca * D, s.y - GUN_Y + sa * D, sw, sh);
+    const pw = mine ? (ctl.charging ? ctl.power : -1) : T.charge;
+    const r = 13, gap = 0.42;
+    c.save(); c.lineCap = 'round';
+    // мягкое свечение, чтобы прицел читался и на светлом небе, и в тёмной пещере
+    c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.arc(x, y, r + 6, 0, TAU); c.fill();
+    for (const [col, w] of [['rgba(0,0,0,0.8)', 5.2], ['#fff6d8', 2.4]]) {
+      c.strokeStyle = col; c.lineWidth = w;
+      for (let k = 0; k < 4; k++) { const a0 = k * Math.PI / 2 + aim + gap, a1 = (k + 1) * Math.PI / 2 + aim - gap; c.beginPath(); c.arc(x, y, r, a0, a1); c.stroke(); }
+      // штрихи внутрь по оси ствола и поперёк неё
+      c.beginPath();
+      for (let k = 0; k < 4; k++) { const a = aim + k * Math.PI / 2, cx = Math.cos(a), cy = Math.sin(a); c.moveTo(x + cx * (r + 4), y + cy * (r + 4)); c.lineTo(x + cx * (r - 4), y + cy * (r - 4)); }
+      c.stroke();
+    }
+    if (pw >= 0) {   // сила броска: дуга по кольцу от зелёного к красному
+      const k = clamp(pw, 0, 1);
+      c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 5.6; c.beginPath(); c.arc(x, y, r + 8, -Math.PI / 2, -Math.PI / 2 + TAU * k); c.stroke();
+      c.strokeStyle = k < 0.55 ? '#5ee07a' : k < 0.85 ? '#ffd23a' : '#ff5a3a'; c.lineWidth = 3.4;
+      c.beginPath(); c.arc(x, y, r + 8, -Math.PI / 2, -Math.PI / 2 + TAU * k); c.stroke();
+    }
+    const team = sc.teams[s.team];
+    c.fillStyle = 'rgba(0,0,0,0.8)'; c.beginPath(); c.arc(x, y, 3.8, 0, TAU); c.fill();
+    c.fillStyle = team ? team.color : '#ff4d4d'; c.beginPath(); c.arc(x, y, 2.6, 0, TAU); c.fill();
     c.restore();
   }
   /** шкала силы броска: слева у края экрана, только пока зажата кнопка выстрела */

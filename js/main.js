@@ -345,6 +345,9 @@ const App = {
     const turn = this.remote ? this.remote.latestTurn : sc.turn;
     if (this.ctl) this.ctl.binoc = this.cam.binoc;
     Input.binocOn = this.cam.binoc;
+    // мышь в бою захвачена игрой: не видна и не уходит за край; меню, пауза, панель оружия и чат её отпускают
+    Input.wantLock = !!(this.sc && !this.demo && !UI.cur && !UI.trayOpen && !UI.chatOpen && !document.hidden);
+    if (!Input.wantLock) Input.unlock(); else if (!Input.locked) Input.lock();
     if (this.ctl && !document.hidden && !this.paused && !UI.chatOpen && !UI.cur) this.ctl.update(dt, sc, this.cam, sw, sh, turn); else if (this.ctl) this.ctl.suspend();
     this.fx.update(this.paused ? 0 : dt, sc, this.cam, sw, sh);
     { const cur = !this.demo && !UI.cur && !this.paused ? 'none' : 'default'; if (this.cv.style.cursor !== cur) this.cv.style.cursor = cur; }   // в бою курсора не видно
