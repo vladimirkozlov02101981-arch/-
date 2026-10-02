@@ -5,20 +5,22 @@
    ========================================================= */
 const CAM_PRI = { rocket: 3, homing: 3, mortar: 3, drill: 3, mini: 2, grenade: 3, cluster: 3, sticky: 3, molotov: 3, bholeg: 3, bhole: 3, dynamite: 2, robot: 3, bomb: 2, nukem: 4, orbital: 3, jet: 1, frag: 1, bomblet: 1 };
 
-CAM_PRI.plasma = 3; CAM_PRI.bullet = 2;   // камера следит и за пулями
-const AIM_RETICLE = 78;   // прицел оружия: расстояние от плеча по линии ствола, игровых единиц (около двух ростов бойца)
+CAM_PRI.plasma = 3;   // за пулями (до 18 000 ед/с) камера не гоняется — она держит стрелка или кадр выстрела, иначе рывки
+const AIM_RETICLE = 78;
+/** жёсткость пружины камеры (рад/с): спокойный переход к бойцу, кадр выстрела, слежение за снарядом */
+const CAM_W = { calm: 6, shot: 8, track: 7.5 };   // прицел оружия: расстояние от плеча по линии ствола, игровых единиц (около двух ростов бойца)
 
 /* Камера. Отдалиться до всей карты нельзя: масштаб ограничен рядом с базовым,
    а дальние участки осматриваются биноклем — вид плавно едет туда, куда ведут мышь. */
 class Camera {
-  constructor() { this.x = 1600; this.y = 900; this.z = 1; this.tz = 1; this.sx = 0; this.sy = 0; this.free = 0; this.userZ = null; this.inited = false; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = 0; this.ly = 0; this.leadE = null; }
+  constructor() { this.x = 1600; this.y = 900; this.z = 1; this.tz = 1; this.sx = 0; this.sy = 0; this.free = 0; this.userZ = null; this.inited = false; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = 0; this.ly = 0; this.leadE = null; this.vx = 0; this.vy = 0; this.track = false; }
   toScreen(wx, wy, sw, sh) { return [(wx - this.x) * this.z + sw / 2 + this.sx, (wy - this.y) * this.z + sh / 2 + this.sy]; }
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
   /** на широких мониторах ширина обзора тоже ограничена (не больше ~2000 px карты) */
   baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 560, 0.9, 2.4), sw / 1500); }   // меньше увеличение — текстуры ближе к 1:1, резче
   zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.max(b * 0.6, sw / 2300), b * 4]; }   // колесом можно приблизить в 4 раза
-  reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = this.ly = 0; this.leadE = null; }
+  reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = this.ly = 0; this.leadE = null; this.vx = this.vy = 0; this.track = false; }
   /** куда смотреть при выстреле быстрыми пулями: свой боец и место попадания вместе, если помещаются в кадр, иначе — место
       попадания (чуть сдвинутое к стрелку, чтобы было видно, откуда летят пули) */
   shotFrame(sx, sy, px, py, sw, sh) {
@@ -36,7 +38,7 @@ class Camera {
     this.binocK = approach(this.binocK, this.binoc ? 1 : 0, 9, dt);
     // бинокль не приближает: он плавно ведёт обзор за мышью
     this.tz = this.userZ ?? this.baseZoom(sh, sw);
-    let target = null;
+    let target = null; this.track = false;
     const look = sc.turn && sc.turn.look;
     if (look && look[2] !== this.lookId) {
       this.lookId = look[2]; const a = sc.soldiers.find(s => s.id === sc.turn.sid);
@@ -66,25 +68,26 @@ class Camera {
         for (const e of sc.entities) {
           let p = CAM_PRI[e.k] || 0; if (e.k === 'mine' && e.s === 2) p = 2; if (e.k === 'crate' && e.v) p = 2;
           if (e.k === 'jet') p = e.s ? 0 : 3; if (e.k === 'storm') p = 3;   // улетающий после сброса самолёт камере не интересен — смотрим на взрывы
-          if (p > bp || (p === bp && p > 0 && best && e.id > best.id)) { bp = p; best = e; }
+          // из одинаково важных — самый ранний снаряд (залп, очередь снарядов): камера ведёт первый, а не скачет к каждому новому
+          if (p > bp || (p === bp && p > 0 && best && e.id < best.id)) { bp = p; best = e; }
         }
         // самолёт до сброса: обзор стоит над районом цели (f — точка курса, v — земля под ней), самолёт пролетает через экран
         // и у края экрана сбрасывает бомбы сам; после сброса камера идёт за бомбами. Туча: она и земля под ней
         if (best && best.k === 'jet' && !best.s && best.f) {
           // заход самолёта: цель ближе к дальнему краю экрана, а самолёт и земля оба в кадре — он виден дольше, успеть сбросить с упреждением
           const dir = Math.cos(best.a) >= 0 ? 1 : -1, vw = sw / this.z, vh = sh / this.z, gy = best.v || best.y + 430, span = gy - best.y;
-          target = { x: best.f - dir * vw * 0.12, y: span < vh - 150 ? (best.y + gy) / 2 + 25 : gy - vh / 2 + 120 };
+          target = { x: best.f - dir * vw * 0.12, y: span < vh - 150 ? (best.y + gy) / 2 + 25 : gy - vh / 2 + 120 }; this.track = true;
         }
         else if (best && best.k === 'nukem') {
           // ядерная ракета: обзор плавно идёт за ней (ракета около середины экрана, внизу видна земля), у земли
           // останавливается над местом падения — ракета влетает в кадр и падает, без рывков
           const vh = sh / this.z, gy = Math.min(sc.waterY, sc.terrain.findTop(clamp(Math.round(best.x), 0, sc.W - 1), 0));
-          target = { x: best.x, y: Math.min(best.y + vh * 0.3, gy - vh / 2 + 120) };
+          target = { x: best.x, y: Math.min(best.y + vh * 0.3, gy - vh / 2 + 120) }; this.track = true;
         }
         else if (best && best.k === 'bomb') {
           // падающие бомбы и земля под ними — оба в кадре, видно, куда ляжет серия
           const vh = sh / this.z, gy = Math.min(sc.waterY, sc.terrain.findTop(clamp(Math.round(best.x), 0, sc.W - 1), 0)), span = gy - best.y;
-          target = { x: best.x, y: span < vh - 150 ? (best.y + gy) / 2 + 25 : gy - vh / 2 + 120 };
+          target = { x: best.x, y: span < vh - 150 ? (best.y + gy) / 2 + 25 : gy - vh / 2 + 120 }; this.track = true;
         }
         else if (best && best.k === 'storm') target = { x: best.x, y: best.v ? (best.y + best.v) / 2 + 20 : best.y + 250 };   // туча и земля под ней — оба в кадре
         else if (best && bp >= 2) {
@@ -93,9 +96,10 @@ class Camera {
           let vx = best.vx, vy = best.vy;
           if (vx === undefined) { vx = L && L.id === best.id && dt > 0 ? (best.x - L.x) / dt : 0; vy = L && L.id === best.id && dt > 0 ? (best.y - L.y) / dt : 0; }   // снаряды друга по сети: скорость по сдвигу
           this.leadE = { id: best.id, x: best.x, y: best.y };
-          const kk = 1 - Math.exp(-dt * 3);
-          this.lx += (clamp(vx * 0.2, -vw * 0.25, vw * 0.25) - this.lx) * kk; this.ly += (clamp(vy * 0.2, -vh * 0.22, vh * 0.22) - this.ly) * kk;
-          target = best.k === 'orbital' ? { x: best.x, y: best.v } : { x: best.x + this.lx, y: best.y + this.ly };
+          // небольшое упреждение: впереди по полёту видно, куда летит снаряд
+          const kk = 1 - Math.exp(-dt * 3), lead = 0.15;   // взгляд чуть вперёд по полёту
+          this.lx += (clamp(vx * lead, -vw * 0.27, vw * 0.27) - this.lx) * kk; this.ly += (clamp(vy * lead, -vh * 0.24, vh * 0.24) - this.ly) * kk;
+          target = best.k === 'orbital' ? { x: best.x, y: best.v } : { x: best.x + this.lx, y: best.y + this.ly }; this.track = true;
         }
         else if (fx.focus) target = fx.focus;
         else { const a = sc.soldiers.find(s => s.id === sc.turn.sid); if (a && !a.gone) target = { x: a.x, y: a.y - 58 }; }
@@ -103,17 +107,26 @@ class Camera {
     }
     if (!target || this.shot === target) { this.lx *= Math.exp(-dt * 3); this.ly *= Math.exp(-dt * 3); this.leadE = null; }
     if (target) {
-      // снаряд у края или за экраном — камера догоняет его быстрее, иначе плавно. Скорость слежения растёт с отставанием
-      // постепенно: прежнее переключение «медленно/быстро» на границе дёргало быстрые снаряды туда-сюда
-      const off = Math.max(Math.abs(target.x - this.x) * this.z / sw, Math.abs(target.y - this.y) * this.z / sh);
-      const rate = target === this.shot ? 9 : 3.4 + 6.6 * clamp((off - 0.16) / 0.24, 0, 1);   // к месту попадания — быстро: выстрел ждёт
-      const k = 1 - Math.exp(-dt * rate); this.x += (target.x - this.x) * k; this.y += (target.y - this.y) * k;
-    }
+      // слежение — пружина с критическим затуханием: камера плавно разгоняется и плавно тормозит (переход к цели перед
+      // очередью, смена хода, полёт снаряда), без рывка в первом кадре и без переключения скоростей
+      const w = target === this.shot ? CAM_W.shot : this.track ? CAM_W.track : CAM_W.calm, cap = 5600;
+      // скорость самой цели (летящий снаряд, падающая ракета): пружина гасит разницу скоростей, а не скорость камеры —
+      // за движущейся целью камера идёт без отставания; при переходе к другой цели скорость цели сбрасывается
+      const jump = this.ptx === undefined || !(dt > 0) || Math.hypot(target.x - this.ptx, target.y - this.pty) > 90;
+      if (jump) { this.tvx = 0; this.tvy = 0; }
+      else { const kv = 1 - Math.exp(-dt * 12); this.tvx += ((target.x - this.ptx) / dt - this.tvx) * kv; this.tvy += ((target.y - this.pty) / dt - this.tvy) * kv; }
+      this.ptx = target.x; this.pty = target.y;
+      this.vx += (w * w * (target.x - this.x) + 2 * w * (this.tvx - this.vx)) * dt; this.vy += (w * w * (target.y - this.y) + 2 * w * (this.tvy - this.vy)) * dt;
+      const sp = Math.hypot(this.vx, this.vy); if (sp > cap) { this.vx *= cap / sp; this.vy *= cap / sp; }
+      this.x += this.vx * dt; this.y += this.vy * dt;
+    } else { this.vx = 0; this.vy = 0; this.ptx = undefined; }   // бинокль, прокрутка у края, свободный обзор — без накопленной инерции
     // авиаудар: пока самолёт заходит и бомбы падают, обзор чуть шире (не дальше пределов колеса)
     if (sc.entities.some(e => (e.k === 'jet' && !e.s) || e.k === 'bomb')) this.tz = Math.max(zmin, Math.min(this.tz, this.baseZoom(sh, sw) * 0.78));
     this.z += (this.tz - this.z) * (1 - Math.exp(-dt * 7));
-    this.clampTo(sc, sw, sh);
-    const s = fx.shake; this.sx = s ? (Math.random() * 2 - 1) * s : 0; this.sy = s ? (Math.random() * 2 - 1) * s : 0;
+    { const x0 = this.x, y0 = this.y; this.clampTo(sc, sw, sh); if (this.x !== x0) this.vx = 0; if (this.y !== y0) this.vy = 0; }   // у края карты инерция не копится
+    // тряска — плавное колебание (несколько синусов), а не случайный скачок каждый кадр: при очередях и взрывах без дёрганья
+    const s = fx.shake, tt = performance.now() / 1000;
+    this.sx = s ? s * (Math.sin(tt * 47) * 0.62 + Math.sin(tt * 71 + 1.3) * 0.38) : 0; this.sy = s ? s * (Math.sin(tt * 53 + 0.7) * 0.62 + Math.sin(tt * 83 + 2.1) * 0.38) : 0;
   }
   /** курсор в полосе у края экрана: направление и сила прокрутки (0…1 по глубине захода в полосу), иначе null */
   edgeDir(mouse, sw, sh) {

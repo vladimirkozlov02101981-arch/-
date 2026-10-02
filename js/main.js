@@ -36,6 +36,8 @@ const App = {
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.ctl) this.ctl.suspend(); });
     Input.onClickRight = () => this.toggleTray();
     Input.onBinoc = (on) => { if (this.sc && !this.demo) { this.cam.binoc = on; if (on) UI.setTray(false); else this.cam.free = 0; } };
+    // браузер без перехвата Esc (не Chrome/Edge) снял захват мыши — один раз подсказываем, где играть без этого
+    Input.onEscLost = () => { if (this.sc && !this.demo) this.fx.banner('Этот браузер отпускает мышь по Esc — играйте в Chrome или Edge («Играть.cmd» открывает игру в них)', '#ffd166', false, 4.5); };
     Input.onWheel = (dy, x, y) => { if (this.sc && !this.demo) this.cam.zoomAt(dy > 0 ? 0.9 : 1.11, x, y, this.ren.sw, this.ren.sh); };
     this.fx.onOver = (ev) => this.onOver(ev);
     this.fx.onTurn = (ev) => this.onTurnEv(ev);
@@ -65,7 +67,7 @@ const App = {
   clearGame() {
     this.game = null; this.remote = null; this.sc = null; this.ais = []; this.ctl = null; this.fx.reset(null);
     UI.showHud(false); Sfx.stopAmbient(); Sfx.chargeStop(); this.paused = false; this.overShown = false; this.waitReady = 0; this.netEv = []; this.acc = 0;
-    Input.free = false; this.holstered = null;   // новый бой: мышь снова захватывается, убранное оружие прошлого боя забыто
+    this.holstered = null;   // новый бой: убранное оружие прошлого боя забыто
   },
   setScene(sc) {
     Sfx.setScene(sc);
@@ -120,7 +122,7 @@ const App = {
       // приглашение: на ПК хоста — публичный адрес туннеля «Играть онлайн.cmd», иначе адрес этого сервера;
       // бесплатный адрес меняется примерно раз в 15 минут — пока друг не подключился, подсказка обновляется
       clearInterval(this.inviteT);
-      const show = () => Net.fetchPublic().then(() => { if (Net.code === code && UI.mode === 'host' && UI.cur === 's-setup' && !Net.connected) UI.setNote(`Код: ${code}. Ссылка для друга: ${Net.inviteLink(code)} — её можно открыть в браузере или вставить в файл игры.`); });
+      const show = () => Net.fetchPublic().then(() => { if (Net.code === code && UI.mode === 'host' && UI.cur === 's-setup' && !Net.connected) UI.setNote(Net.inviteOk() ? `Код: ${code}. Ссылка для друга: ${Net.inviteLink(code)} — её можно открыть в браузере или вставить в файл игры.` : `Код: ${code}. Ссылки для друга ещё нет: запустите «Играть онлайн.cmd» — он создаст её (и скопирует), затем нажмите «Ссылка другу».`); });
       show(); this.inviteT = setInterval(() => { if (Net.code !== code || UI.mode !== 'host') { clearInterval(this.inviteT); return; } show(); }, 20000);
     });
     Net.on('connected', () => {
@@ -292,8 +294,7 @@ const App = {
         else if (this.holstered && this.holstered.key === key) ctl.select(this.holstered.id);
       }
     }
-    if (P.Backspace) this.togglePause();
-    if (P.Delete) Input.toggleFree(!!(this.sc && !this.demo && !UI.cur));
+    if (P.Backspace) this.togglePause();   // меню; заодно отпускает мышь
     // Tab: сначала отменяет взятое оружие (зарядку или выбранную точку), иначе открывает арсенал
     if (P.Tab) {
       const ctl = this.ctl, T = this.sc && this.sc.turn;

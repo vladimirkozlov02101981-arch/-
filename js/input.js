@@ -6,11 +6,10 @@ const Input = {
   keys: {}, pressed: {}, mouse: { x: 0, y: 0, down: [false, false, false], clicked: [false, false, false], moved: false, inside: false },
   wheel: 0, typing: false, drag: null, onClickRight: null, onBinoc: null, onWheel: null,
   // захват указателя в бою: системная стрелка скрыта и не уходит за край окна, мышь двигает внутренний курсор.
-  // Esc мышь не отпускает — он только убирает оружие: в Chrome/Edge бой идёт во весь экран, там браузер отдаёт Esc игре.
-  // Отпускают: Delete (повторно — снова захват; выходит и из полного экрана), клавиша Windows / Alt+Tab, пауза, панель оружия;
-  // клик по полю — снова захват
-  cv: null, locked: false, wantLock: false, lockPending: false, gestureT: -1e9, free: false, selfUnlock: false, escKeyT: -1e9, escLockT: -1e9, failT: -1e9,
-  fsWanted: true, fsOurs: false, leavingFs: false,
+  // Esc мышь не отпускает — он только убирает оружие: бой идёт во весь экран, а там Chrome и Edge (Keyboard Lock) отдают Esc игре.
+  // Отпускают мышь: меню (Backspace), панель оружия, клавиша Windows / Alt+Tab; клик по полю или клавиша — снова захват
+  cv: null, locked: false, wantLock: false, lockPending: false, gestureT: -1e9, selfUnlock: false, escKeyT: -1e9, escLockT: -1e9, failT: -1e9,
+  leavingFs: false, escLost: 0, onEscLost: null,
   GAME_KEYS: new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'KeyF', 'Backspace']),
   init(cv) {
     this.cv = cv;
@@ -19,15 +18,21 @@ const Input = {
       if (this.locked) this.mouse.inside = true;
       // захват снял браузер по Esc (окно без полного экрана, браузер без перехвата клавиш): это тоже нажатие Esc — убрать оружие.
       // Проверка чуть позже: при Alt+Tab и клавише Windows окно теряет фокус — это не Esc
-      else if (was && !this.selfUnlock) setTimeout(() => { if (document.hasFocus() && !document.hidden && performance.now() - this.escKeyT > 400) { this.pressed.Escape = true; this.escLockT = performance.now(); } }, 120);
+      else if (was && !this.selfUnlock) setTimeout(() => {
+        if (!document.hasFocus() || document.hidden || performance.now() - this.escKeyT <= 400) return;
+        this.pressed.Escape = true; this.escLockT = performance.now();
+        if (this.escLost++ === 0 && this.onEscLost) this.onEscLost();   // этот браузер не отдаёт Esc игре — подсказка один раз
+      }, 120);
       this.selfUnlock = false;
     });
     document.addEventListener('pointerlockerror', () => { this.locked = false; this.lockPending = false; this.failT = performance.now(); });
-    // полный экран закрыли не мы (удержание Esc, F11) — до конца сеанса больше не навязываем его
-    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && this.fsOurs) { this.fsOurs = false; if (!this.leavingFs) this.fsWanted = false; } this.leavingFs = false; });
-    document.addEventListener('mousedown', () => { this.gestureT = performance.now(); }, true);   // клик по кнопке «В бой!», «Продолжить», оружию — тоже жест
+    // клик по кнопке «В бой!», «Реванш», «Продолжить», оружию — тоже жест; с кнопок начала боя игра сразу уходит во весь экран
+    document.addEventListener('mousedown', (e) => {
+      this.gestureT = performance.now();
+      if (e.target && e.target.closest && e.target.closest('#btn-start, [data-act="rematch"], [data-act="resume"], [data-act="cpu"], [data-act="hotseat"]')) this.enterFull();
+    }, true);
     window.addEventListener('keydown', (e) => {
-      if (e.code !== 'Escape') this.gestureT = performance.now();   // Esc браузер жестом не считает
+      if (e.code !== 'Escape') { this.gestureT = performance.now(); if (this.wantLock && !document.fullscreenElement) this.enterFull(); }   // Esc браузер жестом не считает
       else if (performance.now() - this.escLockT < 400) { e.preventDefault(); return; }   // этот Esc уже учтён по снятию захвата
       else this.escKeyT = performance.now();
       if (this.typing || (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT'))) return;
@@ -54,7 +59,7 @@ const Input = {
     cv.addEventListener('mousedown', (e) => {
       Sfx.resume(); this.gestureT = performance.now();
       // бой без захвата (после Delete, паузы, Alt+Tab): этот клик только возвращает мышь в игру и не стреляет
-      if (this.wantLock && !this.locked) { this.free = false; this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
+      if (this.wantLock && !this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
       if (this.wantLock && !document.fullscreenElement) this.enterFull();
       if (!this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; }
       this.mouse.inside = true;
@@ -73,7 +78,7 @@ const Input = {
   /** захват указателя: по свежему жесту пользователя (клик, клавиша) — так требует браузер; во весь экран можно и без жеста */
   lock() {
     const cv = this.cv, now = performance.now();
-    if (!cv || !cv.requestPointerLock || this.locked || this.lockPending || this.free || now - this.failT < 1000) return;
+    if (!cv || !cv.requestPointerLock || this.locked || this.lockPending || now - this.failT < 1000) return;
     if (now - this.gestureT > 4000 && !document.fullscreenElement) return;
     this.lockPending = true;
     try { const p = cv.requestPointerLock(); if (p && p.catch) p.catch(() => { this.lockPending = false; this.failT = performance.now(); }); }
@@ -82,23 +87,16 @@ const Input = {
   },
   unlock() { if (this.locked && document.exitPointerLock) { this.selfUnlock = true; document.exitPointerLock(); } },
   /** бой во весь экран: только так Chrome и Edge отдают Esc игре (Keyboard Lock) — Esc убирает оружие и не отпускает мышь.
-      Где перехвата клавиш нет, полный экран не включается: Esc там отпускает мышь сам браузер */
+      Где перехвата клавиш нет, полный экран не включается: Esc там отпускает мышь сам браузер (тогда подсказка onEscLost) */
   enterFull(force = false) {
     const el = document.documentElement;
     if (navigator.webdriver && !force) return;   // автотесты: окно не разворачиваем
-    if (!this.fsWanted || document.fullscreenElement || !el.requestFullscreen || !(navigator.keyboard && navigator.keyboard.lock)) return;
+    if (document.fullscreenElement || !el.requestFullscreen || !(navigator.keyboard && navigator.keyboard.lock)) return;
     try {
-      el.requestFullscreen({ navigationUI: 'hide' }).then(() => { this.fsOurs = true; return navigator.keyboard.lock(['Escape']); }).catch(() => {});
+      // перехват Esc просим заранее и ещё раз после входа: браузер включает его только в полном экране
+      navigator.keyboard.lock(['Escape']).catch(() => {});
+      el.requestFullscreen({ navigationUI: 'hide' }).then(() => navigator.keyboard.lock(['Escape'])).catch(() => {});
     } catch (e) { /* полный экран недоступен (встроенное окно) */ }
-  },
-  leaveFull() {
-    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) { /* */ }
-    if (document.fullscreenElement && document.exitFullscreen) { this.leavingFs = true; document.exitFullscreen().catch(() => {}); }
-  },
-  /** Delete: отпустить мышь за пределы окна (и выйти из полного экрана); повторно в бою — снова захват */
-  toggleFree(inBattle) {
-    if (this.locked || document.fullscreenElement || !inBattle) { this.free = inBattle; this.unlock(); this.leaveFull(); return; }
-    this.free = false; this.lock();
   },
   /** отпускание ПКМ: бинокль выключается всегда (даже включённый клавишей B); короткий клик без бинокля — арсенал */
   releaseRight(click = false) {

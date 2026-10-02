@@ -19,10 +19,13 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     await host.click('[data-act="online"]'); await host.click('[data-act="host"]'); await host.waitForSelector('#s-setup.show');
     const code = await host.locator('#room-code').textContent();
     const note = await host.locator('#setup-note').textContent();
-    assert.match(note, new RegExp('#join=' + code), 'host sees an invite link');
+    // без туннеля «Играть онлайн.cmd» ссылки для друга ещё нет — хост видит подсказку, где её взять
+    assert(new RegExp('#join=' + code).test(note) || /Играть онлайн\.cmd/.test(note), 'host sees an invite link or where to get it: ' + note);
     // гость: файл с диска, ссылка вставлена в поле «Ссылка от друга»
     const served = [];
     guest.on('request', r => { if (!r.url().startsWith('file:') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) served.push(r.url()); });
+    // ПК друга: своего сервера «Играть онлайн» нет (проверка 127.0.0.1:3000 не отвечает) — поле для ссылки видно
+    await guest.route('http://127.0.0.1:3000/**', r => r.abort());
     await guest.goto(file); await guest.waitForSelector('#s-main.show');
     await guest.click('[data-act="online"]'); await guest.waitForSelector('#s-online.show');
     assert.equal(await guest.locator('#srv-box').isVisible(), true, 'link field is shown in the file version');

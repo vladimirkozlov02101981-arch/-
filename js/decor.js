@@ -4,6 +4,24 @@
    Рисуется на отдельный слой позади земли, разрушается взрывами
    ========================================================= */
 let DECOR_THEME = 'valley';
+let DECOR_T = null;   // ландшафт карты, на которую сейчас ставится декор (тени ложатся по его поверхности)
+/** тень предмета на земле: в каждом столбце ложится на поверхность прямо под ним, повторяя склон; над пустотой
+    (край обрыва, крутой склон, узкая опора) её нет — прежний плоский овал висел в воздухе */
+function groundShadow(c, cx, cy, rx, ry, alpha) {
+  const T = DECOR_T;
+  c.fillStyle = `rgba(0,0,0,${alpha})`;
+  if (!T || !T.isSolid) { c.beginPath(); c.ellipse(cx, cy, rx, ry, 0, 0, TAU); c.fill(); return; }
+  const m = c.getTransform(), wx = m.a * cx + m.c * cy + m.e, wy = m.b * cx + m.d * cy + m.f, k = Math.hypot(m.a, m.b) || 1, RX = rx * k, RY = ry * k;
+  c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+  for (let x = Math.ceil(wx - RX); x <= wx + RX; x++) {
+    const u = (x - wx) / RX, h = RY * Math.sqrt(Math.max(0, 1 - u * u)); if (h < 0.35) continue;
+    // поверхность рядом с центром тени; чем дальше от центра, тем больше допустимый перепад (склон), но не обрыв
+    const lim = 6 + Math.abs(x - wx) * 0.9; let top = -1;
+    for (let y = Math.round(wy - lim); y <= wy + lim; y++) if (T.isSolid(x, y) && !T.isSolid(x, y - 1)) { top = y; break; }
+    if (top >= 0) c.fillRect(x, top - h * 0.9, 1, h + 1.5);
+  }
+  c.restore();
+}
 const OAK_PALS = [['#1e3212', '#3e6420', '#7e9e30', '#d0dc60'], ['#1c3414', '#386024', '#72983a', '#c4d868'], ['#223412', '#44681e', '#88a42e', '#dadf64']];
 const CASTLE_PALS = [['#233e14', '#4a7a22', '#8fb83a', '#d8e670'], ['#2e4216', '#5e7e26', '#a0b844', '#e0e27a']];
 
@@ -62,7 +80,7 @@ function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1)
 function treeSprite(c, names, x, y, s, r, size) {
   const have = names.filter((n) => TexLib.data[n]); if (!have.length) return false;
   const T = TexLib.data[have[(r() * have.length) | 0]], D = size * s * r.range(0.9, 1.1);
-  c.fillStyle = 'rgba(0,0,0,0.28)'; c.beginPath(); c.ellipse(x + D * 0.06, y + 2, D * 0.26, D * 0.035, 0, 0, TAU); c.fill();   // тень кроны на земле
+  groundShadow(c, x + D * 0.06, y + 2, D * 0.26, D * 0.035, 0.28);   // тень кроны на земле
   c.save(); c.translate(x, y + 3); if (r() < 0.5) c.scale(-1, 1);
   c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(T.canvas, -D / 2, -D, D, D); c.restore();
   return true;
@@ -74,7 +92,7 @@ const DECOR = {
     if (treeSprite(c, ['tree_oak1', 'tree_oak2', 'tree_oak3'], x, y, s, r, 165)) return;
     const h = r.range(58, 76) * s, tw = r.range(7, 9.5) * s, lean = r.range(-0.1, 0.1);
     const tx = x + lean * h, ty = y - h;
-    c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(x + 10 * s, y + 2, 34 * s, 5 * s, 0, 0, TAU); c.fill();   // тень кроны на земле
+    groundShadow(c, x + 10 * s, y + 2, 34 * s, 5 * s, 0.22);   // тень кроны на земле
     c.fillStyle = hgrad(c, x - tw, x + tw, ['#6b4a2e', '#523620', '#2f1d10']);
     c.beginPath(); c.moveTo(x - tw * 1.2, y + 4); c.quadraticCurveTo(x - tw * 0.4, y - h * 0.35, tx - tw * 0.32, ty + h * 0.15);
     c.lineTo(tx + tw * 0.32, ty + h * 0.15); c.quadraticCurveTo(x + tw * 0.4, y - h * 0.35, x + tw * 1.2, y + 4); c.closePath(); c.fill();
@@ -334,7 +352,10 @@ const DECOR = {
     c.fillStyle = hgrad(c, x - 14 * s, x + 14 * s, ['#9a6030', '#7a4420', '#4a2610']); c.fillRect(x - 14 * s, y - 16 * s, 28 * s, 18 * s);
     c.fillStyle = '#ffd23a'; c.beginPath(); c.ellipse(x, y - 17 * s, 12 * s, 5 * s, 0, Math.PI, 0); c.fill();
     if (g) { g.fillStyle = 'rgba(255,210,60,0.8)'; circ(g, x, y - 18 * s, 14 * s); }
-    c.fillStyle = '#7a4420'; c.save(); c.translate(x - 14 * s, y - 17 * s); c.rotate(-0.9); c.fillRect(0, -14 * s, 28 * s, 14 * s); c.restore();
+    c.save(); c.translate(x - 14 * s, y - 16 * s); c.rotate(-1.92);   // открытая крышка на петле у задней кромки
+    c.fillStyle = '#5e3416'; c.fillRect(0, 0, 28 * s, 6 * s); c.fillStyle = '#8a5428'; c.fillRect(0, 0, 28 * s, 2.4 * s);
+    c.fillStyle = '#c9a23a'; c.fillRect(5 * s, 0, 2.5 * s, 6 * s); c.fillRect(20 * s, 0, 2.5 * s, 6 * s); c.restore();
+    c.fillStyle = '#3a2210'; c.fillRect(x - 15 * s, y - 17.5 * s, 3 * s, 3 * s);   // петля
     c.fillStyle = '#c9a23a'; c.fillRect(x - 14 * s, y - 10 * s, 28 * s, 2.5 * s); c.fillRect(x - 2 * s, y - 13 * s, 4 * s, 6 * s);
   },
   barrel(c, g, x, y, s) {
@@ -549,7 +570,7 @@ const DECOR = {
     // гранёный валун: контур из 7 точек, каждая грань (центр → ребро) освещена по своей нормали
     const pts = [[-w, 3], [-w * r.range(0.75, 0.9), -h * r.range(0.45, 0.65)], [-w * r.range(0.15, 0.35), -h], [w * r.range(0.3, 0.55), -h * r.range(0.75, 0.92)], [w, -h * r.range(0.15, 0.35)], [w * 0.92, 3]];
     const cx = x + w * r.range(-0.2, 0.05), cy = y - h * r.range(0.45, 0.6);
-    c.fillStyle = 'rgba(0,0,0,0.3)'; c.beginPath(); c.ellipse(x + 2, y + 3, w * 1.1, 2.6 * s, 0, 0, TAU); c.fill();
+    groundShadow(c, x + 2, y + 3, w * 1.1, 2.6 * s, 0.3);
     const C = cols.map(hex2rgb), shade = (k) => { k = clamp(k, 0, 1); const i = k < 0.5 ? 0 : 1, f = k < 0.5 ? k * 2 : (k - 0.5) * 2, A = C[2 - i], B = C[1 - i]; return `rgb(${(A[0] + (B[0] - A[0]) * f) | 0},${(A[1] + (B[1] - A[1]) * f) | 0},${(A[2] + (B[2] - A[2]) * f) | 0})`; };
     for (let i = 0; i < pts.length - 1; i++) {
       const [ax, ay] = pts[i], [bx, by] = pts[i + 1]; const mxp = (ax + bx) / 2, myp = (ay + by) / 2;
@@ -662,15 +683,41 @@ function placeDecor(T, theme, map, waterY, tops, mat) {
   placeDecorOn(T, theme, map, waterY, tops, mat, c);
   lightDecorLayer(layer); T.dctx.drawImage(layer, 0, 0);
 }
+/** полуширина опоры предметов, которым нужна ровная земля под всем основанием (деревья стоят на склонах и сюда не входят) */
+const DECOR_FOOT = { windmill: 26, well: 15, fence: 28, haystack: 20, column: 9, watertower: 24, pot: 7, igloo: 30, snowman: 9, sled: 13, chest: 14, barrel: 8, cottage: 38, car: 30, planter: 13, bench: 15, billboard: 18, farmhouse: 44, pod: 8 };
+/** доля основания [x−w, x+w], под которой земля почти на той же высоте, что и в середине: плоское дно (сундук, скамья,
+    машина, стог) не должно висеть одним краем над склоном или обрывом */
+function decorSupport(T, x, y, w) {
+  const tol = Math.max(4, w * 0.12); let n = 0, ok = 0;
+  for (let xx = Math.round(x - w); xx <= x + w; xx += 2) {
+    n++; let top = -1; for (let yy = Math.round(y - 12); yy <= y + 10; yy++) if (T.isSolid(xx, yy) && !T.isSolid(xx, yy - 1)) { top = yy; break; }
+    if (top >= 0 && Math.abs(top + 2 - y) <= tol) ok++;
+  }
+  return n ? ok / n : 1;
+}
 function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
   const g = T.gctx; const r = makeRng((map.seed || 1) * 7919 + 13);
-  DECOR_THEME = theme.id;
+  DECOR_THEME = theme.id; DECOR_T = T;
   for (const d of map.decor || []) {
-    const [kind, x, y0, s = 1, flip = false, opts] = d;
+    const [kind, x0, y0, s = 1, flip = false, opts] = d;
     const fn = DECOR[kind]; if (!fn) continue;
-    const y = DECOR_EXACT.has(kind) ? y0 : T.findTop(x, y0 == null ? 0 : y0 - 40) + 2;
+    // дерево с домиком: ствол растёт с земли (opts.ground — откуда искать землю), а площадка и лестницы остаются как были
+    const from = opts && opts.ground != null ? opts.ground : y0 == null ? 0 : y0 - 40;
+    let x = x0, y = DECOR_EXACT.has(kind) ? y0 : T.findTop(x, from) + 2;
     if (y >= T.H) continue;
-    drawDecorItem(fn, DECOR_FRONT.has(kind) ? T.ctx : c, g, x, y, s, r, flip, opts);
+    // широкий предмет на узкой опоре или на краю (стог на зубце стены, сундук на скате крыши) — сдвигаем к ближайшему
+    // месту, где земля есть под всем основанием; не нашлось — предмет не ставим, чтобы он не висел в воздухе
+    const fw = DECOR_FOOT[kind] ? DECOR_FOOT[kind] * s : 0;
+    if (fw && !DECOR_EXACT.has(kind) && decorSupport(T, x, y, fw) < 0.8) {
+      let best = null;
+      for (let dx = 4; dx <= 140 && !best; dx += 4) for (const sg of [-1, 1]) {
+        const xx = x0 + sg * dx, yy = T.findTop(xx, from) + 2; if (yy >= T.H || Math.abs(yy - y) > 48) continue;
+        if (decorSupport(T, xx, yy, fw) >= 0.9) { best = [xx, yy]; break; }
+      }
+      if (!best) continue;
+      [x, y] = best;
+    }
+    drawDecorItem(fn, DECOR_FRONT.has(kind) ? T.ctx : c, g, x, y, opts && opts.scale || s, r, flip, opts);   // opts.scale — только размер рисунка
   }
   const kinds = theme.scatter || [];
   if (!kinds.length) return;

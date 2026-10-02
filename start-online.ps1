@@ -1,4 +1,18 @@
 ﻿$ErrorActionPreference = 'Stop'
+# окно игры в Chrome или Edge (режим приложения, без вкладок): только они в полном экране отдают клавишу Esc игре,
+# и мышь в бою не отпускается. Нет ни того, ни другого — обычный браузер по умолчанию
+function Open-Game([string]$url) {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+        (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'))
+    foreach ($exe in $candidates) {
+        if ($exe -and (Test-Path -LiteralPath $exe)) { Start-Process -FilePath $exe -ArgumentList ('--app=' + $url); return }
+    }
+    Start-Process $url
+}
 Set-Location -LiteralPath $PSScriptRoot
 try {
     & (Join-Path $PSScriptRoot 'start-game.ps1') -NoBrowser
@@ -12,7 +26,7 @@ try {
         Write-Host 'Друг открывает её в браузере (первая загрузка через бесплатный туннель медленная)'
         Write-Host 'или вставляет в свой файл Territory-War.html: «По сети» -> поле «Ссылка от друга».'
         Write-Host 'В игре: «По сети» -> «Создать комнату» -> «Ссылка другу». Не закрывайте ПК, пока играете.'
-        Start-Process 'http://localhost:3000'
+        Open-Game 'http://localhost:3000'
     }
     try {
         $current = (Invoke-RestMethod -Uri 'http://127.0.0.1:3000/public' -TimeoutSec 3).url

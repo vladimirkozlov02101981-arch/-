@@ -167,7 +167,7 @@ const MAP_VALLEY = buildLevel({
   B.ladder(4352, 900, 1104);
   // укрытия
   B.add(Sh.rect(2800, 1286, 44, 12, { mat: 'wood', pal: P_BARN }), Sh.rect(3560, 1282, 48, 12, { mat: 'wood', pal: P_BARN }));
-  B.decor(['oak', 680, null, 2.1], ['pine', 250, null, 0.9], ['oak', 430, null, 1.1], ['windmill', 1110], ['birch', 930, null, 1], ['well', 1470], ['fence', 1600, null, 1], ['haystack', 2040], ['haystack', 1760, null, 0.8],
+  B.decor(['oak', 680, null, 2.1, false, { ground: 1250, scale: 2.65 }], ['pine', 250, null, 0.9], ['oak', 430, null, 1.1], ['windmill', 1110], ['birch', 930, null, 1], ['well', 1470], ['fence', 1600, null, 1], ['haystack', 2040], ['haystack', 1760, null, 0.8],
     ['oak', 2800, null, 1.2], ['pine', 2890, null, 1], ['birch', 3130, null, 1.05], ['column', 3250, null, 0.7], ['oak', 3480, null, 1.5], ['pine', 3700, null, 1.1], ['pine', 3900, null, 1.05], ['pine', 4480, null, 1.15], ['pine', 4600, null, 1]);
   B.prop(['windmill', 1110]);
   district(B, { from: [4700, 1178], gy: 1190, water: 1700, mat: 'brick', pal: P_STONE, bridge: { mat: 'wood', pal: PAL.lightWood }, coverPal: P_BARN, decor: [['pine', 4960, null, 1.1], ['oak', 5880, null, 1.3], ['pine', 6230, null, 1], ['haystack', 6040]], props: [['flag', 5380, 700, { team: 1, h: 46 }], ['torch', 4990, 1190], ['torch', 5770, 1190]] });
@@ -342,7 +342,7 @@ const MAP_PIRATE = buildLevel({
   // маяк
   B.tower(4140, 1004, 120, { mat: 'brick', pal: P_LIGHT, stories: [100, 96, 96, 90], ladders: [30, 90, 30, 90], found: 40 });
   for (const sy of [930, 740]) B.add({ kind: 'poly', pts: [[4130, sy], [4270, sy], [4270, sy + 40], [4130, sy + 40]], op: 'paint', mat: 'brick', pal: P_RED, rough: 0, params: { x0: 4130, y0: sy, w: 140, h: 40 } });
-  B.decor(['palm', 220, null, 1.1], ['palm', 480, null, 1.3], ['palm', 760, null, 0.9], ['chest', 700], ['palm', 930, null, 1.2], ['barrel', 1600, 1392], ['barrel', 1624, 1392, 0.9], ['mast', 1850, 1392, 1.15], ['mast', 2150, 1392, 1.3], ['mast', 2470, 1392, 1.1], ['barrel', 2000, 1596], ['chest', 3600, 1334], ['chest', 3520, 1334, 0.8], ['palm', 3980, null, 1.1], ['palm', 4400, null, 1], ['palm', 4560, null, 0.9]);
+  B.decor(['palm', 220, null, 1.1], ['palm', 480, null, 1.3], ['palm', 760, null, 0.9], ['chest', 662, 1270], ['palm', 930, null, 1.2], ['barrel', 1600, 1392], ['barrel', 1624, 1392, 0.9], ['mast', 1850, 1392, 1.15], ['mast', 2150, 1392, 1.3], ['mast', 2470, 1392, 1.1], ['barrel', 2000, 1596], ['chest', 3600, 1334], ['chest', 3520, 1334, 0.8], ['palm', 3980, null, 1.1], ['palm', 4400, null, 1], ['palm', 4560, null, 0.9]);
   B.prop(['flag', 2150, 1116, { h: 150, color: '#111', skull: true }], ['torch', 1250, 1566], ['torch', 3200, 1330], ['torch', 3820, 1320], ['beacon', 4200, 596]);
   district(B, { from: [4660, 1135], gy: 1140, water: 1690, mat: 'wood', pal: PAL.shipWood, tmat: 'brick', tpal: P_LIGHT, cover: 'wood', bridge: { mat: 'wood', pal: PAL.lightWood }, decor: [['palm', 4980, null, 1.1], ['palm', 6220, null, 1.2], ['barrel', 5900]], props: [['torch', 4990, 1140], ['torch', 5770, 1140], ['flag', 5380, 650, { team: 1, h: 46 }]] });
 });

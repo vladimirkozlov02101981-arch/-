@@ -21,13 +21,27 @@ const Net = {
     this.server = u.origin; try { localStorage.setItem('tw_server', u.origin); } catch { /* без запоминания */ }
     const m = /#join=([A-Za-z0-9]{5})/.exec(u.hash || ''); return m ? m[1].toUpperCase() : '';
   },
-  /** у хоста на localhost: публичный адрес туннеля «Играть онлайн.cmd» — для приглашения другу */
+  /** файл игры на ПК, где запущен «Играть онлайн.cmd»: свой сервер находится сам — создавать комнату можно без ссылки */
+  async probeLocal() {
+    if (!this.fromFile()) return false;
+    if (this.localBase) return true;
+    try {
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), 1200);
+      const r = await fetch('http://127.0.0.1:3000/health', { cache: 'no-store', signal: ctl ? ctl.signal : undefined }); if (t) clearTimeout(t);
+      const j = await r.json(); if (!j || !j.ok) return false;
+      this.localBase = 'http://127.0.0.1:3000'; this.server = this.localBase; return true;
+    } catch { return false; }
+  },
+  /** у хоста: публичный адрес туннеля «Играть онлайн.cmd» — для приглашения другу (страница с сервера или файл на том же ПК) */
   async fetchPublic() {
-    if (!/^https?:$/.test(location.protocol)) { this.publicBase = null; return null; }
-    try { const r = await fetch('/public', { cache: 'no-store' }); const j = await r.json(); this.publicBase = j && /^https:\/\/[\w.-]+$/.test(j.url) ? j.url : null; } catch { this.publicBase = null; }
+    const base = /^https?:$/.test(location.protocol) ? '' : this.localBase;
+    if (base == null) { this.publicBase = null; return null; }
+    try { const r = await fetch(base + '/public', { cache: 'no-store' }); const j = await r.json(); this.publicBase = j && /^https:\/\/[\w.-]+$/.test(j.url) ? j.url : null; } catch { this.publicBase = null; }
     return this.publicBase;
   },
   inviteLink(code) { return `${this.publicBase || this.serverBase() || location.origin}/#join=${code}`; },
+  /** ссылка годится другу: публичный адрес туннеля, а не localhost этого ПК */
+  inviteOk() { return !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(this.publicBase || this.serverBase() || location.origin); },
   on(ev, fn) { this.h[ev] = fn; },
   emit(ev, ...args) { try { if (this.h[ev]) this.h[ev](...args); } catch (e) { console.error(e); } },
   host() { this.connect('host'); },

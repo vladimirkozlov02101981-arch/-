@@ -1,5 +1,19 @@
 ﻿param([switch]$NoBrowser)
 $ErrorActionPreference = 'Stop'
+# окно игры в Chrome или Edge (режим приложения, без вкладок): только они в полном экране отдают клавишу Esc игре,
+# и мышь в бою не отпускается. Нет ни того, ни другого — обычный браузер по умолчанию
+function Open-Game([string]$url) {
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+        (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'))
+    foreach ($exe in $candidates) {
+        if ($exe -and (Test-Path -LiteralPath $exe)) { Start-Process -FilePath $exe -ArgumentList ('--app=' + $url); return }
+    }
+    Start-Process $url
+}
 Set-Location -LiteralPath $PSScriptRoot
 try {
     $nodeCommand = Get-Command node -ErrorAction Stop
@@ -53,7 +67,7 @@ try {
         }
     }
     if (-not $running) { throw 'Сервер не запустился. Подробности: dev/server-error.log' }
-    if (-not $NoBrowser) { Start-Process 'http://localhost:3000' }
+    if (-not $NoBrowser) { Open-Game 'http://localhost:3000' }
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host 'Установите Node.js 20+ и повторите запуск. Инструкция: README.md'

@@ -220,14 +220,11 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
     const key = async (code) => { await page.evaluate((code) => { Input.pressed[code] = true; }, code); await page.waitForTimeout(120); };
     await key('Escape'); const esc1 = await page.evaluate(() => ({ w: App.game.turn.weapon, pause: UI.cur }));
     await key('Escape'); const esc2 = await page.evaluate(() => ({ w: App.game.turn.weapon, pause: UI.cur }));
-    await key('Backspace'); const bs = await page.evaluate(() => UI.cur);
-    await key('Escape'); const bsEsc = await page.evaluate(() => UI.cur);
-    await page.evaluate(() => { Input.locked = true; });   // как будто мышь захвачена
-    await key('Delete'); const del = await page.evaluate(() => { const f = Input.free; Input.locked = false; return f; });
-    await key('Delete'); const del2 = await page.evaluate(() => Input.free);
+    await key('Backspace'); const bs = await page.evaluate(() => ({ cur: UI.cur, wantLock: Input.wantLock }));
+    await key('Escape'); const bsEsc = await page.evaluate(() => ({ cur: UI.cur, wantLock: Input.wantLock }));
     assert.deepEqual(esc1, { w: null, pause: null }, 'first Esc only holsters'); assert.deepEqual(esc2, { w: 'bazooka', pause: null }, 'second Esc returns the weapon');
-    assert.equal(bs, 's-pause', 'Backspace opens the menu'); assert.equal(bsEsc, null, 'Esc closes the menu');
-    assert.equal(del, true, 'Delete frees the mouse'); assert.equal(del2, false, 'Delete again captures it');
+    assert.deepEqual(bs, { cur: 's-pause', wantLock: false }, 'Backspace opens the menu and frees the mouse'); assert.deepEqual(bsEsc, { cur: null, wantLock: true }, 'Esc closes the menu, mouse back to the game');
+    assert.equal(await page.evaluate(() => typeof Input.toggleFree), 'undefined', 'no Delete binding');
     report.v18 = await page.evaluate((arena) => {
       const out = {};
       // робот: пробел — прыжок с земли; бомба уже не в руках
@@ -280,7 +277,7 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
       finally { S.wind = wind; c.fillText = ft; }
     });
     assert(!report.hud.off && report.hud.on && !report.hud.panel, 'HUD: wind only when enabled, no weapon panel ' + JSON.stringify(report.hud));
-    console.log('Version 18: Esc/Backspace/Delete, robot jump, thrown not held, acid 25, shot framing, zoom tracking, HUD PASS', report.v18, report.frame, report.zoom, report.hud);
+    console.log('Version 18: Esc/Backspace, robot jump, thrown not held, acid 25, shot framing, zoom tracking, HUD PASS', report.v18, report.frame, report.zoom, report.hud);
 
     assert.deepEqual(errors, []);
     fs.writeFileSync('test-results/gameplay.json', JSON.stringify({ passed: true, ...report, date: new Date().toISOString() }, null, 2));

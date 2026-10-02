@@ -11,9 +11,10 @@ function createServer() {
   const server = http.createServer((req, res) => {
     let url;
     try { url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
-    if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end('{"ok":true,"transport":"relay"}'); return; }
+    // файл игры на этом же ПК (адрес file://) спрашивает свой сервер и ссылку туннеля — разрешаем ему эти два ответа
+    if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end('{"ok":true,"transport":"relay"}'); return; }
     // публичный адрес туннеля «Играть онлайн.cmd» (бесплатный адрес иногда меняется — берём последний) — для приглашения другу
-    if (url === '/public') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ url: publicUrl() })); return; }
+    if (url === '/public') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end(JSON.stringify({ url: publicUrl() })); return; }
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405).end(); return; }
     if (url === '/') url = '/index.html';
     if (url !== '/index.html' && !/^\/(js|css|assets)\/[\w./-]+$/.test(url)) { res.writeHead(404).end(); return; }
