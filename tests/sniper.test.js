@@ -2,6 +2,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
+const GUN_Y_TEST = 24;   // высота ствола над стопой (js/util.js, GUN_Y)
 
 function fixture() {
   const context = vm.createContext({
@@ -16,9 +17,21 @@ function fixture() {
   const sc = { soldiers: [s], map: { ladders: [] }, teams: [{ ammo: {} }], W: 6400, H: 1800, waterY: 1750, turn: T, entities: [] }, cam = { z: 1, toWorld: (x, y) => [x, y] };
   Input.mouse.x = 250; Input.mouse.y = 50;
   const tick = () => ctl.update(1 / 60, sc, cam, 800, 600, T);
+  // ход уже начался (с базукой): дальше снайперку выбирают в ходе — оптика открывается у мыши.
+  // В первом кадре нового хода оптика стоит в исходной позиции у бойца (отдельный тест ниже)
+  if (!fixture.fresh) tick();
   return { Input, ctl, s, T, sc, cam, sent, tick, Camera, Keys };
 }
 function angle(actual, expected) { assert(Math.abs(actual - expected) < 1e-10, `${actual} differs from ${expected}`); }
+
+test('A new turn always starts the sniper scope at the initial position by the soldier, never at a stale far point', () => {
+  fixture.fresh = true; const f = fixture(); fixture.fresh = false;
+  f.T.weapon = 'sniper'; f.Input.mouse.x = 5000; f.Input.mouse.y = 50; f.tick();
+  const p = f.ctl.scopePoint, d = Math.hypot(p.x - f.s.x, p.y - (f.s.y - GUN_Y_TEST));
+  assert(d < 200, 'scope ' + JSON.stringify(p) + ' is ' + d + ' from the soldier'); angle(Math.atan2(p.y - (f.s.y - GUN_Y_TEST), p.x - f.s.x), f.s.aim);
+  // следующий ход того же бойца с далёкой прошлой точкой — снова у бойца
+  f.ctl.scopePoint.x = 6000; f.T.round++; f.tick(); assert(Math.hypot(f.ctl.scopePoint.x - f.s.x, f.ctl.scopePoint.y - f.s.y) < 220);
+});
 
 test('Selecting sniper opens the historical scope and immediately aims at the mouse', () => {
   const f = fixture(); f.ctl.aimMode = 'keys'; f.tick(); f.T.weapon = 'sniper'; f.tick();

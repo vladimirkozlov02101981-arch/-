@@ -267,7 +267,7 @@ const UI = {
   assignKey(code) {
     const w = this.keyWait; this.keyWait = null; if (!w || !this.work) return;
     if (code === 'F11') { this.buildKeys(); $('keys-note').textContent = 'F11 переключает полный экран и не переназначается.'; return; }
-    if (/^Arrow|^(Digit|Numpad)\d$/.test(code) || ['KeyQ', 'KeyE', 'ControlLeft', 'ControlRight'].includes(code)) { this.buildKeys(); $('keys-note').textContent = 'Стрелки — камера, верхние цифры — бойцы, Num — оружие, Q/E — листание, Ctrl — оптика. Эти клавиши закреплены.'; return; }
+    if (/^Arrow|^(Digit|Numpad)\d$/.test(code) || ['KeyQ', 'KeyE', 'ControlLeft', 'ControlRight'].includes(code)) { this.buildKeys(); $('keys-note').textContent = 'Стрелки — камера, цифры — оружие (в непрерывном бою верхние цифры — бойцы), Q/E — листание, Ctrl — оптика. Эти клавиши закреплены.'; return; }
     const K = this.work.keys; let moved = '';
     for (const [id, title] of KEY_ACTIONS) { const L = K[id] || []; const j = L.indexOf(code); if (j >= 0 && id !== w.id) { L.splice(j, 1); moved = id === 'binoc' ? 'другого действия' : `«${title}»`; } }
     const L = K[w.id] || (K[w.id] = []);
@@ -428,9 +428,9 @@ const UI = {
     row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки. Мышью можно вести оптику по всей карте; после остановки мыши прицел быстро стабилизируется');
     row(['fire', '#/ ЛКМ'], 'Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела');
     row(['#Мышь в бою'], 'Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру');
-    row(['tray', '#/ ПКМ'], 'Панель оружия');
+    row(['tray', '#/ ПКМ'], 'Панель оружия. Во время хода соперника (и после своего выстрела) панель, Q/E и цифры выбирают оружие на ваш следующий ход — оно будет в руках в начале хода');
     row(['prev', 'next'], 'Предыдущее / следующее доступное оружие в порядке панели: слева направо, сверху вниз');
-    row(['#Num 1–41'], 'Выбрать оружие по номеру на правой цифровой панели. 1–9 — сразу; 10–41 — сначала Num 0, затем две цифры номера. Номера постоянные, даже если боеприпасы закончились');
+    row(['#Num 1–41', '#/ 1–41'], 'Выбрать оружие по номеру: цифры правой панели или (в обычном бою) цифры над буквами. 1–9 — сразу; 10–41 — сначала 0, затем две цифры номера. Номера постоянные, даже если боеприпасы закончились');
     row(['#Верхние цифры'], 'В одновременном бою выбрать своего бойца: 1–9 — сразу, двузначный номер — 0 и две цифры. После атаки боец недоступен до следующего цикла команды. Таймер и запас ходьбы не сбрасываются');
     row(['#← / → / ↑ / ↓'], 'Сдвинуть камеру, оставляя бойца в кадре. В конце хода обзор возвращается; стрелки не двигают бойца и прицел');
     row(['optic'], 'Скрыть / показать оптику снайперки');
@@ -469,9 +469,13 @@ const UI = {
   setTray(on) { this.trayOpen = on; $('tray').classList.toggle('hidden', !on); this.traySig = ''; },
   updateTray(sc, T, ctl) {
     if (!this.trayOpen || !sc) return;
-    const tm = sc.teams[T.team]; const mine = ctl && ctl.mine && T.phase === 'aim' && T.shots === 0;
-    const round = sc.round || T.round;
-    const sig = JSON.stringify(tm ? tm.ammo : {}) + T.weapon + mine + round;
+    // во время хода соперника (или после своего выстрела) панель выбирает оружие на свой следующий ход
+    const pre = ctl && ctl.preTeam !== null && ctl.preTeam !== undefined && !(ctl.mine && T.phase === 'aim');
+    const tm = sc.teams[pre ? ctl.preTeam : T.team]; const mine = ctl && ctl.mine && T.phase === 'aim' && T.shots === 0;
+    const round = sc.round || T.round, selected = pre ? (ctl.preChoice && performance.now() - ctl.preChoice.time < 1500 ? ctl.preChoice.id : tm && tm.nextW) : T.weapon;
+    const sig = JSON.stringify(tm ? tm.ammo : {}) + selected + mine + pre + round;
+    $('tray').classList.toggle('pre', !!pre);
+    { const h = $('tray-pre'); if (h) h.textContent = pre ? 'Оружие на ваш следующий ход' : ''; }
     if (sig === this.traySig) return; this.traySig = sig;
     const g = $('tray-grid'); g.innerHTML = '';
     WEAPON_CATS.forEach((cn, ci) => {
@@ -482,7 +486,7 @@ const UI = {
         if (!w) { g.appendChild(document.createElement('div')); continue; }
         const am = tm ? tm.ammo[w.id] : undefined; const locked = w.minRound && round < w.minRound;
         const off = am === undefined || am === 0 || locked;
-        it.className = 'tray-item' + (off ? ' off' : '') + (T.weapon === w.id ? ' on' : '');
+        it.className = 'tray-item' + (off ? ' off' : '') + (selected === w.id ? ' on' : '');
         it.dataset.weapon = w.id; it.dataset.number = w.number; it.title = w.number + '. ' + w.name + ' — ' + w.desc; it.setAttribute('role', 'button'); it.setAttribute('aria-label', w.name); it.tabIndex = off ? -1 : 0;
         it.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); it.click(); } });
         const number = document.createElement('span'); number.className = 'weapon-number'; number.textContent = w.number; it.appendChild(number);
@@ -491,7 +495,12 @@ const UI = {
         const a = document.createElement('span'); a.className = 'am'; a.textContent = am === undefined ? '' : am < 0 ? '∞' : am; it.appendChild(a);
         if (locked) { const l = document.createElement('span'); l.className = 'lock'; l.textContent = `с ${w.minRound}-го`; it.appendChild(l); }
         it.addEventListener('mouseenter', () => { const inf = $('tray-info'); inf.innerHTML = ''; const b = document.createElement('b'); b.textContent = w.name; inf.appendChild(b); inf.appendChild(document.createElement('br')); inf.appendChild(document.createTextNode(w.desc)); });
-        it.addEventListener('click', () => { if (off || !mine) { Sfx.play('denied'); return; } ctl.select(w.id); this.setTray(false); });
+        it.addEventListener('click', () => {
+          if (off) { Sfx.play('denied'); return; }
+          if (pre) { ctl.preselectId(w.id); this.traySig = ''; this.setTray(false); return; }
+          if (!mine) { Sfx.play('denied'); return; }
+          ctl.select(w.id); this.setTray(false);
+        });
         g.appendChild(it);
       }
     });

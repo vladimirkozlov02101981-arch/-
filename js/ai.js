@@ -210,8 +210,14 @@ class AI {
       if (beam) { const d = this.goalTx - beam.x; send({ c: 'ctrl', l: d < -5, r: d > 5, aim: s.aim, pw: -1 }); return; }
     }
     if (this.plan && this.plan.w === 'robot') {
-      const r = g.entities.find(e => e.k === 'robot');
-      if (r) for (const o of g.soldiers) if (o.alive && o.team !== this.team && Math.hypot(o.x - r.x, o.y - r.y) < 40) { send({ c: 'fire' }); break; }
+      const r = g.entities.find(e => e.k === 'robot' && e.owner === s);
+      if (r) {
+        // у робота нет таймера: компьютер подрывает его рядом с целью, а если робот уходит от врагов или идёт слишком долго
+        let near = Infinity; for (const o of g.soldiers) if (o.alive && o.team !== this.team) near = Math.min(near, Math.hypot(o.x - r.x, o.y - r.y));
+        if (this.robotId !== r.id) { this.robotId = r.id; this.robotMin = near; }
+        this.robotMin = Math.min(this.robotMin, near);
+        if (near < 40 || near > this.robotMin + 140 || r.age > 14) send({ c: 'fire' });
+      }
     }
     send({ c: 'ctrl', l: false, r: false, aim: this.goalAim ?? s.aim, pw: -1 });
   }

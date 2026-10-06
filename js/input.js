@@ -399,6 +399,34 @@ class LocalController {
     const factor = clamp(this.panFactor(team) * (dy < 0 ? 1.2 : 1 / 1.2), 1 / 16, 16);
     this.panSpeeds.set(team, factor); return factor;
   }
+  /** чья команда выбирает оружие заранее: против компьютера и по сети — своя; на одном экране обе команды ходят с одной
+      клавиатуры, поэтому заранее не выбирают */
+  preTeamOf(sc, T) {
+    if (sc.simul) return this.myTeams.includes(T.team) ? T.team : null;
+    return this.myTeams.length === 1 ? this.myTeams[0] : null;
+  }
+  /** во время хода соперника (или после своего выстрела) Q/E, цифры и панель оружия выбирают оружие на свой следующий ход */
+  preselect(sc, T) {
+    const team = T && T.phase !== 'over' ? this.preTeamOf(sc, T) : null; this.preTeam = team;
+    if (team === null) return;
+    const tm = sc.teams[team]; if (!tm) return;
+    const list = (typeof WEAPON_ORDER !== 'undefined' ? WEAPON_ORDER : WEAPONS).filter(w => tm.ammo[w.id] !== undefined && tm.ammo[w.id] !== 0);
+    if (!list.length) return;
+    const pick = (id) => { if (!list.some(w => w.id === id)) { Sfx.play('denied'); return; } this.preselectId(id); };
+    const cur = (this.preChoice && performance.now() - this.preChoice.time < 1500 ? this.preChoice.id : null) || tm.nextW || tm.lastW || list[0].id;
+    for (const dir of [Keys.hit('prev') ? -1 : 0, Keys.hit('next') ? 1 : 0]) {
+      if (!dir) continue; let i = list.findIndex(w => w.id === cur); i = i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length; pick(list[i].id);
+    }
+    const codes = Input.numbers.length ? Input.numbers.splice(0) : [];
+    for (const code of codes) {
+      const m = /^(Digit|Numpad)(\d)$/.exec(code); if (!m || (m[1] === 'Digit' && sc.simul)) continue;
+      const d = m[2];
+      if (this.preEntry) { this.preInput += d; if (this.preInput.length < 2) continue; const n = +this.preInput; this.preEntry = false; this.preInput = ''; const w = WEAPON_ORDER[n - 1]; if (w) pick(w.id); else Sfx.play('denied'); }
+      else if (d === '0') { this.preEntry = true; this.preInput = ''; }
+      else { const w = WEAPON_ORDER[+d - 1]; if (w) pick(w.id); }
+    }
+  }
+  preselectId(id) { this.preChoice = { id, time: performance.now() }; this.send({ c: 'nextw', id }); Sfx.play('select'); }
   select(id) { this.numberEntry = false; this.numberInput = ''; this.fighterNumberEntry = false; this.fighterNumberInput = ''; this.choice = { id, time: performance.now() }; this.send({ c: 'weapon', id }); this.pendingTarget = false; Sfx.play('select'); }
   cycle(sc, T, dir) {
     const list = this.available(sc, T); if (!list.length) return;
@@ -419,8 +447,9 @@ class LocalController {
     for (const code of codes) {
       const m = /^(Digit|Numpad)(\d)$/.exec(code); if (!m || (!queued && !Input.pressed[code])) continue;
       Input.pressed[code] = false;
-      const fighter = m[1] === 'Digit', digit = m[2]; let number;
-      if (fighter && !sc.simul) { this.fighterNumberEntry = false; this.fighterNumberInput = ''; continue; }
+      // верхние цифры выбирают бойца только в непрерывном бою; в обычном бою они, как и Num, выбирают оружие по номеру
+      // (на клавиатуре без цифрового блока иначе оружие по номеру не выбрать)
+      const fighter = m[1] === 'Digit' && !!sc.simul, digit = m[2]; let number;
       const entry = fighter ? 'fighterNumberEntry' : 'numberEntry', input = fighter ? 'fighterNumberInput' : 'numberInput';
       if (this[entry]) {
         this[input] += digit;
@@ -461,7 +490,7 @@ class LocalController {
       case 'charge': return `${key('aimUp')} / ${key('aimDown')} — прицел. Зажмите ${fire} или ЛКМ и отпустите для выстрела`;
       case 'tcharge': return T.target ? 'Цель захвачена с ошибкой. Зажмите ЛКМ для выстрела' : 'Кликните по цели на карте';
       case 'instant': return W.shots ? `${key('aimUp')} / ${key('aimDown')} — прицел. Выстрел ${Math.min(T.shots + 1, W.shots)} из ${W.shots} — ${fire} или ЛКМ` : `${key('aimUp')} / ${key('aimDown')} — прицел. ${fire} или ЛКМ — огонь`;
-      case 'target': return 'Кликните по точке на карте';
+      case 'target': return W.id === 'lightning' ? 'Кликните над целью: туча появится там, ветер снесёт её по стрелке, через 2 с молния ударит в самую высокую точку под тучей' : 'Кликните по точке на карте';
       case 'place': return `ЛКМ — поставить, ${key('rotate')} — повернуть`;
       case 'drop': return `ЛКМ или ${fire} — положить под ноги`;
       case 'self': return W.id === 'skip' ? `ЛКМ или ${fire} — пропустить ход` : `ЛКМ или ${fire} — применить`;
@@ -535,8 +564,13 @@ class LocalController {
     if (!this.scopePoint || T.weapon !== 'sniper' || T.phase !== 'aim') { this.mouseW.x = w[0]; this.mouseW.y = w[1]; }
     const s = sc.soldiers.find(o => o.id === T.sid);
     this.mine = !!(s && s.alive && !s.gone && this.myTeams.includes(T.team) && T.phase !== 'over');
-    if (!this.mine) { this.cancelCharge(); this.key = null; this.scopeOn = false; this.scopeWeapon = null; this.scopePoint = null; this.edgePan = false; return; }
-    const key = T.round + ':' + T.sid;
+    if (!this.mine) { this.cancelCharge(); this.key = null; this.scopeOn = false; this.scopeWeapon = null; this.scopePoint = null; this.edgePan = false; this.preselect(sc, T); return; }
+    this.preTeam = null;
+    const key = T.round + ':' + T.sid, newTurn = this.key !== key;
+    if (this.scopeAfter > 0) this.scopeAfter = Math.max(0, this.scopeAfter - dt);
+    if (this.key !== key) this.scopeAfter = 0;
+    else if (T.weapon === 'sniper' && T.shots > (this.sniperShots || 0) && this.scopeLast) this.scopeAfter = 1.3;   // выстрел снайперки: оптика остаётся на месте выстрела
+    this.sniperShots = T.weapon === 'sniper' ? T.shots : 0;
     if (this.key !== key) { this.scopeOn = false; this.scopeWeapon = null; this.scopePoint = null; this.aimPoint = null; this.aimWeapon = null; this.key = key; this.aim = this.base = s.aim; this.power = 0; this.cancelCharge(); this.pendingTarget = false; this.lastSig = ''; this.breath = 2.5; this.pendingShot = null; this.numberInput = ''; this.numberEntry = false; this.fighterNumberInput = ''; this.fighterNumberEntry = false; this.choice = null; }
     if (this.base === undefined) this.base = this.aim;
     if (T.target) this.pendingTarget = false;
@@ -554,10 +588,19 @@ class LocalController {
     // Прежняя оптика ×3 появляется при выборе снайперки; Ctrl скрывает/показывает, Q/E всегда листают оружие.
     const sniperScope = T.weapon === 'sniper' && canAct;
     const scopeStart = sniperScope && this.scopeWeapon !== 'sniper';
-    if (scopeStart) { this.scopeOn = true; this.aimMode = 'mouse'; this.scopePoint = { x: w[0], y: w[1] }; this.scopeIdle = 1; this.swayAmp = this.scopeSway = 0; }
+    // начало хода: оптика в исходной позиции — у бойца по направлению ствола. Точка под мышью сюда не годится: в первом кадре
+    // нового хода камера ещё смотрит туда, где был прошлый ход (за километр от бойца). Выбор снайперки в ходе — к мыши
+    if (scopeStart) {
+      this.scopeOn = true; this.aimMode = 'mouse';
+      if (newTurn) { const d = Math.min(sw, sh) * 0.24 / (cam.tz || cam.z || 1); this.scopePoint = { x: s.x + Math.cos(this.base) * d, y: s.y - GUN_Y + Math.sin(this.base) * d }; this.clampScope(sc); }
+      else this.scopePoint = { x: w[0], y: w[1] };
+      this.scopeIdle = 1; this.swayAmp = this.scopeSway = 0;
+    }
     if (!sniperScope) { this.scopeOn = false; this.scopePoint = null; this.swayAmp = this.scopeSway = 0; }
     this.scopeWeapon = sniperScope ? 'sniper' : null;
     if (sniperScope && Keys.hit('optic') && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); Keys.eat('optic'); }
+    if (sniperScope && this.scopeOn && this.scopePoint) this.scopeLast = { x: this.scopePoint.x, y: this.scopePoint.y, aim: this.aim };
+    else if (!(T.weapon === 'sniper' && this.scopeAfter > 0)) this.scopeLast = null;
     // наведение мышью или клавишами I/K — работает то, чем пользовались последним, даже со скрытой оптикой
     const previousAimMode = this.aimMode;
     if (Input.mouse.moved || (sniperScope && Input.mouse.clicked[0])) this.aimMode = 'mouse';
@@ -565,7 +608,7 @@ class LocalController {
     const mouseAim = canAct && this.aimMode === 'mouse';
     if (sniperScope && !this.binoc) {
       if (mouseAim) {
-        if (scopeStart || (Input.mouse.clicked[0] && previousAimMode === 'keys')) {
+        if ((scopeStart && !newTurn) || (Input.mouse.clicked[0] && previousAimMode === 'keys')) {
           this.scopePoint.x = w[0]; this.scopePoint.y = w[1];
         } else {
           // Сдвиг мыши ведёт прежнюю мировую точку и без захвата: движение камеры не переопределяет цель.
@@ -635,7 +678,7 @@ class LocalController {
     if (phase === 'aim' && T.shots === 0 && !this.charging && !this.pendingShot) {
       if (Keys.hit('prev')) this.cycle(sc, T, -1); if (Keys.hit('next')) this.cycle(sc, T, 1);
       if (this.chooseNumber(sc, T)) return;
-    }
+    } else if (phase !== 'aim' && phase !== 'use') this.preselect(sc, T);   // свой ход уже сделан: выбор — на следующий ход
     if (Keys.hit('rotate') && T.weapon === 'girder' && canAct) this.send({ c: 'rot', d: 1 });
     if (Keys.hit('rotate') && SPIN_WEAPONS.has(T.weapon) && canAct && !this.charging) { this.send({ c: 'spin' }); Sfx.play('select'); }
     // быстрый пропуск хода (по умолчанию «Ё» слева от 1 и P): сделал всё, что хотел, — ход заканчивается сразу

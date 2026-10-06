@@ -628,3 +628,8 @@ kbd { font-family: var(--ui); font-size: 12px; background: rgba(255, 255, 255, 0
   .touch-right { transform: scale(0.88); transform-origin: right bottom; }
 }
 
+
+/* панель оружия во время хода соперника: выбор на свой следующий ход */
+.tray-pre{display:none}
+.tray.pre .tray-pre{display:block;margin:0 0 8px;padding:6px 10px;border-radius:6px;background:rgba(255,196,90,.12);border:1px solid rgba(255,196,90,.4);color:#ffd27a;font:600 12px var(--ui);letter-spacing:.3px}
+.tray.pre{box-shadow:0 0 0 1px rgba(255,196,90,.35),0 20px 60px rgba(0,0,0,.5)}

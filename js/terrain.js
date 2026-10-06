@@ -216,6 +216,7 @@ class Terrain {
     this.surface = null;
     this.scorch = [20, 10, 5];
     this.version = 0; this.touches = [];   // изменённые области (для кэша чёткой карты)
+    this.blasts = [];   // взрывы и прорезы [x, y, r] / [x1, y1, r, x2, y2]: арматура (ферма, перила) на их месте исчезает
   }
   drawSurfaceNative(c, v, scale = 1) { return this.surface ? this.surface.draw(c, v, Math.max(0.25, scale)) : false; }
   isSolid(x, y) {
@@ -339,7 +340,7 @@ class Terrain {
     this.applyBlast(this.dctx, B, false);   // задняя стена и декор — только там, куда дошла волна (за целым перекрытием всё остаётся)
     this.applyBlast(this.gctx, B, false);
     if (this.surface) { this.applyBlast(this.surface.ctx, B, false); this.surface.damageBlast(B); }
-    this.touches.push([cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8]); this.version++;
+    this.touches.push([cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8]); (this.blasts || (this.blasts = [])).push([cx, cy, r]); this.version++;
   }
   carveLine(x1, y1, x2, y2, r) {
     x1 = Math.round(x1); y1 = Math.round(y1); x2 = Math.round(x2); y2 = Math.round(y2); r = Math.round(r);
@@ -358,7 +359,7 @@ class Terrain {
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke(); cx.restore();
     }
     if (this.surface) this.surface.damageLine(x1, y1, x2, y2, r);
-    this.touches.push([Math.min(x1, x2) - r - 10, Math.min(y1, y2) - r - 10, Math.max(x1, x2) + r + 10, Math.max(y1, y2) + r + 10]); this.version++;
+    this.touches.push([Math.min(x1, x2) - r - 10, Math.min(y1, y2) - r - 10, Math.max(x1, x2) + r + 10, Math.max(y1, y2) + r + 10]); (this.blasts || (this.blasts = [])).push([x1, y1, r, x2, y2]); this.version++;
   }
   /** уборка после хода: срезает одиночные пиксели-занозы и мелкие бугорки на поверхностях и убирает висящую крошку
       (мелкие оторванные кусочки) в изменённых областях — по рваному краю воронки бойцы шли рывками.

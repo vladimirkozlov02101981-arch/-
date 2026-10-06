@@ -475,8 +475,18 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           const dw = S.waterY - y;
           if (dw < 70 && dw > -40) {
             const wet = Math.max(0, Math.min(1, 1 - dw / 70)); r *= 1 - 0.35 * wet; g *= 1 - 0.3 * wet; bl *= 1 - 0.3 * wet;
-            const alg = dw < 26 && tileAt(tl.t1, x, y * 2, 1, 71) > 0.45 - (26 - dw) / 60;
-            if (alg) { const k = 0.6 + n2 * 0.5; r = 46 * k; g = 64 * k; bl = 30 * k; }
+            // водоросли свисают вертикальными прядями; край пятна — плавный переход, а не порог по пикселю:
+            // при сильном приближении (hires) нет квадратных ступенек
+            if (dw < 30) {
+              const nv = tileAt(tl.t1, x * 1.6, y * 0.45, 2, 71), thr = 0.45 - (26 - dw) / 60;
+              let ak = Math.max(0, Math.min(1, (nv - thr) / 0.12 + 0.5)) * Math.max(0, Math.min(1, (30 - dw) / 5)); ak = ak * ak * (3 - 2 * ak);
+              if (ak > 0) {
+                // пряди разного тона: от тёмной зелени к оливковой, у самой воды — темнее и мокрее
+                const st = tileAt(tl.t2, x * 2.4, y * 0.3, 1, 17), wk = Math.max(0, 1 - dw / 26), k = (0.72 + n2 * 0.42) * (1 - wk * 0.18);
+                const ar = (28 + st * 38) * k, ag = (42 + st * 40) * k, ab = (20 + st * 16) * k;
+                r += (ar - r) * ak; g += (ag - g) * ak; bl += (ab - bl) * ak;
+              }
+            }
           }
         }
         break;
@@ -1037,7 +1047,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
             c.fillStyle = cols[1]; c.beginPath(); c.moveTo(x + nx * 0.5, y + 2); c.lineTo(ex + nx, ey + ny); c.lineTo(ex + Math.cos(a) * 4, ey + Math.sin(a) * 4); c.lineTo(ex - nx, ey - ny); c.lineTo(x - nx * 0.5, y + 2); c.closePath(); c.fill();
             c.fillStyle = cols[0]; c.beginPath(); c.moveTo(x + nx * 0.5, y + 2); c.lineTo(ex + nx, ey + ny); c.lineTo(ex + Math.cos(a) * 4, ey + Math.sin(a) * 4); c.lineTo(x, y + 2); c.closePath(); c.fill();
             c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + Math.cos(a) * 3, ey + Math.sin(a) * 3, 0.9, 0, TAU); c.fill();
-            if (gc) { gc.save(); gc.fillStyle = cols[1]; gc.globalAlpha = 0.35; c.beginPath(); gc.arc((x + ex) / 2, (y + ey) / 2, clen * 0.45, 0, TAU); gc.fill(); gc.restore(); }
+            if (gc) { gc.save(); gc.fillStyle = cols[1]; gc.globalAlpha = 0.35; gc.beginPath(); gc.arc((x + ex) / 2, (y + ey) / 2, clen * 0.45, 0, TAU); gc.fill(); gc.restore(); }   // свой контур слоя свечения: иначе кружки всех друз сливались в огромные залитые треугольники
           }
         } else {
           const mw = R * 1.6, mh = R * 0.65;

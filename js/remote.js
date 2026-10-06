@@ -74,7 +74,7 @@ class RemoteGame {
       this.buf[0].V = pending.concat(this.buf[0].V);
     }
   }
-  applyTeams(TM) { TM.forEach((t, i) => { const tt = this.teams[i]; if (!tt) return; tt.ammo = t.a || tt.ammo; tt.dmg = t.d || 0; tt.kills = t.k || 0; }); }
+  applyTeams(TM) { TM.forEach((t, i) => { const tt = this.teams[i]; if (!tt) return; tt.ammo = t.a || tt.ammo; tt.dmg = t.d || 0; tt.kills = t.k || 0; tt.nextW = t.n || null; }); }
   update(dt, fx) {
     if (!this.buf.length) return;
     const latest = this.buf[this.buf.length - 1];

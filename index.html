@@ -65,7 +65,7 @@
         </div>
       </div>
     </div>
-    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.06-33</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.06-34</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
   </section>
 
   <!-- Онлайн -->
@@ -183,9 +183,9 @@
             
             <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела. Кольцо прицела стоит на коротком расстоянии по направлению ствола.</td></tr>
             <tr><td>Мышь в бою</td><td>Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру</td></tr>
-            <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия</td></tr>
+            <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия. Во время хода соперника (и после своего выстрела) панель, <kbd>Q</kbd>/<kbd>E</kbd> и цифры выбирают оружие на ваш следующий ход</td></tr>
             <tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Предыдущее / следующее оружие по номеру</td></tr>
-            <tr><td>Num <kbd>1</kbd>–<kbd>9</kbd></td><td>Выбрать оружие. Для номеров 10–41: Num 0, затем две цифры номера</td></tr>
+            <tr><td>Num <kbd>1</kbd>–<kbd>9</kbd></td><td>Выбрать оружие. Для номеров 10–41: Num 0, затем две цифры номера. В обычном бою так же работают цифры над буквами</td></tr>
             <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Выбрать своего бойца в непрерывном бою. Для 10–20: 0, затем две цифры номера</td></tr>
             <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Сдвинуть камеру, оставляя бойца в кадре</td></tr>
             <tr><td>Колесо / <kbd>C</kbd></td><td>Масштаб / вернуть обзор к бойцу. Зажатое колесо и прокрутка — скорость перемещения камеры</td></tr>
@@ -246,7 +246,7 @@
     <button class="icon-btn" data-act="tray" title="Оружие (Tab / ПКМ)">⚔</button>
     <button class="icon-btn" data-act="pause" title="Меню (Backspace)">☰</button>
   </div>
-  <div id="tray" class="tray hidden"><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
+  <div id="tray" class="tray hidden"><div class="tray-pre" id="tray-pre"></div><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
   <div id="chat" class="chat hidden"><div id="chat-log" class="chat-log"></div><input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Сообщение… (Enter — отправить)"></div>
 
   <!-- Сенсорное управление для Android и сенсорных экранов -->

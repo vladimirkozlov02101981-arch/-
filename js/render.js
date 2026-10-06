@@ -136,6 +136,7 @@ class Camera {
       const actor = T && sc.soldiers.find(s => s.id === T.sid);
       const interrupted = !T || (actor && ['walk', 'climb', 'air', 'fly', 'jet'].includes(actor.st)) || (fx.focus && (fx.focus.L === undefined || fx.focus.L === T.team || this.foe)) || T.phase !== 'aim' || T.shots > 0 || turnKey !== M.key || this.binoc !== M.binoc || this.shot || this.foeFocus ||
         (this.manual && (this.manual.x || this.manual.y)) || (mouse && mouse.moved) || (this.scopeFocus && this.scopeFocus.moving) ||
+        (this.observeAim && T && T.preview) ||   // соперник наводит удар: масштаб меняется, а обзор продолжает следить за его прицелом
         sc.entities.some(e => cameraAttack(e) && (e.team === T.team || this.foe));
       if (interrupted) {
         if (M.full && this.manual && (this.manual.x || this.manual.y)) this.userZ = this.tz = this.z;
@@ -154,6 +155,8 @@ class Camera {
         if (this.z <= zmin * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; }
         if (this.manualActive && actor) { const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y; }
         this.vx = this.vy = 0; this.sx = this.sy = 0; this.glide = null;
+        // масштаб дошёл до нужного: приближение отпускает камеру к обычному слежению (без паузы до следующего действия)
+        if (M.mode === 'center' && Math.abs(this.z - M.z1) <= M.z1 * 1e-5 && Math.abs(this.zoomV || 0) < 1e-6) { this.mapZoom = null; this.ptx = undefined; }
         return;
       }
     }
@@ -373,7 +376,10 @@ class Camera {
         const home = this.soldierTarget(actor, sh); this.x = home.x + this.offsetX; this.y = home.y + this.offsetY;
       }
     }
-    { const x0 = this.x, y0 = this.y; this.clampTo(sc, sw, sh, startFrame); if (this.x !== x0) this.vx = 0; if (this.y !== y0) this.vy = 0; }   // у края карты инерция не копится
+    { const x0 = this.x, y0 = this.y; this.clampTo(sc, sw, sh, startFrame); if (this.x !== x0) this.vx = 0; if (this.y !== y0) this.vy = 0;   // у края карты инерция не копится
+      // стрелки у края карты: сдвиг обзора — от того места, где камера реально стоит, иначе обратное нажатие сначала «отматывало»
+      // накопленный за краем сдвиг и камера отзывалась с задержкой
+      if (this.manualActive && T && (this.x !== x0 || this.y !== y0)) { const actor = sc.soldiers.find(s => s.id === T.sid); if (actor) { const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y; } } }
     // тряска — плавное колебание (несколько синусов), а не случайный скачок каждый кадр: при очередях и взрывах без дёрганья
     const s = fx.shake, tt = performance.now() / 1000;
     this.sx = s ? s * (Math.sin(tt * 47) * 0.62 + Math.sin(tt * 71 + 1.3) * 0.38) : 0; this.sy = s ? s * (Math.sin(tt * 53 + 0.7) * 0.62 + Math.sin(tt * 83 + 2.1) * 0.38) : 0;
@@ -416,7 +422,12 @@ class Camera {
     if (this.scopeFocus) [px, py] = this.toScreen(this.scopeFocus.point.x, this.scopeFocus.point.y, sw, sh);
     const free = this.binoc || this.hold || this.free > 0 || this.scopeFocus || this.manualActive;
     let x1 = this.x, y1 = this.y, mode = 'center';
-    if (f < 1 || (this.mapZoom && z <= this.baseZoom(sh, sw) * 0.8)) {
+    if (f > 1 && !free) {
+      // приближение: путь масштаба ведёт обзор обратно к тому, за кем камера следила до отдаления (обычно к бойцу) —
+      // кадр не остаётся сдвинутым к середине карты там, где бойца не видно
+      const home = this.lastT; if (home && Number.isFinite(home.x) && Number.isFinite(home.y)) { x1 = home.x; y1 = home.y; }
+      this.zoomAnchor = null;
+    } else if (f < 1 || (this.mapZoom && z <= this.baseZoom(sh, sw) * 0.8)) {
       mode = 'map'; const k = clamp((1 / z - 1 / this.z) / (1 / zmin - 1 / this.z || 1), 0, 1);
       x1 += (this.mapW / 2 - this.x) * k; y1 += (this.mapH / 2 - this.y) * k;
       this.zoomAnchor = null;
@@ -462,7 +473,8 @@ function hudPanel(c, x, y, w, h, r = 12) {
 }
 
 class Renderer {
-  constructor(cv) { this.cv = cv; this.c = cv.getContext('2d'); this.dpr = 1; this.sw = 1; this.sh = 1; this.anim = new Map(); this.mini = null; this.miniVer = -1; this.miniT = 0; this.miniRect = null; this.vig = null; this.turnStart = 0; this.lastSid = -1; }
+  constructor(cv) { this.cv = cv; this.c = cv.getContext('2d', { alpha: false });   // кадр всегда закрашен целиком: непрозрачный холст браузер не смешивает со страницей
+    this.dpr = 1; this.sw = 1; this.sh = 1; this.anim = new Map(); this.mini = null; this.miniVer = -1; this.miniT = 0; this.miniRect = null; this.vig = null; this.turnStart = 0; this.lastSid = -1; }
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.dpr = dpr; this.sw = window.innerWidth; this.sh = window.innerHeight;
@@ -488,15 +500,18 @@ class Renderer {
     if (sy <= 0 || sy >= cv.height - 2) return;
     const depth = Math.min(sy, cv.height - sy, Math.round(260 * m.d)), band = Math.max(1, Math.round(2 * this.dpr));
     if (depth <= 0) return;   // отражение меньше физического пикселя не создаёт нулевой источник drawImage
-    if (!this.reflCv || this.reflCv.width !== cv.width || this.reflCv.height < depth) this.reflCv = makeCanvas(cv.width, Math.max(depth, 8));
-    const r = this.reflCv.getContext('2d'); r.setTransform(1, 0, 0, 1, 0, 0); r.clearRect(0, 0, cv.width, depth);
-    r.filter = 'blur(' + (1.2 * this.dpr).toFixed(1) + 'px)'; r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, cv.width, depth); r.filter = 'none';   // снимок полосы над водой, чуть размыт — вода не зеркало
+    // снимок полосы над водой в половинном разрешении: при растяжении обратно он мягко размыт (вода не зеркало) — так же, как
+    // прежний blur-фильтр, но без дорогого фильтра каждый кадр
+    const HW = Math.ceil(cv.width / 2), HD = Math.max(1, Math.ceil(depth / 2));
+    if (!this.reflCv || this.reflCv.width !== HW || this.reflCv.height < HD) this.reflCv = makeCanvas(HW, Math.max(HD, 8));
+    const r = this.reflCv.getContext('2d'); r.setTransform(1, 0, 0, 1, 0, 0); r.imageSmoothingEnabled = true; r.clearRect(0, 0, HW, HD);
+    r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, HW, HD);   // снимок полосы над водой, чуть размыт — вода не зеркало
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     for (let k = 0; k < depth; k += band) {
       const q = 1 - k / depth, a = (0.08 + 0.38 * Math.pow(q, 1.4)) * (0.88 + 0.12 * Math.sin(t * 2.4 + k * 0.08));
       const dx = (Math.sin(t * 1.8 + k * 0.065) * 1.1 + Math.sin(t * 3.1 + k * 0.16) * 0.6 + Math.cos(k * 0.28 - t * 0.9) * 0.35) * (1 + (k / depth) * 1.1) * this.dpr;
       c.globalAlpha = Math.max(0, Math.min(1, a));
-      c.drawImage(this.reflCv, 0, depth - k - band, cv.width, band, dx, sy + k, cv.width, band);
+      c.drawImage(this.reflCv, 0, (depth - k - band) / 2, HW, band / 2, dx, sy + k, cv.width, band);
     }
     c.restore();
   }
@@ -578,7 +593,7 @@ class Renderer {
     if (!this.hires) this.hires = new HiResTerrain();
     if (!this.hires.draw(c, sc, v, z * dpr)) { this.blit(c, sc.terrain.decor, v, sc); this.blit(c, sc.terrain.canvas, v, sc); }
     if (sc.terrain.drawSurfaceNative) sc.terrain.drawSurfaceNative(c, v, z * dpr);
-    drawTacticalRoutes(c, sc.map);
+    drawTacticalRoutes(c, sc.map, sc.terrain);
     if (window.NAV_DEBUG && typeof NavCheck !== 'undefined' && NAV_DEBUG.map === sc.map.id) NavCheck.draw(c, NAV_DEBUG.res);
     if (sc.terrain.glow) { c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.5 + 0.22 * Math.sin(t * 1.6); this.blit(c, sc.terrain.glow, v, sc); c.restore(); }
     drawProps(c, sc, t, false);
@@ -681,10 +696,21 @@ class Renderer {
     if (!preview) return;
     const mx = preview.x, my = preview.y;
     if (T.weapon === 'girder') {
-      c.save(); c.globalAlpha = 0.55; c.translate(mx, my); c.rotate(Math.atan2(SIN8[T.rot & 7], COS8[T.rot & 7]));
-      const far = Math.hypot(mx - s.x, my - s.y + 14) > 300;
-      c.fillStyle = far ? '#ff4040' : '#ffb347'; c.fillRect(-48, -6, 96, 12); c.strokeStyle = '#fff'; c.lineWidth = 1.5; c.strokeRect(-48, -6, 96, 12); c.restore();
-      c.save(); c.strokeStyle = 'rgba(255,255,255,0.18)'; c.setLineDash([5, 6]); c.beginPath(); c.arc(s.x, s.y - 14, 300, 0, TAU); c.stroke(); c.restore();
+      // где можно поставить балку: круг 300 ед. вокруг бойца (как проверяет игра) — светлая заливка и чёткая бегущая рамка;
+      // призрак балки зелёный, если её можно поставить здесь, красный — слишком далеко или мешает боец
+      const ca = COS8[T.rot & 7], sa = SIN8[T.rot & 7], far = Math.hypot(mx - s.x, my - s.y + 14) > 300;
+      const blocked = !far && sc.soldiers.some(o => !o.gone && Math.abs((o.x - mx) * ca + (o.y - 13 - my) * sa) < 54 && Math.abs(-(o.x - mx) * sa + (o.y - 13 - my) * ca) < 22);
+      const okCol = '#7dff9a', badCol = '#ff5a52', zone = '#ffcf6a';
+      c.save();
+      c.globalAlpha = 0.07; c.fillStyle = zone; c.beginPath(); c.arc(s.x, s.y - 14, 300, 0, TAU); c.fill(); c.globalAlpha = 1;
+      c.lineDashOffset = -t * 18;
+      for (const [col, w] of [['rgba(0,0,0,0.6)', 4.6], [zone, 2.2]]) { c.strokeStyle = col; c.lineWidth = w; c.setLineDash([12, 8]); c.beginPath(); c.arc(s.x, s.y - 14, 300, 0, TAU); c.stroke(); }
+      c.setLineDash([]); c.restore();
+      c.save(); c.translate(mx, my); c.rotate(Math.atan2(sa, ca));
+      const col = far || blocked ? badCol : okCol;
+      c.globalAlpha = 0.42; c.fillStyle = col; c.fillRect(-48, -6, 96, 12);
+      c.globalAlpha = 0.95; c.strokeStyle = 'rgba(0,0,0,0.65)'; c.lineWidth = 3.4; c.strokeRect(-48, -6, 96, 12);
+      c.strokeStyle = col; c.lineWidth = 1.6; c.strokeRect(-48, -6, 96, 12); c.restore();
     } else if (T.weapon === 'teleport') {
       const ok = my < sc.waterY - 10 && !sc.terrain.isSolid(mx, my) && !sc.terrain.isSolid(mx, my - 20);
       c.save(); c.globalAlpha = 0.45 + 0.2 * Math.sin(t * 8); c.strokeStyle = ok ? '#c080ff' : '#ff4040'; c.lineWidth = 2.5;
@@ -889,6 +915,15 @@ class Renderer {
       c.fillStyle = '#fff'; c.font = `11px ${FONT_UI}`; c.textAlign = 'right'; c.fillText(`${alive}`, 250, by + 1);
       by += 30;
     }
+    // оружие, выбранное заранее на свой следующий ход (во время хода соперника)
+    if (ctl && ctl.preTeam !== null && ctl.preTeam !== undefined && sc.teams[ctl.preTeam]) {
+      const tmp = sc.teams[ctl.preTeam], id = (ctl.preChoice && performance.now() - ctl.preChoice.time < 1500 ? ctl.preChoice.id : null) || tmp.nextW, W = id && WEAPON[id];
+      const label = W ? 'На ваш ход: ' + W.name : 'Оружие на ваш ход: Q / E, цифры или Tab';
+      c.font = `600 12px ${FONT_UI}`; const tw = c.measureText(label).width, pw = tw + (W ? 54 : 24), px = 12, py = sh - 22 - sc.teams.length * 30 - 40;
+      hudPanel(c, px, py, pw, 32, 9);
+      if (W) { const ic = weaponIcon(id, 28); c.drawImage(ic, px + 8, py + 2, 28, 28); }
+      c.fillStyle = W ? '#ffd27a' : 'rgba(255,255,255,0.7)'; c.textAlign = 'left'; c.fillText(label, px + (W ? 44 : 12), py + 16);
+    }
     // Подсказки выбора точки появляются только для соответствующего оружия.
     const hint = !cam.binoc && cam.edge ? (cam.hold ? `Обзор у цели · ${Keys.label('camera')} — вернуться к бойцу` : 'Цель за экраном? Ведите курсор к краю экрана') : '';
     c.textAlign = 'right'; c.font = `12px ${FONT_UI}`;
@@ -898,10 +933,14 @@ class Renderer {
   }
   /** оптический прицел снайперки: линза ×3 на линии ствола в точке курсора, сетка с дальномерными метками */
   drawScope(c, sc, cam, ctl, sw, sh) {
-    const T = sc.turn; if (cam.foeFocus || T.weapon !== 'sniper' || T.phase !== 'aim' || !ctl || !ctl.mine || !ctl.scopeOn || cam.binocK > 0.5) return;
+    const T = sc.turn;
+    // после выстрела оптика ещё видна на месте выстрела (пока летит пуля и виден результат)
+    const after = !!(ctl && ctl.scopeAfter > 0 && ctl.scopeLast && T.weapon === 'sniper');
+    if (cam.foeFocus || !ctl || cam.binocK > 0.5 || (!after && (T.weapon !== 'sniper' || T.phase !== 'aim' || !ctl.mine || !ctl.scopeOn))) return;
     const s = sc.soldiers.find(o => o.id === T.sid); if (!s || !s.alive) return;
-    const [gx, gy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh), [mx, my] = cam.toScreen(ctl.mouseW.x, ctl.mouseW.y, sw, sh);
-    const dist = Math.max(1, Math.hypot(mx - gx, my - gy)), aimX = gx + Math.cos(ctl.aim) * dist, aimY = gy + Math.sin(ctl.aim) * dist;
+    const P = after ? ctl.scopeLast : ctl.mouseW, AIM = after ? ctl.scopeLast.aim : ctl.aim;
+    const [gx, gy] = cam.toScreen(s.x, s.y - GUN_Y, sw, sh), [mx, my] = cam.toScreen(P.x, P.y, sw, sh);
+    const dist = Math.max(1, Math.hypot(mx - gx, my - gy)), aimX = gx + Math.cos(AIM) * dist, aimY = gy + Math.sin(AIM) * dist;
     const R = Math.round(Math.min(sw, sh) * 0.16), Z = 3, dpr = this.dpr, src = this.c.canvas;
     const cx = aimX, cy = aimY;   // При ручном обзоре линза остаётся на своей мировой цели, даже за краем кадра.
     if (!this.scopeCv || this.scopeCv.width !== Math.ceil(2 * R * dpr)) this.scopeCv = makeCanvas(Math.ceil(2 * R * dpr), Math.ceil(2 * R * dpr));
@@ -920,7 +959,7 @@ class Renderer {
     c.restore();
     c.lineWidth = 7; c.strokeStyle = '#0c0e10'; c.beginPath(); c.arc(cx, cy, R + 3, 0, TAU); c.stroke();
     c.lineWidth = 1.5; c.strokeStyle = 'rgba(180,200,220,0.35)'; c.beginPath(); c.arc(cx, cy, R + 6.5, -2.6, -0.9); c.stroke();
-    c.font = `11px ${FONT_TITLE}`; c.fillStyle = 'rgba(220,235,255,0.8)'; c.textAlign = 'left'; c.fillText(`×${Z}  ${Math.round(Math.hypot(ctl.mouseW.x - s.x, ctl.mouseW.y - s.y) / 10)} м`, cx + R * 0.45, cy + R * 0.82);
+    c.font = `11px ${FONT_TITLE}`; c.fillStyle = 'rgba(220,235,255,0.8)'; c.textAlign = 'left'; c.fillText(`×${Z}  ${Math.round(Math.hypot(P.x - s.x, P.y - s.y) / 10)} м`, cx + R * 0.45, cy + R * 0.82);
     c.restore();
   }
 }

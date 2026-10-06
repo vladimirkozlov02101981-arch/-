@@ -432,42 +432,75 @@ const MAPS = [MAP_VALLEY, MAP_CANYON, MAP_ARCTIC, MAP_VOLCANO, MAP_ALIEN, MAP_PI
 const MAP_BY_ID = Object.fromEntries(MAPS.map(m => [m.id, m]));
 
 /* ---------- лестницы, перила и прочая «арматура» поверх земли ---------- */
-function drawTacticalRoutes(c, map) {
+/** рядом с точкой был взрыв или прорез (бур, лазер) — арматура там разрушена */
+function fixtureHit(T, x, y, pad) {
+  const B = T && T.blasts; if (!B) return false;
+  for (const b of B) {
+    if (b.length > 3) {
+      const dx = b[3] - b[0], dy = b[4] - b[1], L2 = dx * dx + dy * dy || 1, u = Math.max(0, Math.min(1, ((x - b[0]) * dx + (y - b[1]) * dy) / L2));
+      if (Math.hypot(x - b[0] - dx * u, y - b[1] - dy * u) < b[2] + pad) return true;
+    } else if (Math.hypot(x - b[0], y - b[1]) < b[2] + pad) return true;
+  }
+  return false;
+}
+/** под точкой (в пределах h пикселей вниз) ещё есть настил */
+function deckAt(T, x, y, h) {
+  if (!T || !T.isSolid) return true;
+  const xi = Math.round(x); for (let k = 0; k <= h; k += 2) if (T.isSolid(xi, Math.round(y + k))) return true;
+  return false;
+}
+/** ферма моста и перила живут вместе с настилом: разрушенные участки (настил снесён или рядом взрыв) не рисуются.
+    Состояние пересчитывается, только когда карта изменилась (T.version) */
+function fixtureState(T, f, pts, deck, hit) {
+  const ver = T ? T.version : 0;
+  if (f._ok && f._ver === ver && f._ok.length === pts.length && f._T === T) return f._ok;
+  // где настила не было и на целой карте (край пролёта, стык с домом), участок не считается разрушенным
+  if (!f._d0 || f._d0.length !== pts.length || f._T !== T) { f._d0 = new Uint8Array(pts.length); for (let i = 0; i < pts.length; i++) f._d0[i] = deck(pts[i]) ? 1 : 0; f._T = T; }
+  const ok = new Uint8Array(pts.length); for (let i = 0; i < pts.length; i++) ok[i] = (!f._d0[i] || deck(pts[i])) && !hit(pts[i]) ? 1 : 0;
+  f._ok = ok; f._ver = ver; return ok;
+}
+function drawTacticalRoutes(c, map, T) {
   c.save();
   for (const f of map.fixtures || []) {
     if (f.k === 'rail') {
       c.strokeStyle = f.col || 'rgba(60,40,24,0.9)'; c.lineWidth = 2;
-      const cx = (f.x1 + f.x2) / 2, cy = (f.y1 + f.y2) / 2 + f.sag;
-      c.beginPath(); c.moveTo(f.x1, f.y1 - 16); c.quadraticCurveTo(cx, cy - 16, f.x2, f.y2 - 16); c.stroke();
+      const cx = (f.x1 + f.x2) / 2, cy = (f.y1 + f.y2) / 2 + f.sag, len = Math.hypot(f.x2 - f.x1, f.y2 - f.y1), n = Math.max(4, Math.round(len / 10));
+      const pts = []; for (let i = 0; i <= n; i++) { const t = i / n, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t; pts.push([a * f.x1 + b * cx + d * f.x2, a * f.y1 + b * cy + d * f.y2]); }
+      const ok = fixtureState(T, f, pts, (p) => deckAt(T, p[0], p[1] + 1, 10), (p) => fixtureHit(T, p[0], p[1] - 10, 2));
+      c.beginPath();
+      for (let i = 0; i < n; i++) if (ok[i] && ok[i + 1]) { c.moveTo(pts[i][0], pts[i][1] - 16); c.lineTo(pts[i + 1][0], pts[i + 1][1] - 16); }
+      c.stroke();
     } else if (f.k === 'truss') {
       const x1 = f.x1, y1 = f.y1, x2 = f.x2, y2 = f.y2, sag = f.sag || 0, thick = f.thick || 13;
       const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
       const segs = Math.max(4, Math.round(len / 34));
       const ptAt = (t) => [x1 + dx * t, y1 + dy * t + sag * 4 * t * (1 - t)];
       const trussDepth = 18 + Math.min(14, len * 0.05);
+      // узел цел, если над ним остался настил и рядом не было взрыва; пролёт цел, если целы оба узла и его середина
+      const nodes = []; for (let s = 0; s <= segs; s++) nodes.push(ptAt(s / segs));
+      const ok = fixtureState(T, f, nodes, (p) => deckAt(T, p[0], p[1] - 2, thick + 4), (p) => fixtureHit(T, p[0], p[1] + thick + trussDepth * 0.5, 3));
+      const span = (s) => ok[s] && ok[s + 1] && !fixtureHit(T, (nodes[s][0] + nodes[s + 1][0]) / 2, (nodes[s][1] + nodes[s + 1][1]) / 2 + thick + trussDepth * 0.5, 3);
+      const spans = []; for (let s = 0; s < segs; s++) spans.push(span(s));
       c.save();
       c.lineWidth = 2.2; c.strokeStyle = 'rgba(70,85,110,0.85)';
       c.beginPath();
-      for (let s = 0; s <= segs; s++) { const [px, py] = ptAt(s / segs); if (s === 0) c.moveTo(px, py + thick); else c.lineTo(px, py + thick); }
-      c.stroke();
-      c.beginPath();
-      for (let s = 0; s <= segs; s++) { const [px, py] = ptAt(s / segs); if (s === 0) c.moveTo(px, py + thick + trussDepth); else c.lineTo(px, py + thick + trussDepth); }
+      for (let s = 0; s < segs; s++) if (spans[s]) { const [px0, py0] = nodes[s], [px1, py1] = nodes[s + 1]; c.moveTo(px0, py0 + thick); c.lineTo(px1, py1 + thick); c.moveTo(px0, py0 + thick + trussDepth); c.lineTo(px1, py1 + thick + trussDepth); }
       c.stroke();
       c.lineWidth = 1.6; c.strokeStyle = 'rgba(95,120,150,0.78)';
       c.beginPath();
       for (let s = 0; s < segs; s++) {
-        const [px0, py0] = ptAt(s / segs), [px1, py1] = ptAt((s + 1) / segs);
+        if (!spans[s]) continue;
+        const [px0, py0] = nodes[s], [px1, py1] = nodes[s + 1];
         const top0 = py0 + thick, bot0 = top0 + trussDepth, top1 = py1 + thick, bot1 = top1 + trussDepth;
-        c.moveTo(px0, top0); c.lineTo(px0, bot0);
+        c.moveTo(px0, top0); c.lineTo(px0, bot0); c.moveTo(px1, top1); c.lineTo(px1, bot1);
         if (s % 2 === 0) { c.moveTo(px0, top0); c.lineTo(px1, bot1); }
         else { c.moveTo(px0, bot0); c.lineTo(px1, top1); }
       }
-      const [lastPx, lastPy] = ptAt(1);
-      c.moveTo(lastPx, lastPy + thick); c.lineTo(lastPx, lastPy + thick + trussDepth);
       c.stroke();
       c.fillStyle = 'rgba(160,200,240,0.9)';
       for (let s = 0; s <= segs; s++) {
-        const [px, py] = ptAt(s / segs);
+        if (!((s > 0 && spans[s - 1]) || (s < segs && spans[s]))) continue;
+        const [px, py] = nodes[s];
         c.beginPath(); c.arc(px, py + thick, 1.8, 0, TAU); c.fill();
         c.beginPath(); c.arc(px, py + thick + trussDepth, 1.8, 0, TAU); c.fill();
       }

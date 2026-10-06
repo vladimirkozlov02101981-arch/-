@@ -272,7 +272,8 @@ class Robot extends Ent {
   free(T, x, y) { return !T.isSolid(x - 4, y - 3) && !T.isSolid(x + 4, y - 3) && !T.isSolid(x, y - 9) && !T.isSolid(x, y - 15); }
   ground(T, x, y) { return T.isSolid(x - 3, y) || T.isSolid(x, y) || T.isSolid(x + 3, y); }
   update(g, dt) {
-    const T = g.terrain; this.age += dt; this.f -= dt;
+    // без таймера: взрыв — по кнопке игрока, при касании бойца или о преграду, которую робот сам не может перепрыгнуть
+    const T = g.terrain; this.age += dt;
     if (this.air) {
       this.vy += g.gravity * dt;
       const n = Math.max(1, Math.ceil(Math.hypot(this.vx, this.vy) * dt / 2));
@@ -291,11 +292,14 @@ class Robot extends Ent {
           this.walkAcc -= 1; const nx = this.x + this.dir; let moved = false;
           for (let up = 0; up <= 5; up++) if (this.free(T, nx, this.y - up)) { this.x = nx; this.y -= up; moved = true; break; }
           if (moved) {
+            if (this.blockX !== undefined && Math.abs(this.x - this.blockX) > 30) this.blockX = undefined;   // преграду прошёл
             let k = 0; while (k < 6 && !this.ground(T, this.x, this.y) && this.free(T, this.x, this.y + 1)) { this.y++; k++; }
             if (!this.ground(T, this.x, this.y)) { this.air = true; this.vx = this.dir * 60; this.vy = 0; break; }
           } else {
+            // стенка: сам перепрыгивает; снова упёрся в ту же преграду — пройти её не может, взрывается
+            if (this.blockX !== undefined && Math.abs(this.x - this.blockX) < 14) { this.boom(g); return; }
+            this.blockX = this.x;
             this.air = true; this.vx = this.dir * 110; this.vy = -310; this.jumps++; this.y -= 1;
-            if (this.jumps > 3) { this.dir = -this.dir; this.jumps = 0; }
             g.emit({ t: 'jump', x: R1(this.x), y: R1(this.y) }); break;
           }
         }
@@ -304,13 +308,12 @@ class Robot extends Ent {
     this.a = this.dir; this.s = this.air ? 1 : 0;
     const s = g.soldierAt(this.x, this.y - 7, 7, this.owner);
     if (s && this.age > 0.4) { this.boom(g); return; }
-    if (this.f <= 0) this.boom(g);
   }
   push(vx, vy) { this.vx += vx; this.vy += vy; this.air = true; }
   /** прыжок по команде игрока (пробел): только с земли — через своих бойцов, ящики и уступы */
   jump(g) {
     if (this.dead || this.air) return;
-    this.air = true; this.vx = this.dir * 125; this.vy = -360; this.y -= 1; this.jumps = 0;
+    this.air = true; this.vx = this.dir * 125; this.vy = -360; this.y -= 1; this.jumps = 0; this.blockX = undefined;   // своя попытка перепрыгнуть
     g.emit({ t: 'jump', x: R1(this.x), y: R1(this.y) });
   }
   boom(g) { if (this.dead) return; this.dead = true; const B = BLAST.robot; g.explode(this.x, this.y - 6, B.R, B.D, { owner: this.owner, knock: B.K, frag: 'robot' }); }
