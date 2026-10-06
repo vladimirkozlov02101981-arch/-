@@ -143,7 +143,8 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
       const res = {};
       // к середине карты: там есть куда прокручивать
       const dir = App.cam.x < g.W / 2 ? 1 : -1, ex = dir > 0 ? 1439 : 0, back = dir > 0 ? 0 : 1439;
-      T.weapon = 'bazooka'; move(720, 450); await wait(500); let x0 = App.cam.x; move(ex, 450); await wait(700); res.bazooka = App.cam.x - x0;
+      // после удара молнией обзор сначала возвращается к бойцу (плавный перелёт до ~1 с) — замер начинается, когда камера встала
+      T.weapon = 'bazooka'; move(720, 450); await wait(1600); let x0 = App.cam.x; move(ex, 450); await wait(700); res.bazooka = App.cam.x - x0;
       move(720, 450); await wait(900);
       T.weapon = 'airstrike'; await wait(100); x0 = App.cam.x; move(ex, 450); await wait(700); res.forward = (App.cam.x - x0) * dir; res.hold = App.cam.hold;
       const xp = App.cam.x; move(720, 450); await wait(900); res.held = Math.abs(App.cam.x - xp) < 30; res.edgeFlag = App.cam.edge;

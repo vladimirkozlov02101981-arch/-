@@ -117,6 +117,13 @@ function drawWounds(c, wl, far, t, id) {
     if (lv === 3) { c.fillStyle = '#e8d2c0'; c.beginPath(); c.arc(x, y + (i >= 4 ? 1.8 : 0), 0.7, 0, TAU); c.fill(); }   // кость в культе
   }
 }
+/** Blender-ранец в прежней точке спины; тяга и её свечение рисуются отдельно. */
+function drawJetpackSprite(c, x, y, face) {
+  const spr = typeof TexLib !== 'undefined' && TexLib.data.wpn_jetpack;
+  if (!spr) return false;
+  c.save(); c.translate(x, y); c.scale(face, 1); c.drawImage(spr.canvas, -16, -12, 48, 24); c.restore();
+  return true;
+}
 /** боец из 3D-кадров: кадр по состоянию, фазе шага и углу прицела; оружие — у плеча модели */
 function drawSoldierSprite(c, s, team, t, an) {
   const SA = SoldierArt, face = s.face || 1, dead = !s.alive, col = team ? team.color : '#888', K = SA.K, C = SA.CELL;
@@ -136,25 +143,28 @@ function drawSoldierSprite(c, s, team, t, an) {
   else if (s.st === 'stand' && !dead) { row = 0; fr = Math.floor(t * 5 + s.id) % 8; }
   // ранец джетпака за спиной
   if (s.wpn === 'jetpack' || s.st === 'jet') {
-    c.fillStyle = '#3a4048'; rrect(c, -face * 7 - 3.5, -30, 7, 14, 2.4); c.fill(); c.fillStyle = '#c0402f'; c.fillRect(-face * 7 - 3, -25, 6, 2);
+    if (!drawJetpackSprite(c, -face * 7, -23, face)) {
+      c.fillStyle = '#3a4048'; rrect(c, -face * 7 - 3.5, -30, 7, 14, 2.4); c.fill(); c.fillStyle = '#c0402f'; c.fillRect(-face * 7 - 3, -25, 6, 2);
+    }
     if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 7 - 6.5, -17, 13, 18 + Math.random() * 7); c.restore(); }
   }
   const wl = s.wl || NO_WOUNDS;
   // шапка команды: каска — встроенная в модель (в цвет команды), остальные рисуются поверх головы
   const hat = team && HATS[team.hat] ? team.hat : 'helmet', bare = hat !== 'helmet';
-  // хромота: с раненой ногой шаг проваливается на больную сторону
-  const legW = Math.max(wl[4], wl[5]);
-  if (legW && s.st === 'walk' && !dead) c.translate(0, Math.max(0, Math.sin(an.walk * 0.5)) * (legW >= 3 ? 3.2 : legW * 0.9));
+  // Ранения меняют скорость/состояние ног, но не трясут весь силуэт по вертикали.
   c.save(); if (face < 0) c.scale(-1, 1);
   if (s.hurt > 0 && !dead) c.filter = 'brightness(1.3) sepia(0.6) saturate(4) hue-rotate(-30deg)';
   // стороны тела на экране: при взгляде вправо левая половина (по карте) — дальняя
   const far = face > 0 ? 0 : 1;
-  const lostLeg = [4, 5].filter(i => wl[i] === 3);
-  if (lostLeg.length) {
-    // потерянная нога: голень стирается, на её месте — окровавленная культя
+  const lostLimbs = [2, 3, 4, 5].filter(i => wl[i] === 3);
+  if (lostLimbs.length) {
+    // потерянная конечность: рука или голень стирается, на её месте — окровавленная культя
     const cv = SA.tmp || (SA.tmp = makeCanvas(C, C)), tc = cv.getContext('2d');
     tc.globalCompositeOperation = 'copy'; tc.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, 0, 0, C, C); tc.globalCompositeOperation = 'destination-out';
-    for (const i of lostLeg) { const isFar = (i - 4) === far; tc.fillRect(isFar ? SA.FOOT[0] - 22 : SA.FOOT[0] - 2, SA.FOOT[1] - 22, 26, 30); }
+    for (const i of lostLimbs) {
+      if (i >= 4) { const isFar = (i - 4) === far; tc.fillRect(isFar ? SA.FOOT[0] - 22 : SA.FOOT[0] - 2, SA.FOOT[1] - 22, 26, 30); }
+      else { const isFar = (i - 2) === far; tc.fillRect(isFar ? SA.SHOULDER[0] - 26 : SA.SHOULDER[0] + 2, SA.SHOULDER[1] + 2, 26, 44); }
+    }
     tc.globalCompositeOperation = 'source-over';
     c.drawImage(cv, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);
   } else c.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
@@ -178,6 +188,10 @@ function drawSoldier(c, s, team, t, an) {
   const face = s.face || 1; const col = team ? team.color : '#888';
   const colD = css(shadec(col, 0.66));
   const dead = !s.alive;
+  const wl = s.wl || NO_WOUNDS;
+  const far = face > 0 ? 0 : 1;
+  const rearArmLost = wl[2 + far] === 3, frontArmLost = wl[2 + (1 - far)] === 3;
+  const rearLegLost = wl[4 + far] === 3, frontLegLost = wl[4 + (1 - far)] === 3;
   c.save(); c.translate(s.x, s.y);
   if ((s.st === 'stand' || s.st === 'walk' || s.st === 'climb') && !dead) { c.fillStyle = 'rgba(10,6,4,0.28)'; c.beginPath(); c.ellipse(0, 0.6, 10, 2.4, 0, 0, TAU); c.fill(); }
   if (s.st === 'fly') { c.translate(0, -18); c.rotate(s.rot); c.translate(0, 18); }
@@ -200,9 +214,11 @@ function drawSoldier(c, s, team, t, an) {
   // джетпак / ранец за спиной
   const jet = s.wpn === 'jetpack' || s.st === 'jet';
   if (jet) {
-    c.fillStyle = OUTL; rrect(c, -face * 7.5 - 3.5, -27, 7, 14, 2.6); c.fill();
-    c.fillStyle = ballGrad(c, -face * 7.5, -21, 6, '#6a7382'); rrect(c, -face * 7.5 - 2.8, -26.3, 5.6, 12.6, 2); c.fill();
-    c.fillStyle = '#d0402f'; c.fillRect(-face * 7.5 - 2.8, -22.6, 5.6, 2);
+    if (!drawJetpackSprite(c, -face * 7.5, -20, face)) {
+      c.fillStyle = OUTL; rrect(c, -face * 7.5 - 3.5, -27, 7, 14, 2.6); c.fill();
+      c.fillStyle = ballGrad(c, -face * 7.5, -21, 6, '#6a7382'); rrect(c, -face * 7.5 - 2.8, -26.3, 5.6, 12.6, 2); c.fill();
+      c.fillStyle = '#d0402f'; c.fillRect(-face * 7.5 - 2.8, -22.6, 5.6, 2);
+    }
     if (s.thrust) { c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -face * 7.5 - 6.5, -15, 13, 18 + Math.random() * 7); c.restore(); }
   } else {
     c.fillStyle = OUTL; rrect(c, nX - face * 6 - 3, nY + 0.8, 6, 11, 2.2); c.fill();
@@ -210,8 +226,12 @@ function drawSoldier(c, s, team, t, an) {
     c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(nX - face * 6 - 2.4, nY + 5, 4.8, 0.8);
   }
   // задняя нога
-  capsule(c, [[hipX, hipY], k2, [f2[0], f2[1] - 1.2]], 3.3, css(shadec(PANTS, 0.78)));
-  boot(c, f2[0], f2[1], face, true);
+  if (!rearLegLost) {
+    capsule(c, [[hipX, hipY], k2, [f2[0], f2[1] - 1.2]], 3.3, css(shadec(PANTS, 0.78)));
+    boot(c, f2[0], f2[1], face, true);
+  } else {
+    capsule(c, [[hipX, hipY], k2], 3.3, css(shadec(PANTS, 0.78)));
+  }
   // торс: скруглённый мундир с ремнём
   const th = hipY - nY + 2.6;
   c.fillStyle = OUTL; rrect(c, nX - 5.3, nY - 0.7, 10.6, th + 1.4, 3.6); c.fill();
@@ -226,8 +246,12 @@ function drawSoldier(c, s, team, t, an) {
   c.fillStyle = '#d8b04a'; c.fillRect(nX + face * 1.4 - 1.1, hipY - 1.5, 2.2, 2.1);
   c.fillStyle = 'rgba(255,255,255,0.22)'; rrect(c, nX - 4.2, nY + 1, 3, th * 0.5, 1.4); c.fill();
   // передняя нога
-  capsule(c, [[hipX, hipY], k1, [f1[0], f1[1] - 1.2]], 3.5, PANTS);
-  boot(c, f1[0], f1[1], face, false);
+  if (!frontLegLost) {
+    capsule(c, [[hipX, hipY], k1, [f1[0], f1[1] - 1.2]], 3.5, PANTS);
+    boot(c, f1[0], f1[1], face, false);
+  } else {
+    capsule(c, [[hipX, hipY], k1], 3.5, PANTS);
+  }
   // руки и оружие
   const shX = nX, shY = nY + 3;
   const holding = s.wpn && !dead && s.st !== 'fly' && !climb && s.wpn !== 'jetpack';
@@ -236,9 +260,17 @@ function drawSoldier(c, s, team, t, an) {
     const gx = shX + dx * 7.2, gy = shY + dy * 7.2;
     const two = !['grenade', 'cluster', 'sticky', 'blackhole', 'mine', 'dynamite', 'molotov', 'robot', 'medkit', 'skip', 'airstrike', 'lightning', 'orbital', 'nuke', 'teleport', 'girder', 'boot', 'tpgrenade'].includes(s.wpn);
     const bx = two ? gx + dx * 6.4 : gx + dx * 0.5, by = two ? gy + dy * 6.4 : gy + dy * 0.5 + 1;
-    const ke = ik2(shX, shY, bx, by, 6.4, 6.4, face); capsule(c, [[shX, shY], ke, [bx, by]], 2.9, colD); hand(c, bx, by);
+    if (!rearArmLost) {
+      const ke = ik2(shX, shY, bx, by, 6.4, 6.4, face); capsule(c, [[shX, shY], ke, [bx, by]], 2.9, colD); hand(c, bx, by);
+    } else {
+      const ke = ik2(shX, shY, bx, by, 6.4, 6.4, face); capsule(c, [[shX, shY], ke], 2.9, colD);
+    }
     c.save(); c.translate(gx, gy); c.rotate(a); if (face < 0) c.scale(1, -1); drawHeld(c, s.wpn, t); c.restore();
-    const kf = ik2(shX, shY, gx, gy, 6.4, 6.4, face); capsule(c, [[shX, shY], kf, [gx, gy]], 3, col); hand(c, gx, gy);
+    if (!frontArmLost) {
+      const kf = ik2(shX, shY, gx, gy, 6.4, 6.4, face); capsule(c, [[shX, shY], kf, [gx, gy]], 3, col); hand(c, gx, gy);
+    } else {
+      const kf = ik2(shX, shY, gx, gy, 6.4, 6.4, face); capsule(c, [[shX, shY], kf], 3, col);
+    }
   } else {
     let h1, h2;
     const fX = shX + face * 2.2, bX = shX - face * 2.6;
@@ -246,8 +278,16 @@ function drawSoldier(c, s, team, t, an) {
     else if (s.st === 'fly' || s.st === 'dead') { h1 = [shX + 9, shY - 6]; h2 = [shX - 9, shY - 5]; }
     else if (s.st === 'air' || s.st === 'jet') { h1 = [fX + face * 5.6, shY - 5.4]; h2 = [bX - face * 4.8, shY - 3.4]; }
     else { const sw = s.st === 'walk' ? Math.sin(an.walk) * 4.2 : Math.sin(t * 2.4 + s.id) * 0.4; h1 = [fX + sw + face * 1.4, shY + 11.4]; h2 = [bX - sw - face * 1, shY + 11.2]; }
-    const e2 = ik2(bX, shY, h2[0], h2[1], 6.2, 6.2, face); capsule(c, [[bX, shY], e2, h2], 2.9, colD); hand(c, h2[0], h2[1]);
-    const e1 = ik2(fX, shY, h1[0], h1[1], 6.2, 6.2, face); capsule(c, [[fX, shY], e1, h1], 3, col); hand(c, h1[0], h1[1]);
+    if (!rearArmLost) {
+      const e2 = ik2(bX, shY, h2[0], h2[1], 6.2, 6.2, face); capsule(c, [[bX, shY], e2, h2], 2.9, colD); hand(c, h2[0], h2[1]);
+    } else {
+      const e2 = ik2(bX, shY, h2[0], h2[1], 6.2, 6.2, face); capsule(c, [[bX, shY], e2], 2.9, colD);
+    }
+    if (!frontArmLost) {
+      const e1 = ik2(fX, shY, h1[0], h1[1], 6.2, 6.2, face); capsule(c, [[fX, shY], e1, h1], 3, col); hand(c, h1[0], h1[1]);
+    } else {
+      const e1 = ik2(fX, shY, h1[0], h1[1], 6.2, 6.2, face); capsule(c, [[fX, shY], e1], 3, col);
+    }
   }
   // голова: реалистичные пропорции — шея, небольшое лицо с носом, каска по размеру
   const hx = nX + face * 0.6, hy = nY - 5.6, R = 4.7;
@@ -281,6 +321,7 @@ function drawSoldier(c, s, team, t, an) {
   const hat = team ? team.hat : 'helmet';
   c.save(); c.translate(hx, hy); c.scale(0.74, 0.74); drawHat(c, hat, col, 0, hat === 'helmet' || !hat ? -0.6 : -1.8, face); c.restore();
   if (s.hurt > 0 && !dead) { c.globalAlpha = Math.min(0.5, s.hurt * 2.5); c.fillStyle = '#ff3030'; c.beginPath(); c.ellipse(hx, hy, R + 0.6, R * 1.12 + 0.6, 0, 0, TAU); c.fill(); c.globalAlpha = 1; }
+  c.save(); if (face < 0) c.scale(-1, 1); drawWounds(c, wl, far, t, s.id); c.restore();
   c.restore();
 }
 
@@ -293,7 +334,28 @@ function drawRocketShape(c, body, nose, len, th, t, flame) {
   c.beginPath(); c.moveTo(-len * 0.55, th / 2); c.lineTo(-len * 0.7, th * 1.1); c.lineTo(-len * 0.35, th / 2); c.fill();
   if (flame) { c.save(); c.globalCompositeOperation = 'lighter'; const f = 6 + Math.sin(t * 60) * 2; c.drawImage(glowSprite(flame), -len * 0.55 - f * 1.6, -f * 0.6, f * 1.8, f * 1.2); c.restore(); }
 }
+/** метательное в полёте — спрайт из рендера Blender (размер кадра в игровых единицах, сдвиг по вертикали, вращается ли) */
+const ENT_SPRITE = { grenade: ['ent_grenade', 22, 0, true], cluster: ['ent_cluster', 22, 0, true], sticky: ['ent_sticky', 22, 0, false], molotov: ['ent_molotov', 20, -1, true],
+  bholeg: ['ent_blackhole', 26, 0, false], dynamite: ['ent_dynamite', 24, -1, false], mine: ['ent_mine', 24, -1, false], robot: ['ent_robot', 34, -9, false], tpg: ['ent_tpgrenade', 26, 0, false] };
+function drawEntitySprite(c, e, t, held) {
+  const E = ENT_SPRITE[e.k], spr = E && typeof TexLib !== 'undefined' && TexLib.data[E[0]]; if (!spr) return false;
+  const S = E[1];
+  c.save(); if (E[3]) c.rotate(e.a || 0); if (e.k === 'robot' && (e.a || 0) < 0) c.scale(-1, 1);
+  c.imageSmoothingQuality = 'high'; c.drawImage(spr.canvas, -S / 2, -S / 2 + E[2], S, S); c.restore();
+  // живые огоньки поверх модели: мигание мины и робота, искры фитиля, пламя тряпки, мерцание липучки
+  if (!held) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    if (e.k === 'mine') { const rate = e.s === 2 ? 14 : e.s === 1 ? 2 : 6; if (Math.sin(t * rate * Math.PI) > 0.2) c.drawImage(glowSprite(e.s === 0 ? '#ffd23a' : '#ff2a2a'), -6, -9.5, 12, 12); }
+    if (e.k === 'robot' && Math.sin(t * 16) > 0) c.drawImage(glowSprite('#ff3030'), -4, -21, 8, 8);
+    if (e.k === 'dynamite') { const f = 3 + Math.random() * 2; c.drawImage(glowSprite('#ffe06a'), 2 - f, -10.5 - f, f * 2, f * 2); }
+    if (e.k === 'molotov') { const f = 4 + Math.sin(t * 40) * 1.2; c.save(); c.rotate(e.a || 0); c.drawImage(glowSprite('#ffa22a'), -f, -10 - f * 1.6, f * 2, f * 2.2); c.restore(); }
+    if (e.k === 'sticky' && Math.sin(t * (e.f < 1 ? 30 : 12)) > 0) c.drawImage(glowSprite('#ff3a3a'), -3, -3, 6, 6);
+    c.restore();
+  }
+  return true;
+}
 function drawEntityBody(c, e, t, held) {
+  if (ENT_SPRITE[e.k] && drawEntitySprite(c, e, t, held)) return;
   switch (e.k) {
     case 'bullet': c.fillStyle='#ffe7a4'; c.fillRect(-4,-.7,8,1.4); break;
     case 'plasma':
@@ -415,12 +477,25 @@ function drawEntityBody(c, e, t, held) {
       break;
     }
     case 'jet': {
-      c.scale(e.a > 1.5 || e.a < -1.5 ? -1 : 1, 1); c.scale(1.6, 1.6);
-      c.fillStyle = '#6f7a8a'; c.beginPath(); c.moveTo(-22, -3); c.lineTo(14, -4); c.quadraticCurveTo(24, -2, 26, 0); c.quadraticCurveTo(22, 2, 14, 3); c.lineTo(-22, 3); c.closePath(); c.fill();
-      c.fillStyle = '#56606e'; c.beginPath(); c.moveTo(-2, 0); c.lineTo(-12, 12); c.lineTo(-6, 12); c.lineTo(6, 1); c.closePath(); c.fill();
-      c.beginPath(); c.moveTo(-18, -2); c.lineTo(-24, -12); c.lineTo(-19, -12); c.lineTo(-12, -2); c.closePath(); c.fill();
-      c.fillStyle = '#9fd0ff'; c.beginPath(); c.ellipse(10, -3.5, 5, 2, 0, 0, TAU); c.fill();
-      c.save(); c.globalCompositeOperation = 'lighter'; c.drawImage(glowSprite('#ffa23a'), -34, -5, 14, 10); c.restore();
+      c.scale(e.a > 1.5 || e.a < -1.5 ? -1 : 1, 1);
+      c.scale(2.6, 2.6);
+      c.save();
+      c.globalCompositeOperation = 'lighter';
+      c.drawImage(glowSprite('#ffaa3a'), -42, -5, 20, 10);
+      c.drawImage(glowSprite('#ff5a1a'), -48, -4, 18, 8);
+      c.restore();
+      c.fillStyle = '#3a424e'; c.fillRect(-28, -6, 22, 5);
+      c.fillStyle = '#262c35'; c.fillRect(-28, 1, 20, 4);
+      c.fillStyle = '#4c5563'; c.beginPath(); c.moveTo(-16, -3); c.lineTo(-28, -18); c.lineTo(-18, -18); c.lineTo(4, -3); c.closePath(); c.fill();
+      c.fillStyle = '#3f4754'; c.beginPath(); c.moveTo(-24, -2); c.lineTo(-34, -14); c.lineTo(-26, -14); c.lineTo(-18, -2); c.closePath(); c.fill();
+      c.fillStyle = '#647082'; c.beginPath(); c.moveTo(-32, -4); c.lineTo(16, -5); c.quadraticCurveTo(32, -2, 36, 0); c.quadraticCurveTo(32, 2, 16, 4); c.lineTo(-32, 4); c.quadraticCurveTo(-35, 0, -32, -4); c.closePath(); c.fill();
+      c.fillStyle = '#4a5361'; c.beginPath(); c.moveTo(-30, 0); c.lineTo(16, 1); c.quadraticCurveTo(30, 1, 35, 0); c.lineTo(16, 4); c.lineTo(-32, 4); c.closePath(); c.fill();
+      c.fillStyle = '#ffd166'; c.fillRect(-6, -4, 3.5, 8);
+      c.fillStyle = '#566070'; c.beginPath(); c.moveTo(-12, 1); c.lineTo(-24, 18); c.lineTo(-15, 18); c.lineTo(8, 2); c.closePath(); c.fill();
+      c.fillStyle = '#2ecc71'; c.fillRect(-23, 17, 3, 2);
+      c.fillStyle = '#a6d8ff'; c.beginPath(); c.moveTo(14, -4.5); c.lineTo(24, -3); c.lineTo(22, -1); c.lineTo(14, -1.5); c.closePath(); c.fill();
+      c.fillStyle = '#ffffff'; c.fillRect(17, -3.5, 4, 1.2);
+      c.strokeStyle = '#2d333b'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(-14, 3.5); c.lineTo(6, 3.5); c.stroke();
       break;
     }
   }
@@ -511,6 +586,12 @@ function drawEntityAdditive(c, e, t, sc) {
 }
 
 /* ---------- анимированные объекты карт ---------- */
+/** нижний конец шеста до ближайшей реальной опоры; разрушенная опора не оставляет висящий флаг */
+function flagPoleBase(sc, p) {
+  const T = sc.terrain; if (!T || !T.findTop) return p.y;
+  const x = Math.floor(p.x), y = T.findTop(x, Math.ceil(p.y));
+  return y < T.H && y >= p.y && y - p.y <= 64 ? y : null;
+}
 function drawProps(c, sc, t, additive) {
   for (const p of sc.props || []) {
     if (!p.alive) continue;
@@ -525,8 +606,9 @@ function drawProps(c, sc, t, additive) {
         c.fillStyle = '#3a2a1a'; circ(c, 0, 0, 3.4); c.restore(); break;
       }
       case 'flag': if (additive) break; {
+        const base = flagPoleBase(sc, p); if (base === null) break;
         const h = p.o.h || 60; const col = p.o.team !== undefined && sc.teams[p.o.team] ? sc.teams[p.o.team].color : (p.o.color || '#c33');
-        c.strokeStyle = '#3a2a1a'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x, p.y - h); c.stroke();
+        c.strokeStyle = '#3a2a1a'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(p.x, base); c.lineTo(p.x, p.y - h); c.stroke();
         const wind = sc.turn ? sc.turn.wind : 0; const dir = wind < -5 ? -1 : 1; const L = 26, H = 16;
         c.fillStyle = col; c.beginPath(); c.moveTo(p.x, p.y - h);
         for (let i = 0; i <= 8; i++) { const u = i / 8; c.lineTo(p.x + dir * u * L, p.y - h + Math.sin(t * 6 + u * 5 + p.seed) * 2.4 * u); }

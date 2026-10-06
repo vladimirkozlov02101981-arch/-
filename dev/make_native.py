@@ -6,7 +6,7 @@ python dev/make_native.py <рендер.png> <имя> [--k 4] [--match <мала
 - Палитра подгоняется к нынешней игровой текстуре того же имени (или --match): по каналам, квантильной кривой,
   посчитанной на уменьшенной копии — игра запекает свет и тени поверх малой текстуры, поэтому цель — её прежнее
   распределение, а не эталонная картина. Кривая применяется к родной текстуре, затем малая = точное уменьшение k×k.
-- Пишет assets/tex/native/<имя>.webp (родная, WebP) и assets/tex/<имя>.png (малая, без потерь). Прежняя малая
+- Пишет assets/tex/native/<имя>.webp (родная, lossless RGB WebP) и assets/tex/<имя>.png (малая, без потерь). Прежняя малая
   текстура сохраняется в dev/tex-backup/<имя>.png (один раз — откатить можно копированием обратно).
 - В js/art.js добавляет имя в TexLib.nativeAvail и убирает из hiAvail: серая деталь была для прежней текстуры (фото-зерно fine остаётся).
 """
@@ -66,6 +66,8 @@ def main():
     ap.add_argument('--match', default=None); ap.add_argument('--no-match', action='store_true')
     a = ap.parse_args()
     k, name = a.k, a.name
+    if k < 1:
+        ap.error('k должен быть положительным целым числом')
     native = np.asarray(Image.open(a.render).convert('RGB'), dtype=np.float32)
     if native.shape[0] % k or native.shape[1] % k:
         sys.exit('размер рендера должен делиться на k')
@@ -81,7 +83,8 @@ def main():
     native8 = native.round().astype(np.uint8)
     out = ROOT / 'assets' / 'tex' / 'native' / (name + '.webp')
     out.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(native8).save(out, 'WEBP', quality=a.quality, method=6)
+    # Согласованный native RGB сохраняет настоящие исходные пиксели без потерь.
+    Image.fromarray(native8).save(out, 'WEBP', lossless=True, quality=a.quality, method=6)
     # малая — точное уменьшение того, что увидит игра после декодирования WebP
     decoded = np.asarray(Image.open(out).convert('RGB'), dtype=np.float32)
     low = box(decoded, k).round().clip(0, 255).astype(np.uint8)

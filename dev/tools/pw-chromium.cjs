@@ -22,13 +22,22 @@ Module._load = function (request, parent, isMain) {
     }
     candidates.push('/opt/pw-browsers/chromium');
     const executablePath = process.env.CHROME || candidates.find(p => fs.existsSync(p));
-    mod.chromium.launch = (opts = {}) => {
+    mod.chromium.launch = async (opts = {}) => {
       const o = { ...opts };
       if (executablePath && !o.executablePath) {
         delete o.channel;
         o.executablePath = executablePath;
       }
-      return launch(o);
+      const browser = await launch(o);
+      if (process.env.TW_TEST_PROFILE === '1') {
+        const newContext = browser.newContext.bind(browser);
+        browser.newContext = async (...args) => {
+          const context = await newContext(...args);
+          await context.route('**/profile', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+          return context;
+        };
+      }
+      return browser;
     };
   }
   return mod;

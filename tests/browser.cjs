@@ -30,7 +30,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     assert.equal(await guest.locator('[data-team="1"] .tc-name').inputValue(),'Друг онлайн');
     await host.selectOption('#o-perTeam','2');await host.uncheck('#o-turnInf');await host.fill('#o-turnTime','90');await host.dispatchEvent('#o-turnTime','change');
     await guest.waitForFunction(()=>UI.settings.perTeam===2&&UI.settings.turnTime===90);
-    await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game.turn.phase==='aim',{timeout:60000});await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});
+    await host.selectOption('#o-side','left');await host.selectOption('#o-first','team1');await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game.turn.phase==='aim',{timeout:60000});await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});
     await host.waitForTimeout(800);assert.equal(await mapHash(host),await mapHash(guest));
     await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),41);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
     // A real input action and pause must neutralize movement on the authoritative host.
@@ -42,7 +42,7 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await guest.keyboard.press('KeyT');await guest.fill('#chat-input','Проверка связи');await guest.keyboard.press('Enter');await host.waitForFunction(()=>document.getElementById('chat-log').textContent.includes('Проверка связи'));
     const before=await mapHash(host);
     // Fire via the normal game command path. Vertical downward rocket must change terrain.
-    await host.keyboard.press('Escape');await host.waitForFunction(()=>App.game.turn.weapon===null);await host.keyboard.press('Digit1');await host.waitForFunction(()=>!!App.game.turn.weapon);
+    await host.keyboard.press('Escape');await host.waitForFunction(()=>App.game.turn.weapon===null);await host.keyboard.press('Numpad1');await host.waitForFunction(()=>!!App.game.turn.weapon);
     await host.evaluate(()=>{App.ctl.aimMode='keys';App.ctl.aim=Math.PI/2;App.ctl.send({c:'fire',aim:Math.PI/2,pw:.22});});
     await host.waitForFunction(()=>App.game.turn.phase==='settle'||App.game.turn.team===1,{timeout:20000});await host.waitForTimeout(350);
     assert.notEqual(await mapHash(host),before);assert.equal(await mapHash(host),await mapHash(guest));

@@ -14,10 +14,23 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
 
 (async () => {
   const assets = {};
+  // локальный сервер при необходимости
+  const { createServer } = require('../server.js');
+  let localServer = null, testUrl = process.env.TEST_URL;
+  if (!testUrl) {
+    await new Promise((resolve) => {
+      const http = require('node:http');
+      const req = http.get('http://localhost:3001/', () => { testUrl = 'http://localhost:3001'; resolve(); });
+      req.on('error', () => {
+        const { server } = createServer(); localServer = server;
+        server.listen(0, '127.0.0.1', () => { testUrl = 'http://localhost:' + server.address().port; resolve(); });
+      });
+    });
+  }
   // панорамы: PNG → WebP через canvas браузера (качество 0.95)
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : { channel: 'chrome' });
   try {
-    const page = await browser.newPage(); await page.goto(process.env.TEST_URL || 'http://localhost:3000');
+    const page = await browser.newPage(); await page.goto(testUrl);
     for (const f of fs.readdirSync(path.join(root, 'assets/maps'))) {
       const p = 'assets/maps/' + f;
       if (f.endsWith('.png')) {
@@ -33,7 +46,10 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
     if (fs.existsSync(texDir)) for (const f of fs.readdirSync(texDir)) if (f.endsWith('.png')) {
       const p = 'assets/tex/' + f; assets[p] = dataUri(p);
     }
-  } finally { await browser.close(); }
+  } finally {
+    await browser.close();
+    if (localServer) await new Promise(r => localServer.close(r));
+  }
   // карты мелких деталей уже в WebP: сохраняем исходные пиксели без повторного сжатия
   const hiDir = path.join(root, 'assets/tex/hi');
   if (fs.existsSync(hiDir)) for (const f of fs.readdirSync(hiDir)) if (f.endsWith('.webp')) {
@@ -60,10 +76,14 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
   html = html.replace('<link rel="stylesheet" href="css/fonts.css">', `<style>${fonts}</style>`);
   html = html.replace('<link rel="stylesheet" href="css/style.css">', () => `<style>${read('css/style.css')}</style>`);
   html = html.replace(/<link rel="icon" href="assets\/favicon.svg"[^>]*>/, `<link rel="icon" href="${dataUri('assets/favicon.svg')}" type="image/svg+xml">`);
+  html = html.replace(/src="(assets\/[^"\s]+)"/g, (_, p) => {
+    if (!assets[p]) throw new Error('Не встроено изображение меню: ' + p);
+    return 'src="' + assets[p] + '"';
+  });
   // пути к ресурсам → встроенные данные
   const patch = {
     'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.png`', 'im.src = ASSET(`assets/tex/${n}.png`)'], ['im.src = `assets/tex/hi/${n}.webp`', 'im.src = ASSET(`assets/tex/hi/${n}.webp`)'], ['im.src = `assets/tex/fine/${n}.webp`', 'im.src = ASSET(`assets/tex/fine/${n}.webp`)'], ['im.src = `assets/tex/native/${n}.webp`', 'im.src = ASSET(`assets/tex/native/${n}.webp`)'], ['im.src = `assets/tex/surface/${n}.png`', 'im.src = ASSET(`assets/tex/surface/${n}.png`)']],
-    'js/ui.js': [['url("assets/maps/${m.id}.png")', 'url("${ASSET(`assets/maps/${m.id}.png`)}")'], ['img.src = `assets/maps/${m.id}-thumb.webp`', 'img.src = ASSET(`assets/maps/${m.id}-thumb.webp`)']],
+    'js/ui.js': [['url("assets/maps/${m.id}.png")', 'url("${ASSET(`assets/maps/${m.id}.png`)}")'], ['img.src = `assets/maps/${m.id}-thumb.webp`', 'img.src = ASSET(`assets/maps/${m.id}-thumb.webp`)'], ['preview.src = `assets/maps/${m.id}-thumb.webp`', 'preview.src = ASSET(`assets/maps/${m.id}-thumb.webp`)']],
     'js/audio.js': [['fetch(`assets/sfx/${n}.ogg`)', 'fetch(ASSET(`assets/sfx/${n}.ogg`))']],
   };
   const boot = `<script>window.__ASSETS=${JSON.stringify(assets)};function ASSET(p){return window.__ASSETS[p]||p;}</script>`;

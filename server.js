@@ -5,14 +5,66 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 
-function createServer() {
-  const rooms = new Map(), root = __dirname;
+
+/** Bound the relay's own transport queue; never drop ordered world events. */
+function createRelayQueue(ws, options = {}) {
+  const maxBytes = options.maxBytes || 8 * 1024 * 1024, highWater = options.highWater || 64 * 1024;
+  const now = options.now || Date.now, timeout = options.timeout || 30000;
+  let fifo = [], priority = [], state = null, busy = false, busyAt = null, closed = false, queuedBytes = 0, waitingAt = null;
+  const encode = data => ({ data, text: JSON.stringify(data), at: now() });
+  const slow = () => { if (!closed) { dispose(); ws.close(1013, 'Connection too slow'); } };
+  function dispose() { closed = true; clearInterval(timer); fifo = []; priority = []; state = null; queuedBytes = 0; }
+  function stats() { return { reliable: fifo.length, priority: priority.length, latestState: !!state, queuedBytes, busy, buffered: ws.bufferedAmount || 0 }; }
+  function flush() {
+    if (closed || ws.readyState !== WebSocket.OPEN) return;
+    if (busy) { if (now() - busyAt > timeout) slow(); return; }
+    if ((ws.bufferedAmount || 0) > highWater) { if (waitingAt === null) waitingAt = now(); if (now() - waitingAt > timeout) slow(); return; }
+    waitingAt = null;
+    const entry = priority.shift() || fifo.shift() || state;
+    if (!entry) return;
+    if (entry === state) state = null;
+    queuedBytes -= Buffer.byteLength(entry.text); busy = true; busyAt = now();
+    try { ws.send(entry.text, err => { busy = false; busyAt = null; if (err) { slow(); return; } flush(); }); }
+    catch { busy = false; slow(); }
+  }
+  function push(data) {
+    if (closed || ws.readyState !== WebSocket.OPEN) return false;
+    const d = data && data.type === 'data' && data.data;
+    let entry;
+    if (d && d.t === 's') {
+      const old = state && state.data.data;
+      const latest = { ...d, V: (old && old.V || []).concat(d.V || []) };
+      if (!d.TM && old && old.TM) latest.TM = old.TM;
+      if (state) queuedBytes -= Buffer.byteLength(state.text);
+      state = entry = encode({ ...data, data: latest }); queuedBytes += Buffer.byteLength(entry.text);
+    } else {
+      // A new lobby/start is a boundary: a queued old state belongs to the old game.
+      if (d && (d.t === 'lobby' || d.t === 'start' || d.t === 'net' && d.items && d.items.some(i => i && (i.t === 'lobby' || i.t === 'start')))) {
+        if (state) queuedBytes -= Buffer.byteLength(state.text); state = null;
+      }
+      entry = encode(data);
+      const urgent = d && ['ping', 'pong', 'net-ack'].includes(d.t);
+      const tail = fifo[fifo.length - 1], previous = tail && tail.data.data;
+      if (!urgent && d && d.t === 'c' && d.c && d.c.c === 'ctrl' && previous && previous.t === 'c' && previous.c && previous.c.c === 'ctrl') {
+        queuedBytes -= Buffer.byteLength(tail.text); fifo[fifo.length - 1] = entry;
+      } else (urgent ? priority : fifo).push(entry);
+      queuedBytes += Buffer.byteLength(entry.text);
+    }
+    if (queuedBytes > maxBytes || fifo.length > 512 || priority.length > 64) { slow(); return false; }
+    flush(); return true;
+  }
+  const timer = setInterval(flush, 25); timer.unref();
+  return { push, flush, dispose, stats };
+}
+
+function createServer(options = {}) {
+  const rooms = new Map(), root = options.root || __dirname;
   const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.ogg': 'audio/ogg' };
   const server = http.createServer((req, res) => {
     let url;
     try { url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
     // файл игры на этом же ПК (адрес file://) спрашивает свой сервер и ссылку туннеля — разрешаем ему эти два ответа
-    if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end('{"ok":true,"transport":"relay"}'); return; }
+    if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end('{"ok":true,"transport":"relay","project":"territory-war-copy1"}'); return; }
     // публичный адрес туннеля «Играть онлайн.cmd» (бесплатный адрес иногда меняется — берём последний) — для приглашения другу
     if (url === '/public') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end(JSON.stringify({ url: publicUrl() })); return; }
     // личные настройки игрока этого ПК (profile.json рядом с игрой): только с самого ПК — не через туннель для друга
@@ -65,10 +117,11 @@ function createServer() {
     if (req.url !== '/room' || (req.headers.origin && !sameOrigin) || wss.clients.size >= 400) { socket.destroy(); return; }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws));
   });
+  const queues = new WeakMap();
   const send = (ws, data) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    if (ws.bufferedAmount > 4 * 1024 * 1024) { ws.close(1013, 'Connection too slow'); return; }
-    ws.send(JSON.stringify(data));
+    let q = queues.get(ws); if (!q) { q = createRelayQueue(ws); queues.set(ws, q); }
+    q.push(data);
   };
   const leave = ws => {
     const room = rooms.get(ws.code); ws.code = null;
@@ -81,7 +134,7 @@ function createServer() {
   wss.on('connection', ws => {
     ws.alive = true; ws.bucket = 0; ws.bucketAt = Date.now();
     ws.on('pong', () => { ws.alive = true; });
-    ws.on('error', () => {}); ws.on('close', () => leave(ws));
+    ws.on('error', () => {}); ws.on('close', () => { const q = queues.get(ws); if (q) q.dispose(); leave(ws); });
     ws.on('message', raw => {
       if (Date.now() - ws.bucketAt > 1000) { ws.bucketAt = Date.now(); ws.bucket = 0; }
       if (++ws.bucket > 180) { ws.close(1008, 'Rate limit'); return; }
@@ -116,7 +169,7 @@ function createServer() {
 }
 if (require.main === module) {
   const { server } = createServer();
-  const port = Number(process.env.PORT) || 3000;
+  const port = Number(process.env.PORT) || 3001;
   server.listen(port, '0.0.0.0', () => console.log(`Территория войны: http://localhost:${port}`));
 }
-module.exports = { createServer };
+module.exports = { createServer, createRelayQueue };

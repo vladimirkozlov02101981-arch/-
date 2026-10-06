@@ -327,11 +327,11 @@ class BlackHole extends Ent {
     const R = 250;
     for (const s of g.soldiers) {
       if (s.gone) continue; const dx = this.x - s.x, dy = this.y - (s.y - 13); const d = Math.hypot(dx, dy);
-      if (d < R && d > 2) { const f = 1300 * (1 - d / R); s.vx += dx / d * f * dt; s.vy += dy / d * f * dt - g.gravity * dt * 0.55; if (s.st !== 'fly' && s.st !== 'dead') s.fly(); }
+      if (d < R && d > 2) { g.markImpact(s, this.owner); const f = 1300 * (1 - d / R); s.vx += dx / d * f * dt; s.vy += dy / d * f * dt - g.gravity * dt * 0.55; if (s.st !== 'fly' && s.st !== 'dead') s.fly(); }
     }
     for (const e of g.entities) {
       if (e === this || e.dead || !e.pushable || e.k === 'tomb') continue; const dx = this.x - e.x, dy = this.y - e.y; const d = Math.hypot(dx, dy);
-      if (d < R && d > 2) { const f = 900 * (1 - d / R); e.push(dx / d * f * dt, dy / d * f * dt - g.gravity * dt * 0.8); }
+      if (d < R && d > 2) { g.markImpact(e, this.owner); const f = 900 * (1 - d / R); e.push(dx / d * f * dt, dy / d * f * dt - g.gravity * dt * 0.8); }
     }
     this.carveT -= dt; if (this.carveT <= 0) { this.carveT = 0.18; g.carve(this.x, this.y, 10 + 36 * (this.age / 2.8), false); }
     this.dmgT -= dt; if (this.dmgT <= 0) { this.dmgT = 0.2; for (const s of g.soldiers) if (s.alive && Math.hypot(this.x - s.x, this.y - s.y + 13) < 36) g.damage(s, 4, this.owner); }

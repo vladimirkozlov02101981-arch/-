@@ -24,13 +24,19 @@ class RemoteGame {
     this.entities = []; this.eView = new Map();
     this.time = 0; this.round = 0; this.over = null;
     this.turn = { team: -1, sid: 0, time: 0, phase: 'wait', wind: 0, weapon: 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, round: 0 };
-    this.latestTurn = this.turn;
+    this.latestTurn = this.turn; this.turnCut = null;
     this.buf = []; this.clock = null; this.lastRecv = performance.now();
   }
   buildVisual() { buildTerrainVisual(this.terrain, this.theme, this.map, this.raster, this.waterY); this.raster = null; }
   active() { return this.sView.get(this.turn.sid) || null; }
+  /** Ввод следует последнему подтверждённому ходу, раньше интерполированной картинки. */
+  controlled() { return this.sView.get(this.latestTurn.sid) || null; }
   decodeTurn(T) {
-    return { team: T.tm, sid: T.sid, time: T.t / 10, phase: T.ph, wind: T.wd, weapon: T.w, walk: T.wk, ox: T.ox, retreat: T.rt / 10, shots: T.sh, charge: T.ch >= 0 ? T.ch / 100 : -1, rot: T.ro, spin: T.sp | 0, round: T.rd, target: T.tg ? { x: T.tg[0], y: T.tg[1] } : null, look: T.lk || null };
+    return { team: T.tm, sid: T.sid, time: T.t / 10, phase: T.ph, wind: T.wd, weapon: T.w, walk: T.wk, ox: T.ox, retreat: T.rt / 10, shots: T.sh, charge: T.ch >= 0 ? T.ch / 100 : -1, rot: T.ro, spin: T.sp | 0, round: T.rd, target: T.tg ? { x: T.tg[0], y: T.tg[1] } : null, preview: T.pv ? { x: T.pv[0], y: T.pv[1] } : null, look: T.lk || null, pick: Array.isArray(T.pk) ? T.pk : null, usedSids: Array.isArray(T.us) ? T.us.slice() : [] };
+  }
+  staleTurnEvent(ev, ht) {
+    const cut = this.turnCut;
+    return ev.t === 'turn' && cut && ev.team === cut.team && ev.sid !== cut.sid && ht <= cut.ht;
   }
   onSnap(m) {
     this.lastRecv = performance.now();
@@ -44,9 +50,22 @@ class RemoteGame {
     const turns = m.TL ? m.TL.map(t => this.decodeTurn(t)) : null;
     const turn = turns ? turns[this.viewLane] || turns[0] : m.T ? this.decodeTurn(m.T) : null;
     if (turns) this.turns = turns;
-    if (turn) this.latestTurn = turn;
+    if (turn) {
+      const previous = this.latestTurn;
+      // Ручной выбор сохраняет команду и номер хода. Камера следует ACK сразу,
+      // а ландшафт и остальные события по-прежнему ждут свой момент в буфере.
+      if (previous && previous.sid && turn.sid !== previous.sid && turn.team === previous.team &&
+          turn.round === previous.round && turn.phase === 'aim' && previous.phase === 'aim') {
+        this.turn = turn; this.round = turn.round;
+        this.turnCut = { ht: m.ht, team: turn.team, sid: turn.sid };
+        // Фильтруем до сжатия буфера: объединение переносит события в более
+        // новый кадр, поэтому его ht уже не отражает возраст старого turn.
+        for (const frame of this.buf) frame.V = frame.V.filter(ev => !this.staleTurnEvent(ev, frame.ht));
+      }
+      this.latestTurn = turn;
+    }
     if (m.TM) this.applyTeams(m.TM);
-    this.buf.push({ ht: m.ht, S, E, T: turn, V: m.V || [], done: false });
+    this.buf.push({ ht: m.ht, S, E, T: turn, V: (m.V || []).filter(ev => !this.staleTurnEvent(ev, m.ht)), done: false });
     // Compact positions but retain ordered, unapplied world events. A hidden tab
     // must not lose craters, constructed girders or the end-of-match event.
     if (this.buf.length > 90) {
@@ -67,14 +86,31 @@ class RemoteGame {
     for (const f of this.buf) {
       if (f.done || f.ht > this.clock) continue;
       f.done = true;
-      for (const ev of f.V) { try { fx.handle(ev, this, false); } catch (e) { console.warn(e); } }
-      if (f.T) { this.turn = f.T; this.round = f.T.round; }
+      for (const ev of f.V) {
+        // Объединённый снимок может содержать старые уведомления о ходе:
+        // они не должны повторно открыть обзор/баннер прежнего бойца после ACK.
+        if (this.staleTurnEvent(ev, f.ht)) continue;
+        try { fx.handle(ev, this, false); } catch (e) { console.warn(e); }
+      }
+      if (f.T && (!this.turnCut || f.ht >= this.turnCut.ht)) { this.turn = f.T; this.round = f.T.round; }
     }
     let a = null, b = null;
     for (let i = 0; i < this.buf.length; i++) { if (this.buf[i].ht <= this.clock) a = this.buf[i]; else { b = this.buf[i]; break; } }
     if (!a) a = this.buf[0]; if (!b) b = a;
     const t = b.ht > a.ht ? clamp((this.clock - a.ht) / (b.ht - a.ht), 0, 1) : 0;
     this.interp(a, b, t);
+    // Точка наведения получает ту же задержку и интерполяцию, что и фигура/ствол.
+    // Чужое превью не подменяет latestTurn, которым управляется ввод гостя.
+    const at = a.T, bt = b.T;
+    if (at && bt && at.team === bt.team && at.sid === bt.sid && at.round === bt.round &&
+        at.weapon === bt.weapon && at.phase === 'aim' && bt.phase === 'aim' && at.preview && bt.preview &&
+        this.turn.sid === at.sid && this.turn.round === at.round && this.turn.weapon === at.weapon) {
+      this.turn = { ...this.turn, preview: { x: lerp(at.preview.x, bt.preview.x, t), y: lerp(at.preview.y, bt.preview.y, t) } };
+    }
+    // Позиции остаются плавными; принадлежность оружия меняется вместе с ACK.
+    if (this.turnCut && this.clock < this.turnCut.ht) for (const s of this.soldiers) {
+      if (s.team === this.turn.team) s.wpn = s.id === this.turn.sid && s.alive ? this.turn.weapon : null;
+    }
     while (this.buf.length > 2 && this.buf[1].ht <= this.clock && this.buf[0].done) this.buf.shift();
   }
   interp(a, b, t) {

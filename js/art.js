@@ -2,13 +2,17 @@
 // Permanent artwork, loaded from the project. No round-dependent generation.
 const MapArt = {
   images: new Map(),
+  pending: new Map(),
   themeMap: { valley: 'valley', desert: 'canyon', arctic: 'arctic', volcano: 'volcano', alien: 'alien', tropical: 'pirate', castle: 'castles', city: 'city' },
-  get(id) {
+  get(id, priority = 'high') {
     if (!this.images.has(id)) {
-      const img = new Image(); img.src = `assets/maps/${id}.png`; this.images.set(id, img);
+      const img = new Image(); img.fetchPriority = priority; img.decoding = 'async'; this.images.set(id, img);
+      this.pending.set(id, new Promise(resolve => { img.onload = () => resolve(!!img.naturalWidth); img.onerror = () => resolve(false); }));
+      img.src = `assets/maps/${id}.png`;
     }
-    return this.images.get(id);
+    const img = this.images.get(id); if (priority === 'high') img.fetchPriority = 'high'; return img;
   },
+  load(id, priority = 'high') { this.get(id, priority); return this.pending.get(id); },
   softs: new Map(),
   /** дальний план: исходное разрешение, лёгкая резкость (unsharp mask) — чёткая картинка без мыла */
   soft(id) {
@@ -38,15 +42,19 @@ const MapArt = {
   }
 };
 
-/** фотореалистичные бесшовные текстуры карт (рендер Blender, dev/blender/make_textures.py).
-    Загружаются сразу при старте; если файла нет — карта рисуется процедурно, как раньше */
+/** Постоянные текстуры: общие бойцы/оружие и только материалы выбранной карты.
+    Отсутствующий файл сохраняет прежнюю запасную отрисовку; медленная загрузка не считается отсутствием. */
 const TexLib = {
   names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall', 'grass_valley', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'bush1', 'bush2',
     'rock_canyon', 'dirt_canyon', 'cave_canyon', 'rock_arctic', 'cave_arctic', 'rock_volcano', 'cave_volcano', 'rock_alien', 'dirt_alien', 'cave_alien', 'grass_alien',
     'wood_ship', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash', 'soldier_free', 'soldier_aim', 'haystack1', 'alien_tree1', 'alien_tree2', 'facade_city', 'tree_pine_snow1', 'tree_pine_snow2',
-    'wpn_bazooka', 'wpn_rpg', 'wpn_assault', 'wpn_sniper', 'wpn_shotgun', 'wpn_revolver', 'wpn_magnum', 'wpn_uzi', 'wpn_minigun', 'wpn_flamer', 'wpn_autocannon', 'wpn_mortar', 'wpn_homing'],
+    // оружие в руках (wpn_*, кадр 48×24 ед.) и метательное в полёте (ent_*, кадр 16×16 ед.) — рендер Blender, dev/blender/make_weapons2.py
+    'wpn_assault', 'wpn_revolver', 'wpn_magnum', 'wpn_uzi', 'wpn_acid', 'wpn_plasma', 'wpn_autocannon', 'wpn_tesla', 'wpn_repulsor', 'wpn_rpg', 'wpn_bazooka', 'wpn_homing', 'wpn_mortar', 'wpn_drill', 'wpn_salvo', 'wpn_grenade', 'wpn_cluster', 'wpn_sticky', 'wpn_molotov', 'wpn_blackhole', 'wpn_shotgun', 'wpn_sniper', 'wpn_minigun', 'wpn_flamer', 'wpn_railgun', 'wpn_dynamite', 'wpn_mine', 'wpn_robot', 'wpn_boot', 'wpn_bat', 'wpn_airstrike', 'wpn_lightning', 'wpn_orbital', 'wpn_nuke', 'wpn_tpgrenade', 'wpn_teleport', 'wpn_girder', 'wpn_pickaxe', 'wpn_medkit', 'wpn_skip', 'wpn_jetpack', 'ent_grenade', 'ent_cluster', 'ent_sticky', 'ent_molotov', 'ent_blackhole', 'ent_dynamite', 'ent_mine', 'ent_robot', 'ent_tpgrenade'],
   data: {},
   ready: null,
+  commonReady: null,
+  pending: new Map(), images: new Map(), surfacePending: new Map(), surfaceImages: new Map(),
+  surfaceNames: ['grass_valley', 'bush1', 'bush2'],
   hi: {},
   hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
@@ -111,11 +119,17 @@ const TexLib = {
       try {
         const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
         x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(c.width * c.height * 3);
-        for (let i = 0; i < c.width * c.height; i++) { rgb[i * 3] = d[i * 4]; rgb[i * 3 + 1] = d[i * 4 + 1]; rgb[i * 3 + 2] = d[i * 4 + 2]; }
+        for (let i = 0; i < c.width * c.height; i++) {
+          const lum = Math.round(d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114);
+          rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = lum;
+        }
         const mw = Math.floor(c.width / 2), mh = Math.floor(c.height / 2), md = new Uint8Array(mw * mh * 3);
-        for (let y = 0; y < mh; y++) for (let xx = 0; xx < mw; xx++) for (let channel = 0; channel < 3; channel++) {
-          const a = (y * 2 * c.width + xx * 2) * 3 + channel, b = a + c.width * 3;
-          md[(y * mw + xx) * 3 + channel] = Math.round((rgb[a] + rgb[a + 3] + rgb[b] + rgb[b + 3]) / 4);
+        for (let y = 0; y < mh; y++) for (let xx = 0; xx < mw; xx++) {
+          const a = (y * 2 * c.width + xx * 2) * 3, b = a + c.width * 3;
+          const avg = (rgb[a] + rgb[a + 3] + rgb[b] + rgb[b + 3]) / 4;
+          const val = Math.max(0, Math.min(255, Math.round(128 + (avg - 128) * 1.18)));
+          const idx = (y * mw + xx) * 3;
+          md[idx] = md[idx + 1] = md[idx + 2] = val;
         }
         this.fine[n] = { name: n, w: c.width, h: c.height, scale: 8, d: rgb, mip: { w: mw, h: mh, scale: 4, d: md } };
       } catch (e) { /* без мелких фотодеталей */ }
@@ -124,37 +138,81 @@ const TexLib = {
     im.src = `assets/tex/fine/${n}.webp`;
     return null;
   },
-  load() {
-    if (this.ready) return this.ready;
-    const base = this.names.map((n) => new Promise((res) => {
-      const im = new Image();
+  /** A shared in-flight request can be promoted from menu/demo to battle priority. */
+  loadOne(n, priority = 'high') {
+    if (!this.names.includes(n)) return Promise.resolve(false);
+    const have = this.images.get(n); if (have && priority === 'high') have.fetchPriority = 'high';
+    if (this.pending.has(n)) return this.pending.get(n);
+    const request = new Promise((res) => {
+      const im = new Image(); im.fetchPriority = priority; im.decoding = 'async'; this.images.set(n, im);
       im.onload = () => {
         try {
           const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
           x.drawImage(im, 0, 0); this.data[n] = { name: n, w: c.width, h: c.height, canvas: c, d: x.getImageData(0, 0, c.width, c.height).data };
         } catch (e) { /* холст недоступен — без текстуры */ }
-        res();
+        res(!!this.data[n]);
       };
-      im.onerror = () => res();
+      im.onerror = () => res(false);
       im.src = `assets/tex/${n}.png`;
-    }));
-    const surface = ['grass_valley', 'bush1', 'bush2'].map((n) => new Promise((res) => {
-      const im = new Image();
+    });
+    this.pending.set(n, request); return request;
+  },
+  loadSurface(n, priority = 'high') {
+    if (!this.surfaceNames.includes(n)) return Promise.resolve(false);
+    const have = this.surfaceImages.get(n); if (have && priority === 'high') have.fetchPriority = 'high';
+    if (this.surfacePending.has(n)) return this.surfacePending.get(n);
+    const request = new Promise((res) => {
+      const im = new Image(); im.fetchPriority = priority; im.decoding = 'async'; this.surfaceImages.set(n, im);
       im.onload = () => {
         try {
           const c = makeCanvas(im.naturalWidth, im.naturalHeight); c.getContext('2d').drawImage(im, 0, 0);
           this.surfaceHi[n] = { name: n, w: c.width, h: c.height, canvas: c, scale: 4 };
         } catch (e) { /* остаётся обычный спрайт */ }
-        res();
+        res(!!this.surfaceHi[n]);
       };
-      im.onerror = () => res();
+      im.onerror = () => res(false);
       im.src = `assets/tex/surface/${n}.png`;
-    }));
-    this.ready = Promise.all(base.concat(surface));
+    });
+    this.surfacePending.set(n, request); return request;
+  },
+  commonNames() { return this.names.filter(n => /^soldier_|^wpn_|^ent_/.test(n)); },
+  loadCommon(priority = 'low') {
+    const requests = this.commonNames().map(n => this.loadOne(n, priority));
+    if (!this.commonReady) this.commonReady = Promise.all(requests);
+    return this.commonReady;
+  },
+  /** Full-library compatibility for explicit tooling/tests; never called eagerly. */
+  load() {
+    if (this.ready) return this.ready;
+    this.ready = Promise.all(this.names.map(n => this.loadOne(n)).concat(this.surfaceNames.map(n => this.loadSurface(n))));
     return this.ready;
   },
+  mapAssets(id) {
+    const map = typeof id === 'object' && id ? id : typeof MAP_BY_ID !== 'undefined' && MAP_BY_ID[id];
+    const theme = map && typeof THEMES !== 'undefined' && THEMES[map.theme];
+    if (!map || !theme) throw new Error('Не найдена карта для загрузки: ' + String(id));
+    const names = new Set(), add = n => { if (typeof n === 'string' && this.names.includes(n)) names.add(n); };
+    for (const n of Object.values(theme.ground.tex || {})) add(n);
+    for (const shape of map.shapes || []) { add(shape.pal && shape.pal.tex); add(typeof MAT_DEFAULT !== 'undefined' && MAT_DEFAULT[shape.mat] && MAT_DEFAULT[shape.mat].tex); }
+    // Floor planks are sampled directly in terrain_visual.js, outside sh.pal.
+    if ((map.shapes || []).some(s => ['brick', 'wood'].includes(s.mat))) add('wood_light');
+    const trees = { oak: ['tree_oak1', 'tree_oak2', 'tree_oak3'], birch: ['tree_birch1'], pine: ['tree_pine1', 'tree_pine2'], pineSnow: ['tree_pine_snow1', 'tree_pine_snow2'], haystack: ['haystack1'], alientree: ['alien_tree1', 'alien_tree2'] };
+    for (const d of map.decor || []) for (const n of trees[d[0]] || []) add(n);
+    // The cap uses these sprites even when a scatter list contains no explicit bush.
+    const cap = theme.ground.cap;
+    if (cap.blades && !cap.snow && !cap.bushPal) { add('bush1'); add('bush2'); }
+    const surface = theme.id === 'valley' || theme.id === 'castle' ? this.surfaceNames.filter(n => names.has(n)) : [];
+    return { mapId: map.id, names: [...names], surface, panorama: MapArt.themeMap[theme.id] || 'valley' };
+  },
+  /** Await this before buildVisual/Net.ready; no arbitrary three-second fallback race. */
+  loadForMap(id, priority = 'high') {
+    let assets; try { assets = this.mapAssets(id); } catch (e) { return Promise.reject(e); }
+    const base = this.commonNames().concat(assets.names), jobs = base.map(n => this.loadOne(n, priority));
+    jobs.push(...assets.surface.map(n => this.loadSurface(n, priority)), MapArt.load(assets.panorama, priority));
+    return Promise.all(jobs).then(results => ({ ...assets, failed: base.concat(assets.surface.map(n => 'surface/' + n), ['maps/' + assets.panorama]).filter((n, i) => !results[i]) }));
+  },
 };
-TexLib.load();
+TexLib.loadCommon('low');
 /* Боец из 3D-модели (кадры отрендерены в Blender, dev/blender/make_soldier.py).
    Лист free: строки — стойка, шаг, бег, лазание; лист aim: строка — угол прицела (−90°…+90° через 15°),
    столбец 0 — стойка, 1…12 — шаг. Светлые пластины брони перекрашиваются в цвет команды. */

@@ -10,26 +10,25 @@
    Хранение: localStorage этого браузера; на ПК с сервером «Играть» ещё и файл profile.json рядом с игрой
    (общий для Chrome, Opera и файла игры на этом ПК).
    ========================================================= */
-const PROFILE_KEY = 'tw_profile_v2';
+const PROFILE_KEY = 'tw_profile_copy1_v2';
 
 /* ---------- клавиши: по физической клавише (event.code) — раскладка (рус/укр/англ) не важна ---------- */
 const KEY_ACTIONS = [
-  ['left', 'Идти влево', ['KeyA', 'ArrowLeft']], ['right', 'Идти вправо', ['KeyD', 'ArrowRight']],
+  ['left', 'Идти влево', ['KeyA']], ['right', 'Идти вправо', ['KeyD']],
   ['up', 'Вверх по лестнице / тяга джетпака', ['KeyW']], ['down', 'Вниз по лестнице', ['KeyS']],
-  ['aimUp', 'Прицел выше', ['ArrowUp']], ['aimDown', 'Прицел ниже', ['ArrowDown']], ['precise', 'Точнее прицел / задержать дыхание', ['ShiftLeft', 'ShiftRight']],
+  ['aimUp', 'Поднять прицел', ['KeyI']], ['aimDown', 'Опустить прицел', ['KeyK']], ['precise', 'Точное наведение / задержка дыхания', ['ShiftLeft', 'ShiftRight']],
   ['jump', 'Прыжок (и прыжок робо-бомбы)', ['Space']], ['fire', 'Выстрел', ['KeyF', 'Enter']],
-  ['holster', 'Убрать / вернуть оружие', ['Escape']], ['skip', 'Пропустить ход (сделал всё, что хотел)', ['Backquote', 'KeyP']],
-  ['tray', 'Панель оружия', ['Tab']], ['prev', 'Предыдущее оружие', ['KeyQ']], ['next', 'Следующее оружие / оптика снайперки', ['KeyE']],
-  ['cat1', 'Ракеты', ['Digit1']], ['cat2', 'Гранаты', ['Digit2']], ['cat3', 'Огнестрел', ['Digit3']], ['cat4', 'Взрывчатка', ['Digit4']], ['cat5', 'С воздуха', ['Digit5']], ['cat6', 'Снаряжение', ['Digit6']],
-  ['binoc', 'Бинокль', ['KeyB']], ['camera', 'Камера к бойцу', ['KeyC']], ['rotate', 'Повернуть балку / подкрутка гранаты', ['KeyR']],
-  ['menu', 'Меню (пауза) — мышь свободна', ['Backspace']], ['chat', 'Чат (по сети)', ['KeyT']], ['sound', 'Звук вкл/выкл', ['KeyM']],
+  ['holster', 'Убрать / вернуть оружие', ['Escape']], ['skip', 'Пропустить ход', ['Backquote', 'KeyP']],
+  ['tray', 'Панель оружия', ['Tab']], ['prev', 'Предыдущее оружие', ['KeyQ']], ['next', 'Следующее оружие', ['KeyE']], ['optic', 'Скрыть / показать оптику', ['ControlLeft', 'ControlRight']],
+  ['binoc', 'Бинокль', ['KeyB']], ['camera', 'Вернуть камеру к бойцу', ['KeyC']], ['rotate', 'Повернуть балку / подкрутить гранату', ['KeyR']],
+  ['menu', 'Меню (пауза) — мышь свободна', ['Backspace']], ['chat', 'Чат (по сети)', ['KeyT']], ['sound', 'Включить / выключить звук', ['KeyM']],
 ];
 const KEY_DEFAULTS = Object.fromEntries(KEY_ACTIONS.map(([id, , codes]) => [id, codes.slice()]));
 function sanitizeKeys(k) {
   const out = {};
   for (const [id] of KEY_ACTIONS) {
-    const v = k && Array.isArray(k[id]) ? k[id].filter(c => typeof c === 'string' && /^[A-Za-z0-9]{1,24}$/.test(c)).slice(0, 3) : null;
-    out[id] = v && (v.length || Array.isArray(k[id])) ? v : KEY_DEFAULTS[id].slice();
+    const v = k && Array.isArray(k[id]) ? k[id].filter(c => typeof c === 'string' && c !== 'F11' && !/^Arrow|^(Digit|Numpad)\d$/.test(c) && (id === 'prev' || id === 'next' || !['KeyQ', 'KeyE'].includes(c)) && (id === 'optic' || !['ControlLeft', 'ControlRight'].includes(c)) && /^[A-Za-z0-9]{1,24}$/.test(c)).slice(0, 3) : null;
+    out[id] = id === 'prev' || id === 'next' || id === 'optic' ? KEY_DEFAULTS[id].slice() : v && (v.length || k[id].length === 0) ? v : KEY_DEFAULTS[id].slice();
   }
   return out;
 }
@@ -48,18 +47,27 @@ const Keys = {
   set(k) { this.map = sanitizeKeys(k); this.codes = new Set(Object.values(this.map).flat()); },
   codes: new Set(Object.values(KEY_DEFAULTS).flat()),
   /** зажата ли любая клавиша действия */
-  down(id) { const L = this.map[id]; if (!L) return false; for (const c of L) if (Input.keys[c]) return true; return false; },
+  down(id) {
+    if (typeof Input !== 'undefined' && Input.touchKeys && Input.touchKeys[id]) return true;
+    const L = this.map[id]; if (!L) return false; for (const c of L) if (Input.keys[c]) return true; return false;
+  },
   /** нажата ли в этом кадре */
-  hit(id) { const L = this.map[id]; if (!L) return false; for (const c of L) if (Input.pressed[c]) return true; return false; },
+  hit(id) {
+    if (typeof Input !== 'undefined' && Input.touchPressed && Input.touchPressed[id]) return true;
+    const L = this.map[id]; if (!L) return false; for (const c of L) if (Input.pressed[c]) return true; return false;
+  },
   /** «съесть» нажатие, чтобы другое действие на той же клавише его не увидело */
-  eat(id) { for (const c of this.map[id] || []) Input.pressed[c] = false; },
+  eat(id) {
+    if (typeof Input !== 'undefined' && Input.touchPressed) Input.touchPressed[id] = false;
+    for (const c of this.map[id] || []) Input.pressed[c] = false;
+  },
   label(id) { return (this.map[id] || []).map(keyLabel).join(' / ') || '—'; },
 };
 
 /* ---------- наборы настроек ---------- */
 /** значения по умолчанию при первом запуске — нынешние настройки игрока (перенесены из его браузера 02.10) */
 const FACTORY_SNAP = {
-  settings: { mapId: 'arctic', perTeam: 4, hp: 100, turnTime: 0, wind: true, arsenal: 'all', ai: 'normal', side: 'random', ammo: null, walk: 'limited', simul: false },
+  settings: { mapId: 'arctic', perTeam: 4, hp: 100, turnTime: 0, wind: true, arsenal: 'all', ai: 'normal', side: 'random', first: 'random', ammo: null, walk: 'limited', simul: false, foeCam: false },
   teams: [{ name: 'Красные', color: '#2fd6e0', hat: 'viking' }, { name: 'Синие', color: '#3d8bff', hat: 'beret' }],
   bot: { name: 'Компьютер', color: '#ff8a2b', hat: 'ushanka' },
   keys: null, sound: { on: true, volume: 0.7 },

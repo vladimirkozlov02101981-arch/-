@@ -5,7 +5,7 @@ const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const base = process.env.TEST_URL || 'http://localhost:3000';
+const base = process.env.TEST_URL || 'http://localhost:3001';
 const file = pathToFileURL(path.join(__dirname, '..', 'dist', 'Territory-War.html')).href;
 const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h = Math.imul(h ^ v, 16777619); return h >>> 0; };
 (async () => {
@@ -24,8 +24,8 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     // гость: файл с диска, ссылка вставлена в поле «Ссылка от друга»
     const served = [];
     guest.on('request', r => { if (!r.url().startsWith('file:') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) served.push(r.url()); });
-    // ПК друга: своего сервера «Играть онлайн» нет (проверка 127.0.0.1:3000 не отвечает) — поле для ссылки видно
-    await guest.route('http://127.0.0.1:3000/**', r => r.abort());
+    // ПК друга: своего сервера «Играть онлайн» нет (проверка 127.0.0.1:3001 не отвечает) — поле для ссылки видно
+    await guest.route('http://127.0.0.1:3001/**', r => r.abort());
     await guest.goto(file); await guest.waitForSelector('#s-main.show');
     await guest.click('[data-act="online"]'); await guest.waitForSelector('#s-online.show');
     assert.equal(await guest.locator('#srv-box').isVisible(), true, 'link field is shown in the file version');
@@ -36,6 +36,7 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     await guest.click('[data-act="join"]');
     await guest.waitForFunction(() => UI.mode === 'guest' && UI.cur === 's-setup');
     await host.waitForFunction(() => UI.teamsCfg[1] && document.getElementById('peer-status').classList.contains('ok'));
+    await host.selectOption('#o-first', 'team1');
     await host.click('#btn-start');
     await host.waitForFunction(() => App.mode === 'host' && App.game?.turn.phase === 'aim');
     await guest.waitForFunction(() => App.mode === 'guest' && App.remote?.turn.phase === 'aim');
@@ -48,7 +49,7 @@ const hash = () => { let h = 2166136261; for (const v of App.sc.terrain.mask) h 
     // ход гостя по сети
     await guest.evaluate(() => { App.ctl.aimMode = 'keys'; App.ctl.send({ c: 'fire', aim: Math.PI / 2, pw: 0.22 }); });
     await host.waitForFunction(() => App.game.turn.team === 0 && App.game.turn.phase === 'aim', {}, { timeout: 60000 });
-    const remembered = await guest.evaluate(() => localStorage.getItem('tw_server'));
+    const remembered = await guest.evaluate(() => localStorage.getItem('tw_server_copy1'));
     assert.equal(remembered, new URL(invite).origin, 'server remembered in the file version');
     assert(served.every(u => u.startsWith(base.replace(/\/$/, '')) === false || /\/room$/.test(u) || u.endsWith('/public')), 'guest loads no game files from the server: ' + served.join(', '));
     assert.deepEqual(errors, []);

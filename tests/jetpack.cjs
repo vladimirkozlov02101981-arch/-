@@ -1,0 +1,16 @@
+'use strict';
+require('../dev/tools/pw-chromium.cjs');
+const {chromium}=require('playwright'),fs=require('node:fs'),assert=require('node:assert/strict');
+(async()=>{let browser;const report={pass:false,errors:[]};try{
+ browser=await chromium.launch({headless:true});const ctx=await browser.newContext({viewport:{width:1280,height:720}});await ctx.route('**/profile',r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));const page=await ctx.newPage();page.on('pageerror',e=>report.errors.push(e.message));await page.goto(process.env.TEST_URL||'http://127.0.0.1:3001');await page.waitForSelector('#s-main.show',{timeout:120000});await page.waitForFunction(()=>SoldierArt.ok());
+ const result=await page.evaluate(async()=>{
+  await TexLib.load();App.paused=true;const spr=TexLib.data.wpn_jetpack,cv=makeCanvas(960,320),c=cv.getContext('2d');c.fillStyle='#24313a';c.fillRect(0,0,960,320);const signatures=[],saved=drawJetpackSprite;let calls=0;
+  drawJetpackSprite=(...args)=>{calls++;return saved(...args);};
+  try{for(const [i,face]of [1,-1,1,-1].entries()){const s={id:1,x:0,y:0,face,aim:0,st:i<2?'stand':'jet',thrust:i>=2,alive:true,hp:100,maxHp:100,wpn:'jetpack',hurt:0,wl:NO_WOUNDS},an={walk:0,blink:0};c.save();c.translate(120+i*240,265);c.scale(5,5);drawSoldier(c,s,{color:'#3d8bff',hat:'helmet'},0,an);c.restore();const d=c.getImageData(i*240,0,240,320).data;let h=2166136261;for(const v of d)h=Math.imul(h^v,16777619);signatures.push(h>>>0);}}
+  finally{drawJetpackSprite=saved;}
+  const g=new Game({mapId:'valley',settings:sanitizeSettings({...Profile.base.settings,wind:false,perTeam:1}),teams:Profile.base.teams});for(let i=0;i<600&&g.turn.phase!=='aim';i++)g.step(1/60);const s=g.active(),team=g.turn.team;g.cmd(team,{c:'weapon',id:'jetpack'});const ammo=g.teams[team].ammo.jetpack;g.cmd(team,{c:'fire',aim:0,pw:1});const y=s.y;g.cmd(team,{c:'ctrl',u:true,r:false,l:false,aim:0});for(let i=0;i<36;i++)g.step(1/60);
+  return {png:cv.toDataURL('image/png'),sprite:{w:spr.w,h:spr.h},calls,signatures,flight:{before:y,after:s.y,st:s.st,fuel:s.fuel,thrust:s.thrust,ammoBefore:ammo,ammoAfter:g.teams[team].ammo.jetpack,phase:g.turn.phase}};
+ });
+ fs.mkdirSync('test-results/jetpack',{recursive:true});fs.writeFileSync('test-results/jetpack/mounted.png',Buffer.from(result.png.split(',')[1],'base64'));delete result.png;Object.assign(report,result);assert.deepEqual(result.sprite,{w:768,h:384});assert.equal(result.calls,4);assert.equal(new Set(result.signatures).size,4);assert.equal(result.flight.st,'jet');assert(result.flight.after<result.flight.before-30);assert(result.flight.thrust);assert.equal(result.flight.ammoAfter,result.flight.ammoBefore-1);assert.deepEqual(report.errors,[]);report.pass=true;
+ }catch(e){report.failure=e.stack;process.exitCode=1;}finally{if(browser)await browser.close();fs.mkdirSync('test-results/jetpack',{recursive:true});fs.writeFileSync('test-results/jetpack/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));}
+})();

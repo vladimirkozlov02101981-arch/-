@@ -378,23 +378,32 @@ const DECOR = {
       o: [rx, ry, rot] — полуоси эллипса купола */
   glassdome(c, g, x, y, s, r, o) {
     const [rx, ry, rot] = o || [92, 46, -0.04];
-    if (g) { g.save(); g.translate(x, y); g.rotate(rot); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.ellipse(0, 0, rx + 3, ry + 3, 0, Math.PI, TAU); g.fill(); g.restore(); }   // стекло не светится, как кристалл
+    if (g) { g.save(); g.translate(x, y); g.rotate(rot); g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.ellipse(0, 0, rx + 3, ry + 3, 0, Math.PI, TAU); g.fill(); g.restore(); }
     c.save(); c.translate(x, y); c.rotate(rot);
     c.beginPath(); c.ellipse(0, 0, rx, ry, 0, Math.PI, TAU); c.closePath(); c.clip();
     c.globalCompositeOperation = 'source-atop';
-    // стекло: отражает небо — светлое сверху, темнее и голубее к основанию, внутри видна тёмная кабина
-    const gg = c.createLinearGradient(0, -ry, 0, 0); gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(0.4, 'rgba(214,232,252,1)'); gg.addColorStop(1, 'rgba(120,150,196,1)');
+    // многослойное оптическое стекло купола с отражением горизонта
+    const gg = c.createLinearGradient(0, -ry, 0, 0);
+    gg.addColorStop(0, 'rgba(255,255,255,0.95)'); gg.addColorStop(0.25, 'rgba(195,225,255,0.85)'); gg.addColorStop(0.65, 'rgba(120,165,220,0.75)'); gg.addColorStop(1, 'rgba(45,70,110,0.9)');
     c.fillStyle = gg; c.fillRect(-rx, -ry, rx * 2, ry);
-    c.fillStyle = 'rgba(40,50,80,0.25)'; c.beginPath(); c.ellipse(0, 0, rx * 0.62, ry * 0.55, 0, Math.PI, TAU); c.fill();
-    // каркас: меридианы и параллели из стальных рёбер
-    c.strokeStyle = 'rgba(120,128,142,0.95)'; c.lineWidth = 2.2;
+    // кабина и приборные консоли
+    c.fillStyle = 'rgba(25,32,48,0.55)'; c.beginPath(); c.ellipse(0, 0, rx * 0.72, ry * 0.62, 0, Math.PI, TAU); c.fill();
+    c.fillStyle = 'rgba(15,20,32,0.7)'; c.fillRect(-rx * 0.45, -ry * 0.28, rx * 0.9, ry * 0.22);
+    c.fillStyle = '#4ff5d8'; for (let k = -3; k <= 3; k++) { c.fillRect(k * rx * 0.1, -ry * 0.2, 2.2, 1.8); }
+    c.fillStyle = '#ffcf5a'; c.fillRect(-rx * 0.25, -ry * 0.12, 6, 2); c.fillRect(rx * 0.15, -ry * 0.12, 6, 2);
+    // преломляющая изумрудно-голубая кромка стекла по контуру (френель)
+    c.strokeStyle = 'rgba(79,245,216,0.55)'; c.lineWidth = 3.2;
+    c.beginPath(); c.ellipse(0, 0, rx - 1.6, ry - 1.6, 0, Math.PI, TAU); c.stroke();
+    // каркас: меридианы и параллели из титановых рёбер
+    c.strokeStyle = 'rgba(105,115,135,0.95)'; c.lineWidth = 2.4;
     for (let k = -3; k <= 3; k++) { const px = k / 3.6; c.beginPath(); c.ellipse(0, 0, Math.abs(px) * rx + 0.01, ry, 0, Math.PI, TAU); c.stroke(); }
     for (const h of [0.35, 0.68]) { c.beginPath(); c.ellipse(0, 0, rx * Math.sqrt(1 - h * h), 1, 0, 0, TAU); c.save(); c.translate(0, -h * ry); c.restore(); c.moveTo(-rx * Math.sqrt(1 - h * h), -h * ry); c.lineTo(rx * Math.sqrt(1 - h * h), -h * ry); c.stroke(); }
-    c.strokeStyle = 'rgba(210,218,230,0.8)'; c.lineWidth = 0.8;
+    c.strokeStyle = 'rgba(225,235,250,0.85)'; c.lineWidth = 0.9;
     for (let k = -3; k <= 3; k++) { const px = k / 3.6; c.beginPath(); c.ellipse(-0.8, -0.8, Math.abs(px) * rx + 0.01, ry, 0, Math.PI * 1.1, Math.PI * 1.5); c.stroke(); }
-    // блики: широкая полоса неба и яркая искра
-    c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(-rx * 0.35, -ry * 0.62, rx * 0.28, ry * 0.12, -0.35, 0, TAU); c.fill();
-    c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.arc(-rx * 0.46, -ry * 0.7, 2.5, 0, TAU); c.fill();
+    // блики: широкая полоса небесного отражения и двойная искра на изгибе стекла
+    c.fillStyle = 'rgba(255,255,255,0.65)'; c.beginPath(); c.ellipse(-rx * 0.35, -ry * 0.62, rx * 0.28, ry * 0.12, -0.35, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.98)'; c.beginPath(); c.arc(-rx * 0.46, -ry * 0.7, 2.6, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.85)'; c.beginPath(); c.arc(-rx * 0.32, -ry * 0.52, 1.4, 0, TAU); c.fill();
     c.restore();
   },
   drygrass(c, g, x, y, s, r) {
@@ -442,20 +451,45 @@ const DECOR = {
   },
   /* ---------- чужая планета ---------- */
   alientree(c, g, x, y, s, r) {
-    if (treeSprite(c, ['alien_tree1', 'alien_tree2'], x, y, s, r, 150)) return;   // гриб из Blender
-    const h = r.range(70, 90) * s; const bend = r.range(-12, 12) * s;
-    c.strokeStyle = hgrad(c, x - 8 * s, x + 8 * s, ['#b28ae0', '#6a3fa0', '#3a1f66']); c.lineWidth = 9 * s; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(x, y + 4); c.quadraticCurveTo(x + bend * 2, y - h * 0.5, x + bend, y - h); c.stroke();
-    const cx = x + bend, cy = y - h; const R = 36 * s;
-    c.fillStyle = vgrad(c, cy - R * 0.7, cy + R * 0.3, ['#ff8af0', '#c43fb0', '#6a1a60']);
-    c.beginPath(); c.moveTo(cx - R, cy + 4 * s); c.quadraticCurveTo(cx - R * 0.95, cy - R * 0.75, cx, cy - R * 0.8); c.quadraticCurveTo(cx + R * 0.95, cy - R * 0.75, cx + R, cy + 4 * s);
-    c.quadraticCurveTo(cx, cy - R * 0.15, cx - R, cy + 4 * s); c.fill();
-    for (let i = 0; i < 9; i++) {
-      const sx = cx + r.range(-R * 0.75, R * 0.75), sy = cy - r.range(R * 0.15, R * 0.6); const sr = r.range(2, 4.5) * s;
-      c.fillStyle = '#fff2a0'; circ(c, sx, sy, sr); if (g) { g.fillStyle = 'rgba(255,240,140,0.9)'; circ(g, sx, sy, sr * 2.4); }
+    const hasSprite = treeSprite(c, ['alien_tree1', 'alien_tree2'], x, y, s, r, 150);
+    const h = r.range(70, 90) * s, bend = r.range(-12, 12) * s;
+    const cx = x + bend, cy = y - h, R = 36 * s;
+    if (!hasSprite) {
+      c.save(); const stw = 9 * s;
+      c.strokeStyle = hgrad(c, x - stw, x + stw, ['#3a1f66', '#7a42b0', '#b88ef0', '#5a2d8a', '#2a144c']);
+      c.lineWidth = stw; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x, y + 4); c.quadraticCurveTo(x + bend * 1.8, y - h * 0.5, cx, cy); c.stroke();
+      c.lineWidth = 1.1 * s;
+      for (let fi = -3; fi <= 3; fi++) {
+        c.strokeStyle = fi % 2 === 0 ? 'rgba(220,180,255,0.6)' : 'rgba(50,20,90,0.7)';
+        c.beginPath(); c.moveTo(x + fi * 1.8 * s, y + 3); c.quadraticCurveTo(x + bend * 1.8 + fi * 1.2 * s, y - h * 0.5, cx + fi * 0.8 * s, cy); c.stroke();
+      }
+      c.fillStyle = vgrad(c, cy - R * 0.75, cy + R * 0.3, ['#ffaef5', '#d44fc2', '#7a1a70', '#3b0a38']);
+      c.beginPath(); c.moveTo(cx - R, cy + 4 * s); c.quadraticCurveTo(cx - R * 0.95, cy - R * 0.75, cx, cy - R * 0.82); c.quadraticCurveTo(cx + R * 0.95, cy - R * 0.75, cx + R, cy + 4 * s); c.quadraticCurveTo(cx, cy - R * 0.15, cx - R, cy + 4 * s); c.closePath(); c.fill();
+      c.lineWidth = 0.9 * s; c.strokeStyle = 'rgba(60,10,65,0.65)';
+      for (let gi = 0; gi < 16; gi++) { const gx = cx - R * 0.85 + gi * R * 0.11; c.beginPath(); c.moveTo(gx, cy + 3 * s); c.lineTo(cx, cy); c.stroke(); }
+      c.restore();
     }
-    c.strokeStyle = 'rgba(255,140,240,0.7)'; c.lineWidth = 1.2 * s;
-    for (let i = 0; i < 7; i++) { const tx = cx - R * 0.85 + i * R * 0.28; const l = r.range(8, 22) * s; c.beginPath(); c.moveTo(tx, cy + 2 * s); c.quadraticCurveTo(tx + 3 * s, cy + l * 0.5, tx, cy + l); c.stroke(); if (g) { g.fillStyle = 'rgba(255,120,240,0.8)'; circ(g, tx, cy + l, 3 * s); } }
+    c.save();
+    for (let i = 0; i < 11; i++) {
+      const sx = cx + r.range(-R * 0.75, R * 0.75), sy = cy - r.range(R * 0.12, R * 0.65), sr = r.range(2, 4.8) * s;
+      c.fillStyle = 'rgba(255,245,160,0.92)'; circ(c, sx, sy, sr);
+      c.strokeStyle = 'rgba(255,160,240,0.65)'; c.lineWidth = 0.8 * s; c.beginPath(); c.arc(sx, sy, sr * 1.35, 0, TAU); c.stroke();
+      if (g) { g.fillStyle = 'rgba(255,240,140,0.85)'; circ(g, sx, sy, sr * 2.2); }
+    }
+    c.lineWidth = 1.1 * s;
+    for (let i = 0; i < 9; i++) {
+      const tx = cx - R * 0.82 + i * R * 0.20 + r.range(-2, 2) * s, l = r.range(12, 32) * s, cur = r.range(-4, 4) * s;
+      c.strokeStyle = 'rgba(240,160,255,0.75)'; c.beginPath(); c.moveTo(tx, cy + 2 * s); c.quadraticCurveTo(tx + cur, cy + l * 0.5, tx + cur * 0.6, cy + l); c.stroke();
+      c.fillStyle = '#6fffe9'; circ(c, tx + cur * 0.6, cy + l, 1.8 * s);
+      if (g) { g.fillStyle = 'rgba(110,255,233,0.7)'; circ(g, tx + cur * 0.6, cy + l, 4.5 * s); }
+    }
+    c.lineWidth = 1.2 * s; c.strokeStyle = 'rgba(180,120,240,0.7)';
+    for (let ri = 0; ri < 5; ri++) {
+      const rx = x + (ri - 2) * 5 * s, rlen = (8 + r.range(2, 8)) * s, rdir = ri < 2 ? -1 : 1;
+      c.beginPath(); c.moveTo(x, y + 2); c.quadraticCurveTo(rx + rdir * 4 * s, y + 1, rx + rdir * rlen, y + 3); c.stroke();
+    }
+    c.restore();
   },
   tentacle(c, g, x, y, s, r) {
     for (let i = 0; i < 4; i++) {

@@ -16,7 +16,7 @@ class HiResTerrain {
     this.tiles = new Map(); this.bytes = 0; this.scale = HIRES_S; this.terr = null; this.ver = -1; this.nTouch = 0; this.frame = 0;
     this.det = null; this.detKey = null;
     const w = HIRES_T + 2 * HIRES_P;
-    this.src = makeCanvas(w, w); this.sx = this.src.getContext('2d', { willReadFrequently: true });
+    this.src = makeCanvas(w, w); this.sx = this.src.getContext('2d', { willReadFrequently: false });
   }
   /** сколько карт деталей уже загружено — когда приходят новые, плитки пересчитываются */
   hiCount(terr) {
@@ -122,9 +122,11 @@ class HiResTerrain {
     need.sort((a, b) => a[2] - b[2]);
     // общие границы в физических пикселях: ни щелей, ни перекрытия полупрозрачных краёв
     const m = c.getTransform(); c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    // Новый кадр показывается сразу; чтение исходников одной плитки распределяется по кадрам.
+    let submitted = 0;
     for (const [tx, ty, dist] of need) {
       const key = tx + ',' + ty; let e = this.tiles.get(key);
-      if (!e && !this.pending.has(key)) this.request(sc, tx, ty);
+      if (!e && !this.pending.has(key) && submitted < 1 && this.request(sc, tx, ty)) submitted++;
       const x = tx * T, y = ty * T, w = Math.min(T, sc.W - x), h = Math.min(T, sc.H - y);
       const px0 = Math.round(x * m.a + m.e), py0 = Math.round(y * m.d + m.f), px1 = Math.round((x + w) * m.a + m.e), py1 = Math.round((y + h) * m.d + m.f);
       const dw = px1 - px0, dh = py1 - py0; if (dw <= 0 || dh <= 0) continue;
@@ -251,8 +253,9 @@ function hiresWorkerMain() {
         const i = yy * w + xx; if (REF[i] !== rid) continue;
         const k = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy); LRGB[0] += LF[i * 3] * k; LRGB[1] += LF[i * 3 + 1] * k; LRGB[2] += LF[i * 3 + 2] * k; s += k;
       }
-      if (s > 1e-4) { LRGB[0] /= s; LRGB[1] /= s; LRGB[2] /= s; return; }
+      if (s > 1e-4) { LRGB[0] /= s; LRGB[1] /= s; LRGB[2] /= s; return s; }
       const i = Math.round(v) * w + Math.round(u); LRGB[0] = LF[i * 3]; LRGB[1] = LF[i * 3 + 1]; LRGB[2] = LF[i * 3 + 2];
+      return 0;
     };
     for (let Y = 0; Y < N; Y++) {
       const v = P - pad + (Y + 0.5) / S - 0.5, vi = Math.round(v), wy = ty * T - pad + (Y + 0.5) / S;
@@ -288,14 +291,17 @@ function hiresWorkerMain() {
               const cr = e.crop, hx = (wx + e.dx) * e.nk - 0.5 - cr.x0, hy = (wy + e.dy) * e.nk - 0.5 - cr.y0;
               const xi = Math.floor(hx), yi = Math.floor(hy), fx = hx - xi, fy = hy - yi, cd = cr.d, cw = cr.w;
               const p00 = (yi * cw + xi) * 3, p01 = p00 + 3, p10 = p00 + cw * 3, p11 = p10 + 3;
-              lightAt(u, v, rid);
+              const same = lightAt(u, v, rid);
               for (let c = 0; c < 3; c++) {
                 const nv = ((cd[p00 + c] * (1 - fx) + cd[p01 + c] * fx) * (1 - fy) + (cd[p10 + c] * (1 - fx) + cd[p11 + c] * fx) * fy) / 255;
                 NRGB[c] = nv * LRGB[c];
               }
-              r = NRGB[0]; g = NRGB[1]; b = NRGB[2];
               const fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;   // фото-поры мельче текселя родной текстуры
-              if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; r *= fineAt(f, cx, cy, 0); g *= fineAt(f, cx, cy, 1); b *= fineAt(f, cx, cy, 2); }
+              if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; NRGB[0] *= fineAt(f, cx, cy, 0); NRGB[1] *= fineAt(f, cx, cy, 1); NRGB[2] *= fineAt(f, cx, cy, 2); }
+              // у границы с другим материалом (грунт/пещера, порода/кладка) родной цвет плавно переходит в гладкое увеличение:
+              // без этого граница шла ступеньками по пикселям карты
+              const kb = same >= 0.999 ? 1 : Math.max(0, Math.min(1, (same - 0.5) * 2));
+              r += (NRGB[0] - r) * kb; g += (NRGB[1] - g) * kb; b += (NRGB[2] - b) * kb;
             }
           } else {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
             const h = HI[e.name], fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;

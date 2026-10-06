@@ -16,7 +16,7 @@ const fs=require('node:fs');
         return connect.call(this,destination,...rest);
       };
     });
-    await page.goto('http://localhost:3000');await page.waitForSelector('#s-main.show');await page.click('[data-act="hotseat"]');
+    await page.goto('http://localhost:3001');await page.waitForSelector('#s-main.show');await page.click('[data-act="hotseat"]');
     const levels=await page.evaluate(async()=>{
       Sfx.setSilent(false);Sfx.toggle(true);Sfx.setVolume(.7);Sfx.setScene(null);
       // Disable camera listener updates so distance measurements stay reproducible.

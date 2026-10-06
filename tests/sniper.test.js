@@ -7,16 +7,16 @@ function fixture() {
   const context = vm.createContext({
     Sfx: { play() {}, chargeStop() {}, chargeStart() {}, chargeSet() {} },
     WEAPON: { sniper: { id: 'sniper', mode: 'instant' }, bazooka: { id: 'bazooka', mode: 'charge' } },
-    WEAPONS: [], SPIN_WEAPONS: new Set(),
+    WEAPONS: [], SPIN_WEAPONS: new Set(), performance: { now: () => 0 },
   });
-  for (const file of ['util.js', 'profile.js', 'input.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
-  const { Input, LocalController } = vm.runInContext('({Input,LocalController})', context), sent = [];
+  for (const file of ['util.js', 'profile.js', 'input.js', 'render.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../js', file), 'utf8'), context);
+  const { Input, LocalController, Camera, Keys } = vm.runInContext('({Input,LocalController,Camera,Keys})', context), sent = [];
   const ctl = new LocalController(c => sent.push(c)); ctl.myTeams = [0];
   const s = { id: 1, x: 100, y: 124, aim: -0.4, alive: true }, T = { round: 1, sid: 1, team: 0, phase: 'aim', weapon: 'bazooka', shots: 0 };
-  const sc = { soldiers: [s], map: { ladders: [] }, teams: [{ ammo: {} }] }, cam = { toWorld: (x, y) => [x, y] };
+  const sc = { soldiers: [s], map: { ladders: [] }, teams: [{ ammo: {} }], W: 6400, H: 1800, waterY: 1750, turn: T, entities: [] }, cam = { z: 1, toWorld: (x, y) => [x, y] };
   Input.mouse.x = 250; Input.mouse.y = 50;
   const tick = () => ctl.update(1 / 60, sc, cam, 800, 600, T);
-  return { Input, ctl, s, T, sc, sent, tick };
+  return { Input, ctl, s, T, sc, cam, sent, tick, Camera, Keys };
 }
 function angle(actual, expected) { assert(Math.abs(actual - expected) < 1e-10, `${actual} differs from ${expected}`); }
 
@@ -26,36 +26,102 @@ test('Selecting sniper opens the historical scope and immediately aims at the mo
   angle(f.ctl.base, Math.atan2(-50, 150));
 });
 
-test('E hides only the optic: mouse control remains active and E never cycles weapons', () => {
-  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.KeyE = true; f.tick();
-  assert.equal(f.ctl.scopeOn, false); assert.equal(f.Input.pressed.KeyE, false);
-  f.Input.mouse.x = 20; f.Input.mouse.y = 40; f.Input.mouse.moved = true; f.tick();
+test('Ctrl hides only the optic: mouse control remains active and Ctrl never cycles weapons', () => {
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.ControlLeft = true; f.tick();
+  assert.equal(f.ctl.scopeOn, false); assert.equal(f.Input.pressed.ControlLeft, false);
+  f.Input.mouse.x = 20; f.Input.mouse.y = 40; f.Input.mouse.dx = -230; f.Input.mouse.dy = -10; f.Input.mouse.moved = true; f.tick();
   angle(f.ctl.base, Math.atan2(-60, -80)); assert.equal(f.sent.some(c => c.c === 'weapon'), false);
-  assert.match(f.ctl.hint(f.sc, f.T), /Мышь.*ЛКМ.*F.*Shift.*показать/);
+  assert.match(f.ctl.hint(f.sc, f.T), /по всей карте.*стабилизируется.*ЛКМ.*показать/);
 });
 
 test('Left click after keyboard aiming fires at its current mouse position, including hidden scope', () => {
-  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.KeyE = true; f.tick();
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.ControlLeft = true; f.tick();
   f.ctl.aimMode = 'keys'; f.Input.mouse.x = 170; f.Input.mouse.y = 170; f.Input.mouse.clicked[0] = true; f.tick();
   angle(f.ctl.base, Math.PI / 4); assert.equal(f.ctl.scopeOn, false);
   const shot = f.sent.find(c => c.c === 'fire'); assert(shot); angle(shot.aim, f.ctl.aim);
 });
 
 test('Scope is restored when sniper is selected again or the next turn starts; breath still limits steadiness', () => {
-  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.KeyE = true; f.tick();
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.ControlLeft = true; f.tick();
   f.T.weapon = null; f.tick(); assert.equal(f.ctl.scopeOn, false);
   f.T.weapon = 'sniper'; f.tick(); assert.equal(f.ctl.scopeOn, true);
   f.Input.keys.ShiftLeft = true; f.tick(); assert(f.ctl.breath < 2.5);
-  f.Input.keys = {}; f.Input.pressed.KeyE = true; f.tick(); assert.equal(f.ctl.scopeOn, false);
+  f.Input.keys = {}; f.Input.pressed.ControlLeft = true; f.tick(); assert.equal(f.ctl.scopeOn, false);
   f.T.round++; f.tick(); assert.equal(f.ctl.scopeOn, true); assert.equal(f.ctl.breath, 2.5);
   f.T.phase = 'retreat'; f.tick(); assert.equal(f.ctl.scopeOn, false);
 });
 
 test('Non-sniper keyboard and mouse aiming, and binocular click protection, keep their behavior', () => {
-  const f = fixture(); f.Input.keys.ArrowUp = true; f.tick(); assert.equal(f.ctl.aimMode, 'keys'); assert.equal(f.ctl.scopeOn, false);
+  const f = fixture(); f.Input.keys.KeyI = true; f.tick(); assert.equal(f.ctl.aimMode, 'keys'); assert.equal(f.ctl.scopeOn, false);
   const keyboardAngle = f.ctl.base; f.Input.keys = {}; f.Input.mouse.x = 10; f.Input.mouse.y = 200; f.tick(); angle(f.ctl.base, keyboardAngle);
   f.Input.mouse.moved = true; f.tick(); angle(f.ctl.base, Math.atan2(100, -90));
   f.T.weapon = 'sniper'; f.tick(); const sniperAngle = f.ctl.base; f.ctl.binoc = true;
   f.Input.mouse.x = 200; f.Input.mouse.y = 10; f.Input.mouse.clicked[0] = true; f.tick();
   angle(f.ctl.base, sniperAngle); assert.equal(f.sent.some(c => c.c === 'fire'), false);
+});
+
+
+test('Locked sniper retains all relative motion beyond the screen and reaches every map boundary', () => {
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true;
+  const move = (dx, dy) => { f.Input.mouse.dx = dx; f.Input.mouse.dy = dy; f.Input.mouse.moved = true; f.tick(); f.Input.endFrame(); };
+  move(5000, 1000); assert.equal(f.ctl.mouseW.x, 5250); assert.equal(f.ctl.mouseW.y, 1050);
+  move(10000, 10000); assert.equal(f.ctl.mouseW.x, 6399); assert.equal(f.ctl.mouseW.y, 1799);
+  move(-20000, -20000); assert.equal(f.ctl.mouseW.x, 0); assert.equal(f.ctl.mouseW.y, -900);
+  move(6000, 2200); assert.equal(f.ctl.mouseW.x, 6000); assert.equal(f.ctl.mouseW.y, 1300);
+});
+
+test('Stationary scope keeps its world target when the camera moves or zooms and settles completely', () => {
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true; f.s.wl = [0, 0, 3, 3];
+  f.Input.mouse.dx = 5200; f.Input.mouse.dy = 500; f.Input.mouse.moved = true; f.tick();
+  const point = { ...f.ctl.scopePoint }, range = Math.hypot(point.x - f.s.x, point.y - (f.s.y - 24));
+  assert(Math.abs(f.ctl.aim - f.ctl.base) * range <= 1.5 + 1e-8);
+  f.Input.endFrame(); f.cam.z = 6; f.cam.toWorld = (x, y) => [x + 3300, y + 900];
+  for (let i = 0; i < 30; i++) f.tick();
+  assert.deepEqual({ ...f.ctl.scopePoint }, point); angle(f.ctl.aim, f.ctl.base); assert.equal(f.ctl.swayAmp, 0);
+  f.Input.keys.ShiftLeft = true; f.ctl.breath = 0;
+  for (let i = 0; i < 30; i++) f.tick();
+  angle(f.ctl.aim, f.ctl.base);
+});
+
+test('Scope sensitivity follows zoom and binocular movement preserves the selected world target', () => {
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true; f.cam.z = 4;
+  f.Input.mouse.dx = 120; f.Input.mouse.dy = -40; f.Input.mouse.moved = true; f.tick(); f.Input.endFrame();
+  assert.equal(f.ctl.scopePoint.x, 280); assert.equal(f.ctl.scopePoint.y, 40);
+  const point = { ...f.ctl.scopePoint }; f.ctl.binoc = true;
+  f.Input.mouse.dx = 2000; f.Input.mouse.dy = 3000; f.Input.mouse.moved = true; f.tick(); f.Input.endFrame();
+  assert.deepEqual({ ...f.ctl.scopePoint }, point);
+  f.ctl.binoc = false; f.tick(); assert.deepEqual({ ...f.ctl.scopePoint }, point);
+});
+
+test('Optic camera keeps the whole historical lens in view at every map corner without idle drift', () => {
+  const f = fixture(), sw = 800, sh = 600, pad = Math.round(Math.min(sw, sh) * 0.16) + 16;
+  for (const z of [0.86, 2, 4.28]) for (const [x, y] of [[0, -900], [6399, -900], [0, 1799], [6399, 1799]]) {
+    const cam = new f.Camera(), point = { x, y }; Object.assign(cam, { inited: true, x: 3200, y: 600, z, tz: z, userZ: z, turnKey: '0:1:1', scopeFocus: { point, locked: true, visible: true } });
+    cam.update(1 / 60, f.sc, { shake: 0, focus: null }, sw, sh, f.Input.mouse);
+    const screen = cam.toScreen(x, y, sw, sh);
+    assert(screen[0] >= pad - 1e-7 && screen[0] <= sw - pad + 1e-7, 'horizontal lens clipping: ' + screen);
+    assert(screen[1] >= pad - 1e-7 && screen[1] <= sh - pad + 1e-7, 'vertical lens clipping: ' + screen);
+    const pos = [cam.x, cam.y]; for (let i = 0; i < 30; i++) cam.update(1 / 60, f.sc, { shake: 0, focus: null }, sw, sh, f.Input.mouse);
+    assert(Math.hypot(cam.x - pos[0], cam.y - pos[1]) < 1e-8); assert.deepEqual(point, { x, y });
+  }
+});
+
+test('Scope zoom anchors its world point and live hints reflect remapped keys', () => {
+  const f = fixture(), cam = new f.Camera(), p = { x: 2300, y: 500 };
+  Object.assign(cam, { x: 2000, y: 400, z: 1, tz: 1, userZ: 1, scopeFocus: { point: p, locked: true, visible: true } });
+  const before = cam.toScreen(p.x, p.y, 800, 600); cam.zoomAt(2, 10, 10, 800, 600);
+  assert.deepEqual(cam.toScreen(p.x, p.y, 800, 600), before); assert.deepEqual(p, { x: 2300, y: 500 });
+  f.T.weapon = 'sniper'; f.tick(); f.Keys.set({ fire: ['KeyX'], optic: ['ControlLeft', 'ControlRight'], precise: ['KeyZ'] });
+  const hint = f.ctl.hint(f.sc, f.T); assert.match(hint, /ЛКМ или X/); assert.match(hint, /Z —/); assert.match(hint, /Ctrl.*—/);
+});
+
+
+test('Zoom preserves directional weapon aim until a real mouse adjustment', () => {
+  const f = fixture(); f.tick(); const base = f.ctl.base, point = { ...f.ctl.aimPoint };
+  for (const z of [0.65, 1.3, 4.2, 1]) {
+    f.cam.z = z; f.cam.toWorld = (x, y) => [(x - 400) / z + 2100, (y - 300) / z + 700]; f.tick();
+    angle(f.ctl.base, base); assert.deepEqual({ ...f.ctl.aimPoint }, point);
+  }
+  f.Input.mouse.clicked[0] = true; f.tick(); angle(f.ctl.base, base); f.Input.endFrame();
+  f.Input.mouse.x += 17; f.Input.mouse.moved = true; f.tick(); assert.notEqual(f.ctl.base, base);
 });

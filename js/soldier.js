@@ -181,12 +181,15 @@ class Soldier {
             this.walkAcc -= 1;
             if (legacy ? g.turn.walk <= 0 : !walkOk(g, this, this.x + dir)) { this.walkAcc = 0; break; }
             if (this.tryStep(T, dir)) {
-              moving = true; if (legacy) g.turn.walk -= 1;
+              if (legacy) g.turn.walk -= 1;
               this.footDistance=(this.footDistance||0)+1;
               if(this.footDistance>=22){this.footDistance=0;g.emit({t:'footstep',x:R1(this.x),y:R1(this.y)});}
               if (!onGround(T, this.x, this.y)) { this.st = 'air'; this.vx = dir * 45; this.vy = 0; this.maxVy = 0; break; }
             } else { this.walkAcc = 0; break; }
           }
+          // Поза зависит от доступного движения, а не от целого пикселя накопленного шага.
+          // Проверяем следующую позицию: у стены или на границе запаса сразу останавливаемся.
+          moving = (legacy ? g.turn.walk > 0 : walkOk(g, this, this.x + dir)) && !!stepFrom(T, this.x, this.y, dir);
         } else this.walkAcc = 0;
         if (this.st === 'stand' || this.st === 'walk') this.st = moving ? 'walk' : 'stand';
         break;
@@ -196,7 +199,7 @@ class Soldier {
       case 'dead': {
         if (!onGround(T, this.x, this.y) && bodyFree(T, this.x, this.y + 1)) { this.st = 'fly'; this.vx = 0; this.vy = 0; break; }
         this.restT += dt;
-        if (this.restT > 0.7) { this.gone = true; g.spawn(new Tomb(g, this.x, this.y, this.team)); }
+        if (this.restT > 0.7) { this.gone = true; g.spawn(new Tomb(g, this.x, this.y, this.team), this); }
         break;
       }
     }

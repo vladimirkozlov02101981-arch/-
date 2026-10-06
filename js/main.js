@@ -5,7 +5,7 @@
 const DT = 1 / 60;
 /* запасные значения для проверки полей; настройки игрока и их значения по умолчанию — js/profile.js (Profile, FACTORY_SNAP) */
 const DEFAULT_PREFS = {
-  settings: { mapId: 'arctic', perTeam: 4, hp: 100, turnTime: 0, wind: true, crates: false, sd: 0, arsenal: 'all', ai: 'normal', ammo: null, walk: 'limited', simul: false },
+  settings: { mapId: 'arctic', perTeam: 4, hp: 100, turnTime: 0, wind: true, crates: false, sd: 0, arsenal: 'all', ai: 'normal', ammo: null, walk: 'limited', simul: false, first: 'random' },
   teams: [{ name: 'Красные', color: '#2fd6e0', hat: 'viking' }, { name: 'Синие', color: '#3d8bff', hat: 'beret' }],
   bot: { name: 'Компьютер', color: '#ff8a2b', hat: 'ushanka' },
 };
@@ -17,13 +17,31 @@ function sanitizeTeam(t, fb) {
 function sanitizeSettings(S) {
   const D = DEFAULT_PREFS.settings; S = S && typeof S === 'object' ? S : {};
   return {
-    mapId: MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 20),
+    mapId: S.mapId === 'random' || MAP_BY_ID[S.mapId] ? S.mapId : D.mapId, perTeam: clamp((S.perTeam | 0) || D.perTeam, 1, 20),
     hp: Number.isFinite(+S.hp) && +S.hp >= 1 ? clamp(Math.round(+S.hp), 1, 1000) : D.hp, turnTime: S.turnTime === 0 ? 0 : Number.isFinite(+S.turnTime) && +S.turnTime >= 5 ? clamp(Math.round(+S.turnTime), 5, 600) : D.turnTime,   // 0 — без ограничения
     wind: S.wind !== false, crates: false, sd: 0,   // ящиков с припасами и внезапной смерти в игре нет
     arsenal: ['classic', 'tw3'].includes(S.arsenal) ? S.arsenal : 'all', ai: ['easy', 'normal', 'hard'].includes(S.ai) ? S.ai : 'normal', side: ['left', 'right', 'random'].includes(S.side) ? S.side : 'random', swap: !!S.swap, ammo: sanitizeAmmo(S.ammo),
+    first: ['random', 'team1', 'team2'].includes(S.first) ? S.first : 'random',
+    ...(S.firstTeam === 0 || S.firstTeam === 1 ? { firstTeam: S.firstTeam } : {}),
     walk: S.walk === 'free' ? 'free' : 'limited',   // ход бойца: ограничен дистанцией или на любую дистанцию
     simul: !!S.simul,                                // непрерывный бой: обе команды ходят одновременно (по сети и против компьютера)
+    foeCam: false,                              // прежнее поле профиля отключено; обзор соперника удалён
   };
+}
+
+/** Конкретную карту выбирает создатель боя один раз; в сеть уходит уже выбранное поле. */
+function resolveBattleMap(cfg) {
+  const requested = cfg.mapId || cfg.settings.mapId;
+  const mapId = requested === 'random' ? MAPS[Math.floor(Math.random() * MAPS.length)].id : MAP_BY_ID[requested] ? requested : DEFAULT_PREFS.settings.mapId;
+  return { ...cfg, mapId, settings: { ...cfg.settings, mapId } };
+}
+
+/** Сторона карты и первый ход независимы. Решает создатель боя, гость принимает готовые поля. */
+function resolveBattleStart(cfg) {
+  const resolved = resolveBattleMap(cfg), S = { ...resolved.settings };
+  if (['left', 'right', 'random'].includes(S.side)) S.swap = S.side === 'right' || (S.side === 'random' && Math.random() < 0.5);
+  S.firstTeam = S.simul ? 0 : S.first === 'team2' ? 1 : S.first === 'team1' ? 0 : S.first === 'random' ? (Math.random() < 0.5 ? 0 : 1) : S.firstTeam === 1 ? 1 : 0;
+  return { ...resolved, settings: S };
 }
 
 const App = {
@@ -38,7 +56,18 @@ const App = {
     const s = { on: Sfx.enabled, volume: Sfx.volume }; Profile.base.sound = s; Profile.save();
     if (UI.work) UI.work.sound = Object.assign({}, s);
   },
+  /** обычное колесо меняет масштаб; нажатое колесо с прокруткой — личную скорость обзора этого боя */
+  wheel(dy, x, y, heldWheel = false) {
+    if (!this.sc || this.demo || !Number.isFinite(dy) || !dy) return;
+    if (heldWheel) {
+      const T = this.remote ? this.remote.latestTurn : this.sc.turn, team = this.ctl && this.ctl.panTeam(T);
+      if (team !== null && this.ctl && T && T.phase !== 'over' && !this.paused && !UI.cur && !UI.chatOpen) this.cam.panFactor = this.ctl.adjustPanSpeed(team, dy);
+      return;
+    }
+    this.cam.zoomAt(Math.pow(0.9, clamp(dy, -240, 240) / 120), x, y, this.ren.sw, this.ren.sh);
+  },
   init() {
+    if (this.initialized) return; this.initialized = true;
     this.cv = document.getElementById('game'); this.ren = new Renderer(this.cv); this.ren.resize();
     window.addEventListener('resize', () => this.ren.resize());
     Input.init(this.cv);
@@ -48,13 +77,15 @@ const App = {
     Input.onBinoc = (on) => { if (this.sc && !this.demo) { this.cam.binoc = on; if (on) UI.setTray(false); else this.cam.free = 0; } };
     // браузер без перехвата Esc (не Chrome/Edge) снял захват мыши — один раз подсказываем, где играть без этого
     Input.onEscLost = () => { if (this.sc && !this.demo) this.fx.banner('Этот браузер отпускает мышь по Esc — играйте в Chrome или Edge («Играть.cmd» открывает игру в них)', '#ffd166', false, 4.5); };
-    Input.onWheel = (dy, x, y) => { if (this.sc && !this.demo) this.cam.zoomAt(dy > 0 ? 0.9 : 1.11, x, y, this.ren.sw, this.ren.sh); };
+    Input.onWheel = (dy, x, y, heldWheel) => this.wheel(dy, x, y, heldWheel);
     this.fx.onOver = (ev) => this.onOver(ev);
     this.fx.onTurn = (ev) => this.onTurnEv(ev);
     this.fx.isLocalTeam = (t) => this.myTeams.includes(t);
+    this.fx.localTeams = () => this.myTeams;
     this.bindNet();
     Profile.load();
     UI.init(this);
+    TexLib.loadCommon('low').then(() => { UI.buildHelp(); UI.traySig = null; });
     // на ПК с сервером «Играть» настройки общие для всех браузеров (файл profile.json рядом с игрой)
     Profile.pull().then((changed) => { if (changed && UI.cur === 's-main') UI.featureMap(Profile.base.settings.mapId); });
     window.addEventListener('beforeunload', () => { if (Net.connected) Net.send({ t: 'bye' }); });
@@ -71,6 +102,7 @@ const App = {
   },
   /* ---------- сцены ---------- */
   clearGame() {
+    this.sceneEpoch = (this.sceneEpoch || 0) + 1;
     this.game = null; this.remote = null; this.sc = null; this.ais = []; this.ctl = null; this.fx.reset(null);
     UI.showHud(false); Sfx.stopAmbient(); Sfx.chargeStop(); this.paused = false; this.overShown = false; this.waitReady = 0; this.netEv = []; this.acc = 0;
     this.holstered = null;   // новый бой: убранное оружие прошлого боя забыто
@@ -78,26 +110,38 @@ const App = {
   setScene(sc) {
     Sfx.setScene(sc);
     sc.bg = new Background(sc.theme, sc.map.seed); this.sc = sc; this.fx.reset(sc); this.cam.reset(); this.ren.anim.clear(); this.ren.mini = null;
+    if (sc === this.game) sc.visualBusy = team => this.fx.combatBusy(team);
     if (!this.demo) Sfx.setAmbient(sc.theme.ambientSound);
   },
-  startDemo() {
+  async startDemo() {
     this.clearGame(); this.mode = 'menu'; this.demo = true; this.myTeams = []; Sfx.setSilent(true);
     const map = MAP_BY_ID[this.prefs.settings.mapId] || MAPS[0];
     const cfg = { mapId: map.id, settings: { perTeam: 3, hp: 100, turnTime: 30, wind: true, crates: false, sd: 0, arsenal: 'all' }, teams: [DEFAULT_PREFS.teams[0], { name: 'Зелёные', color: '#3ecf5a', hat: 'cap' }] };
-    try { const g = new Game(cfg); g.buildVisual(); this.game = g; this.setScene(g); this.ais = [new AI(g, 0, 'normal'), new AI(g, 1, 'hard')]; }
+    const epoch = this.sceneEpoch;
+    try {
+      await TexLib.loadForMap(map.id, 'low');
+      if (epoch !== this.sceneEpoch || !this.demo || this.mode !== 'menu') return;
+      const g = new Game(cfg); g.buildVisual(); this.game = g; this.setScene(g); this.ais = [new AI(g, 0, 'normal'), new AI(g, 1, 'hard')];
+    }
     catch (e) { console.error(e); }
   },
-  launch(build, done) {
+  launch(build, done, mapId) {
     UI.hideScreens(); UI.loading(true, 'Готовим поле боя…');
     this.clearGame(); this.demo = false; Sfx.setSilent(false);
+    const epoch = this.sceneEpoch;
     const go = () => {
+      if (epoch !== this.sceneEpoch || this.demo) return;
       let g;
       try { g = build(); } catch (e) { console.error(e); UI.loading(false); UI.dialog('Ошибка при создании карты: ' + e.message, () => this.toMenu()); return; }
       UI.loading(false); done(g); UI.showHud(true);
+      this.foeCam = false;
       document.getElementById('chat').classList.toggle('hidden', !(this.mode === 'host' || this.mode === 'guest'));
     };
-    // текстуры карт из Blender должны успеть загрузиться (не дольше 3 с)
-    Promise.race([TexLib.load(), new Promise((r) => setTimeout(r, 3000))]).then(() => setTimeout(go, 40));
+    // Строим поле только после его материалов; остальные карты не задерживают запуск.
+    TexLib.loadForMap(mapId, 'high').then(() => setTimeout(go, 40)).catch(e => {
+      if (epoch !== this.sceneEpoch) return;
+      UI.loading(false); UI.dialog('Не удалось загрузить поле боя: ' + e.message, () => this.toMenu());
+    });
   },
   teamCfgs() { return UI.teamsCfg.map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])); },
   /** «В бой!»: бой идёт по набору на экране (UI.work); постоянные настройки игрока при этом не трогаются — их меняют
@@ -106,7 +150,6 @@ const App = {
     const S = sanitizeSettings(UI.readSettings());
     if (UI.mode === 'guest') return;
     if (UI.mode === 'hotseat') S.simul = false;   // на одном экране ходят только по очереди
-    S.swap = S.side === 'right' || (S.side === 'random' && Math.random() < 0.5);   // сторона первой команды: выбранная или случайная
     Keys.set(UI.work.keys);   // клавиши этого набора действуют в бою
     if (UI.mode === 'host') { if (!Net.connected) { UI.setNote('Друг ещё не подключился — отправьте ему код комнаты'); Sfx.play('denied'); return; } this.startHostGame(S); return; }
     const teams = this.teamCfgs();
@@ -114,12 +157,13 @@ const App = {
   },
   startLocal(cfg, kind) {
     this.lastCfg = cfg; this.lastLocalMode = kind;
+    cfg = resolveBattleStart(cfg);
     this.launch(() => { const g = new Game(cfg); g.buildVisual(); return g; }, (g) => {
       this.mode = kind; this.game = g; this.setScene(g);
       if (kind === 'cpu') { this.ais = [new AI(g, 1, cfg.settings.ai)]; this.myTeams = [0]; this.ctl = new LocalController((c) => g.cmd(0, c)); g.greenTeam = 0; }
       else { this.myTeams = [0, 1]; this.ctl = new LocalController((c) => g.cmd(g.turn.team, c)); g.greenTeam = Math.random() < 0.5 ? 0 : 1; }   // на одном экране зелёные достаются случайно
       this.ctl.myTeams = this.myTeams;
-    });
+    }, cfg.mapId);
   },
   /* ---------- сеть ---------- */
   bindNet() {
@@ -184,9 +228,10 @@ const App = {
       case 'lobby': {
         const S = sanitizeSettings(d.settings); const teams = Array.isArray(d.teams) ? d.teams.slice(0, 2).map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])) : null;
         if (!teams || teams.length < 2) return;
-        if (!this.demo && (this.game || this.remote)) { this.clearGame(); this.startDemo(); }
+        if (!this.demo) { this.clearGame(); UI.loading(false); this.startDemo(); }
         if (UI.cur !== 's-setup' || UI.mode !== 'guest') { UI.openSetup('guest'); UI.setRoomCode(Net.code); UI.setPeerStatus(true, '● подключено к хосту'); }
         // бой настраивает хост: его настройки — временный набор этого боя; свои настройки гостя не трогаются
+        S.foeCam = false;
         UI.work.settings = S; UI.settings = S; UI.applySettings(S); UI.markMap();
         UI.teamsCfg = teams; UI.buildTeams(); UI.refreshCfgBar();
         break;
@@ -201,26 +246,26 @@ const App = {
   },
   startHostGame(S) {
     const teams = [sanitizeTeam(UI.teamsCfg[0], DEFAULT_PREFS.teams[0]), sanitizeTeam(this.guestTeam || UI.teamsCfg[1], DEFAULT_PREFS.teams[1])];
-    const cfg = { mapId: S.mapId, settings: S, teams };
+    const cfg = resolveBattleStart({ mapId: S.mapId, settings: S, teams });
     this.launch(() => { const g = new Game(cfg); g.buildVisual(); return g; }, (g) => {
       this.mode = 'host'; this.game = g; g.greenTeam = 0; this.setScene(g); this.myTeams = [0];
       this.ctl = new LocalController((c) => g.cmd(0, c)); this.ctl.myTeams = [0];
       this.waitReady = 30; this.snapAcc = 0; this.teamsAcc = 0; this.netEv = [];
       Net.sendBig(Object.assign({ t: 'start', you: 1, v: NET_VERSION }, g.startInfo()));
-    });
+    }, cfg.mapId);
   },
   startGuestGame(d) {
     if (!d || !MAP_BY_ID[d.mapId] || !Array.isArray(d.soldiers) || !Array.isArray(d.teams)) { UI.dialog('Получены неверные данные от хоста.'); return; }
     const start = {
       mapId: d.mapId, settings: sanitizeSettings(d.settings),
       teams: d.teams.slice(0, 2).map((t, i) => sanitizeTeam(t, DEFAULT_PREFS.teams[i])),
-      soldiers: d.soldiers.filter(a => Array.isArray(a) && isNum(a[0]) && isNum(a[1]) && isNum(a[3]) && isNum(a[4])).slice(0, 24).map(a => [a[0] | 0, clamp(a[1] | 0, 0, 1), String(a[2]).slice(0, 16), +a[3], +a[4], clamp(a[5] | 0, 1, 999)]),
+      soldiers: d.soldiers.filter(a => Array.isArray(a) && isNum(a[0]) && isNum(a[1]) && isNum(a[3]) && isNum(a[4])).slice(0, 40).map(a => [a[0] | 0, clamp(a[1] | 0, 0, 1), String(a[2]).slice(0, 16), +a[3], +a[4], clamp(a[5] | 0, 1, 999)]),
     };
     this.launch(() => { const r = new RemoteGame(start); r.buildVisual(); return r; }, (r) => {
       this.mode = 'guest'; this.remote = r; r.greenTeam = 1; this.setScene(r); this.myTeams = [1];
       this.ctl = new LocalController((c) => Net.send({ t: 'c', c })); this.ctl.myTeams = [1];
       Net.send({ t: 'ready' });
-    });
+    }, start.mapId);
   },
   onNetError(e) {
     const msg = Net.errorText(e);
@@ -246,7 +291,7 @@ const App = {
     if (UI.cur === 's-online') Net.close();
     UI.show('s-main');
   },
-  toMenu() { Net.close(); this.clearGame(); UI.hideScreens(); this.mode = 'menu'; this.startDemo(); UI.show('s-main'); },
+  toMenu() { Net.close(); this.clearGame(); UI.loading(false); UI.hideScreens(); this.mode = 'menu'; this.startDemo(); UI.show('s-main'); },
   /** вернулись к выбору режима: временный набор боя забыт, действуют постоянные настройки игрока */
   leftToMain() { UI.work = null; Profile.forgetPrev(); Profile.applyDevice(Profile.base); },
   quitToMenu() { if (Net.connected) Net.send({ t: 'bye' }); this.toMenu(); },
@@ -263,7 +308,10 @@ const App = {
       const code = Net.code; this.clearGame(); this.startDemo(); UI.openSetup('host', { keep: true }); UI.setRoomCode(code); UI.setPeerStatus(true);   // реванш — тот же набор боя
       UI.teamsCfg[1] = Object.assign({}, this.guestTeam || UI.teamsCfg[1]); UI.buildTeams(); this.sendLobby(); return;
     }
-    if (this.lastCfg) this.startLocal(this.lastCfg, this.lastLocalMode);
+    if (this.lastCfg) {
+      const cfg = this.lastCfg, settings = { ...cfg.settings };
+      this.startLocal({ ...cfg, settings }, this.lastLocalMode);
+    }
   },
   toggleTray() { if (!this.sc || this.demo || UI.cur) return; UI.setTray(!UI.trayOpen); },
   onTurnEv(ev) {
@@ -272,7 +320,20 @@ const App = {
     UI.setTray(false); this.cam.free = 0;
     if (!(Input.drag && Input.drag.binoc)) this.cam.binoc = false;
     const sc = this.sc; const tm = sc.teams[ev.team]; const s = sc.soldiers.find(o => o.id === ev.sid);
-    if (tm) this.fx.banner(`Ход: боец №${s ? s.name : ''} («${tm.name}»)`, tm.color, this.myTeams.length > 1, 1.8);
+    const isMine = this.myTeams.includes(ev.team);
+    // плашка начала хода видна 3,4 с: кто ходит (номер бойца на знаке команды), чей ход, раунд и время хода
+    const T = sc.turn, S = sc.settings || (sc.cfg && sc.cfg.settings) || {};
+    this.fx.banners = this.fx.banners.filter(b => b.kind !== 'turn');   // прежняя плашка хода сразу уступает место новой
+    if (tm) this.fx.banner(`Ход: боец ${s ? s.name : ''} («${tm.name}»)`, tm.color, false, 3.4, {
+      kind: 'turn',
+      soldier: s ? s.name : '',
+      teamName: tm.name,
+      teamColor: tm.color,
+      isMine,
+      hotseat: this.myTeams.length > 1,
+      round: T && T.team === ev.team ? (T.round || 1) : (sc.round || 1),
+      time: S.turnTime > 0 ? S.turnTime : 0
+    });
   },
   onOver(ev) {
     if (this.demo) { setTimeout(() => { if (this.demo && this.mode === 'menu') this.startDemo(); }, 3500); return; }
@@ -304,7 +365,14 @@ const App = {
     if (Keys.hit('sound')) { Sfx.toggle(); UI.updateSoundIcon(); this.soundChanged(); }
     if (!this.sc || this.demo) return;
     if (Keys.hit('binoc')) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }
-    if (Keys.hit('camera')) { this.cam.binoc = false; this.cam.free = 0; this.cam.userZ = null; this.cam.hold = false; }
+    if (Keys.hit('camera')) {
+      this.cam.binoc = false; this.cam.free = 0; this.cam.mapZoom = null; this.cam.userZ = null; this.cam.hold = false; this.cam.offsetX = this.cam.offsetY = 0; this.cam.manualActive = false;
+      if (this.ctl && this.ctl.scopePoint) {
+        const s = this.sc.soldiers.find(o => o.id === this.sc.turn.sid);
+        this.cam.scopeFocus = null; if (s) this.cam.cut(this.sc, this.fx, s, this.ren.sw, this.ren.sh);
+        this.ctl.returnScope(this.sc, this.cam, this.ren.sw, this.ren.sh);
+      }
+    }
     if (Keys.hit('chat') && (this.mode === 'host' || this.mode === 'guest') && !UI.chatOpen) UI.openChat();
   },
   timerTick(turn) {
@@ -314,7 +382,8 @@ const App = {
   },
   /* ---------- цикл ---------- */
   runSim(dt) {
-    if (this.mode === 'host' && this.waitReady > 0) { this.waitReady -= dt; this.lastSim = performance.now(); return; }
+    // Ход не начинается, пока гость действительно не построил карту, даже при медленном туннеле.
+    if (this.mode === 'host' && this.waitReady > 0) { this.acc = 0; this.lastSim = performance.now(); return; }
     this.acc += dt; let n = 0;
     while (this.acc >= DT && n < 6) { this.simStep(DT); this.acc -= DT; n++; }
     if (n >= 6) this.acc = 0;
@@ -330,6 +399,7 @@ const App = {
       for (const ev of evs) { try { this.fx.handle(ev, g, true); } catch (e) { console.warn(e); } }
       if (this.mode === 'host') for (const ev of evs) this.netEv.push(ev);
     }
+    this.fx.update(dt, g, this.cam, this.ren.sw, this.ren.sh);
     if (this.mode === 'host') { this.snapAcc += dt; this.teamsAcc += dt; if (this.snapAcc >= 1 / 30 - 1e-6) { this.snapAcc = 0; this.sendSnap(); } }
   },
   sendSnap() {
@@ -354,10 +424,10 @@ const App = {
     if (this.ctl) this.ctl.binoc = this.cam.binoc;
     Input.binocOn = this.cam.binoc;
     // мышь в бою захвачена игрой: не видна и не уходит за край; меню, пауза, панель оружия и чат её отпускают
-    Input.wantLock = !!(this.sc && !this.demo && !UI.cur && !UI.trayOpen && !UI.chatOpen && !document.hidden);
+    Input.wantLock = !Input.isTouch && !!(this.sc && !this.demo && !UI.cur && !UI.trayOpen && !UI.chatOpen && !document.hidden);
     if (!Input.wantLock) Input.unlock(); else if (!Input.locked) Input.lock();
     if (this.ctl && !document.hidden && !this.paused && !UI.chatOpen && !UI.cur) this.ctl.update(dt, sc, this.cam, sw, sh, turn); else if (this.ctl) this.ctl.suspend();
-    this.fx.update(this.paused ? 0 : dt, sc, this.cam, sw, sh);
+    if (!this.game || this.demo || this.paused) this.fx.update(this.paused ? 0 : dt, sc, this.cam, sw, sh);
     { const cur = !this.demo && !UI.cur && !this.paused ? 'none' : 'default'; if (this.cv.style.cursor !== cur) this.cv.style.cursor = cur; }   // в бою курсора не видно
     // плавность: симуляция идёт шагами по 1/60 с, а кадры экрана — чаще или неровно; рисуем положение между двумя шагами
     const lerpK = this.game && !this.paused && !this.demo ? clamp(this.acc / DT, 0, 1) : 1, moved = [];
@@ -366,21 +436,30 @@ const App = {
       moved.push(o, o.x, o.y); o.x = o.px + (o.x - o.px) * lerpK; o.y = o.py + (o.y - o.py) * lerpK;
     }
     // прокрутка обзора курсором у края — только в свой ход с оружием, которому выбирают точку на карте
+    const arrowInput = !this.paused && !UI.cur && !UI.chatOpen && !UI.trayOpen && !document.hidden;
+    this.cam.manual = this.ctl && this.ctl.mine && !this.demo ? { x: arrowInput ? (Input.keys.ArrowRight ? 1 : 0) - (Input.keys.ArrowLeft ? 1 : 0) : 0, y: arrowInput ? (Input.keys.ArrowDown ? 1 : 0) - (Input.keys.ArrowUp ? 1 : 0) : 0 } : null;
+    this.cam.panFactor = this.ctl ? this.ctl.panFactor(this.ctl.panTeam(turn)) : 1;
     this.cam.edge = !!(this.ctl && this.ctl.mine && this.ctl.edgePan && !this.demo && !this.paused && !UI.cur && !UI.chatOpen && !UI.trayOpen && !document.hidden);
+    this.cam.scopeFocus = this.cam.edge && this.ctl.scopePoint && !this.ctl.binoc && !this.ctl.pendingShot ? { point: this.ctl.scopePoint, locked: Input.locked, visible: this.ctl.scopeOn, moving: Input.mouse.moved || Keys.down('aimUp') || Keys.down('aimDown') } : null;
+    this.cam.foe = false;
+    this.cam.observeAim = !this.demo && !sc.simul && !!this.ctl && !this.ctl.mine;
     this.cam.update(dt, sc, this.fx, sw, sh, Input.mouse);
+    if (this.cam.scopeFocus && !this.cam.foeFocus) this.ctl.syncScope(sc, this.cam, sw, sh);
     sc.bg.update(dt, sc.turn.wind, sw);
     Sfx.setListener(this.cam.x, this.cam.y, this.cam.z, sw);
     this.timerTick(turn);
     this.ren.draw(sc, this.cam, this.fx, this.ctl, this.t, dt);
     if (!this.demo) {
       this.ren.drawOverlay(sc, this.cam, this.ctl, this.t);
-      this.ren.drawHUD(sc, this.cam, this.ctl, this.t, (this.mode === 'host' || this.mode === 'guest') ? { ping: Net.rtt } : null);
+      this.ren.drawHUD(sc, this.cam, this.ctl, this.t, (this.mode === 'host' || this.mode === 'guest') ? { ping: Net.rtt, pingStatus: Net.rttStatus } : null);
     }
     this.fx.drawScreen(this.ren.c, sc, this.cam, sw, sh);
     for (let i = 0; i < moved.length; i += 3) { moved[i].x = moved[i + 1]; moved[i].y = moved[i + 2]; }
     if (this.waitReady > 0) { const c = this.ren.c; c.save(); c.font = `22px ${FONT_TITLE}`; c.textAlign = 'center'; textOutlined(c, 'Ждём, пока друг загрузит карту…', sw / 2, sh / 2, '#fff', 'rgba(0,0,0,0.85)', 6); c.restore(); }
     UI.updateTray(sc, turn, this.ctl);
+    Input.updateTouchControls(sc, turn, this.ctl);
     Input.endFrame();
   },
 };
-window.addEventListener('load', () => App.init());
+// Меню и подключение не ждут картинок остальных карт.
+window.addEventListener('DOMContentLoaded', () => App.init(), { once: true });

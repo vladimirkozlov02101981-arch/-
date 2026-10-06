@@ -6,8 +6,8 @@ const $ = (id) => document.getElementById(id);
 const UI = {
   app: null, cur: null, mode: 'hotseat', teamsCfg: null, settings: null, trayOpen: false, traySig: '', chatOpen: false,
   /* набор настроек на экране настройки боя: work — копия; workSrc — откуда он ('base' — основной, иначе id конфигурации);
-     linked — набор связан с основным (галочка «по умолчанию»): правки сразу сохраняются в основной. В своих режимах
-     (против компьютера, на одном экране) основной открывается связанным, в комнате по сети — временным */
+     linked — набор связан с основным (галочка «Использовать по умолчанию»): правки сразу сохраняются в основной.
+     Галочка всегда открывается снятой: без неё правки — только для этого боя */
   work: null, workSrc: 'base', linked: false, wantSimul: false, keyWait: null,
   init(app) {
     this.app = app;
@@ -21,12 +21,13 @@ const UI = {
     $('join-code').addEventListener('input', (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
     // вставили в поле кода всю ссылку-приглашение — берём из неё код (а для файла игры и сервер)
     $('join-code').addEventListener('paste', (e) => { const t = (e.clipboardData || window.clipboardData).getData('text') || ''; if (!/#join=/.test(t)) return; e.preventDefault(); const c = Net.useLink(t); if (c) e.target.value = c; if (Net.fromFile()) $('srv-link').value = t.trim(); });
-    for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai', 'o-side', 'o-walk', 'o-simul']) $(id).addEventListener('change', () => this.onSettingsChanged());
+    for (const id of ['o-perTeam', 'o-hp', 'o-turnTime', 'o-wind', 'o-ai', 'o-side', 'o-first', 'o-walk', 'o-simul']) $(id).addEventListener('change', () => this.onSettingsChanged());
+    // показывать ли атаки соперника — личный выбор каждого игрока (и у гостя в комнате)
     $('cfg-select').addEventListener('change', (e) => this.selectConfig(e.target.value));
     $('cfg-default').addEventListener('change', (e) => this.setDefaultChecked(e.target.checked));
     $('cfg-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { this.act('cfg-name-ok'); e.preventDefault(); } else if (e.key === 'Escape') { this.act('cfg-name-cancel'); e.preventDefault(); } e.stopPropagation(); });
     // назначение клавиши: следующее нажатие (любая физическая клавиша) становится клавишей действия
-    window.addEventListener('keydown', (e) => { if (this.keyWait) { e.preventDefault(); e.stopImmediatePropagation(); this.assignKey(e.code); } }, true);
+    window.addEventListener('keydown', (e) => { if (this.keyWait) { if (e.code === 'F11') { this.assignKey(e.code); return; } e.preventDefault(); e.stopImmediatePropagation(); this.assignKey(e.code); } }, true);
     $('o-turnTime').addEventListener('input', () => this.onSettingsChanged());
     $('o-turnInf').addEventListener('change', () => { this.syncTurnInf(); this.onSettingsChanged(); });
     $('o-hp').addEventListener('input', () => this.onSettingsChanged());
@@ -45,8 +46,9 @@ const UI = {
   act(a, el) {
     const app = this.app;
     switch (a) {
-      case 'online': this.wantSimul = false; if (!Net.available()) { this.dialog('Игра с другом по сети работает через сервер: запустите «Играть онлайн.cmd» из папки игры. В этом файле доступны «Против компьютера» и «На одном экране».'); return; } this.show('s-online'); this.status(''); this.syncServerBox(); break;
-      case 'map-prev': case 'map-next': { const i = MAPS.findIndex(m => m.id === app.prefs.settings.mapId); this.featureMap(MAPS[(i + (a === 'map-next' ? 1 : -1) + MAPS.length) % MAPS.length].id); break; }
+      case 'online': this.wantSimul = false; if (!Net.available()) { this.dialog('Игра с другом по сети работает через сервер: запустите «Играть онлайн.cmd» из папки игры. В этом файле доступны «Против компьютера» и «На одном компьютере».'); return; } this.show('s-online'); this.status(''); this.syncServerBox(); break;
+      case 'map-random': this.featureMap('random'); break;
+      case 'map-prev': case 'map-next': { let i = MAPS.findIndex(m => m.id === app.prefs.settings.mapId); if (i < 0) i = a === 'map-next' ? -1 : 0; this.featureMap(MAPS[(i + (a === 'map-next' ? 1 : -1) + MAPS.length) % MAPS.length].id); break; }
       // адрес бесплатного туннеля меняется примерно раз в 15 минут (начатая партия при этом не рвётся) — ссылку берём свежую в момент нажатия
       case 'invite': Net.fetchPublic().then(() => { if (!Net.inviteOk()) { this.setNote('Ссылки для друга ещё нет: запустите «Играть онлайн.cmd» — он создаст её и скопирует. Потом нажмите «Ссылка другу» ещё раз.'); return; } const link = Net.inviteLink(Net.code); if (navigator.clipboard) navigator.clipboard.writeText(link).then(() => this.setNote('Приглашение скопировано — отправьте другу: ' + link), () => this.setNote(link)); else this.setNote(link); }); break;
       case 'hotseat': this.openSetup('hotseat'); break;
@@ -58,7 +60,7 @@ const UI = {
       case 'cfg-rename': if (Profile.config(this.workSrc)) this.askName('rename', Profile.config(this.workSrc).name); break;
       case 'cfg-name-ok': this.nameDone(); break;
       case 'cfg-name-cancel': $('cfg-name-box').classList.add('hidden'); this.nameMode = null; break;
-      case 'cfg-save': if (Profile.saveConfig(this.workSrc, this.work)) { this.cfgNote('Сохранено в «' + Profile.config(this.workSrc).name + '»'); if (this.linked) Profile.setBase(this.work); this.refreshCfgBar(); } break;
+      case 'cfg-save': if (Profile.saveConfig(this.workSrc, this.work)) { this.cfgNote('Настройки сохранены в конфигурации «' + Profile.config(this.workSrc).name + '»'); if (this.linked) Profile.setBase(this.work); this.refreshCfgBar(); } break;
       case 'cfg-del': {
         const c = Profile.config(this.workSrc); if (!c) break;
         if (this.delArm !== c.id) { this.delArm = c.id; this.cfgNote('Нажмите «Удалить» ещё раз, чтобы удалить «' + c.name + '»'); setTimeout(() => { if (this.delArm === c.id) this.delArm = null; }, 4000); break; }
@@ -67,6 +69,7 @@ const UI = {
       case 'keys-reset': this.work.keys = sanitizeKeys(null); Keys.set(this.work.keys); this.buildKeys(); this.workChanged(); break;
       case 'help': this.show('s-help'); break;
       case 'back': app.back(); break;
+      case 'fullscreen': Input.toggleFullscreen(); break;
       case 'sound': case 'sound2': Sfx.toggle(); this.updateSoundIcon(); this.app.soundChanged(); break;
       case 'host': if (Net.fromFile() && this.takeServerLink() === null) return; app.hostRoom(); break;
       case 'join': {
@@ -90,7 +93,7 @@ const UI = {
     // на ПК хоста (запущен «Играть онлайн.cmd») файл сам находит свой сервер — поле со ссылкой не нужно
     Net.probeLocal().then((local) => {
       if (this.cur !== 's-online') return;
-      if (local) { this.status('Найден сервер «Играть онлайн» на этом ПК: создавайте комнату, ссылку для друга даст «Ссылка другу».'); return; }
+      if (local) { this.status('Найден сервер «Играть онлайн» на этом ПК: создайте комнату и нажмите «Ссылка другу», чтобы получить приглашение.'); return; }
       $('srv-box').classList.remove('hidden'); if (!$('srv-link').value) $('srv-link').value = Net.serverBase() || '';
     });
   },
@@ -110,26 +113,43 @@ const UI = {
     if (id === 's-help') this.buildHelpKeys();
   },
   featureMap(id) {
-    const m = MAP_BY_ID[id] || MAPS[0]; this.app.prefs.settings.mapId = m.id; this.app.savePrefs();
+    this.syncKeyHints();
+    const random = id === 'random', m = MAP_BY_ID[id] || MAPS[0]; this.app.prefs.settings.mapId = random ? 'random' : m.id; this.app.savePrefs();
     $('menu-art').style.backgroundImage = `url("assets/maps/${m.id}.png")`;
-    $('featured-name').textContent = m.name; $('featured-desc').textContent = m.desc;
-    $('featured-number').textContent = String(MAPS.indexOf(m) + 1).padStart(2, '0') + ' / 08';
+    $('featured-name').textContent = random ? 'Случайная карта' : m.name; $('featured-desc').textContent = random ? 'Одно из восьми полей выбирается при старте боя. В онлайн-матче оба игрока получают одну карту.' : m.desc;
+    $('random-map-badge').classList.toggle('hidden', !random); $('random-map-badge').parentElement.classList.toggle('random', random);
+    $('map-random').classList.toggle('on', random); $('map-random').setAttribute('aria-pressed', String(random));
+    $('featured-rule').textContent = random ? 'Карта выбирается заново при каждом старте боя' : 'Фиксированная карта · Разрушаемое окружение';
+    const preview = $('featured-preview'); if (preview) { preview.src = `assets/maps/${m.id}-thumb.webp`; preview.alt = random ? 'Случайный выбор из восьми карт' : `Карта «${m.name}»`; }
+    $('featured-number').textContent = random ? '? / 08' : String(MAPS.indexOf(m) + 1).padStart(2, '0') + ' / 08';
     $('map-dots').innerHTML = '';
-    MAPS.forEach(map => { const b = document.createElement('button'); b.className = 'map-dot' + (map === m ? ' on' : ''); b.title = map.name; b.setAttribute('aria-label', map.name); b.onclick = () => this.featureMap(map.id); $('map-dots').appendChild(b); });
+    MAPS.forEach(map => { const b = document.createElement('button'); b.className = 'map-dot' + (!random && map === m ? ' on' : ''); b.title = map.name; b.setAttribute('aria-label', map.name); b.setAttribute('aria-pressed', String(!random && map === m)); b.onclick = () => this.featureMap(map.id); $('map-dots').appendChild(b); });
   },
   hideScreens() { document.querySelectorAll('.screen').forEach(s => s.classList.remove('show')); this.cur = null; },
   status(txt, err) { const s = $('online-status'); s.textContent = txt; s.classList.toggle('err', !!err); },
   setNote(txt) { $('setup-note').textContent = txt; },
   dialog(txt, cb) { $('dialog-text').textContent = txt; $('dialog').classList.remove('hidden'); this.dialogCb = cb || null; },
   loading(on, txt) { $('loading').classList.toggle('hidden', !on); if (txt) $('loading-text').textContent = txt; },
-  updateSoundIcon() { document.querySelectorAll('[data-act="sound"]').forEach(b => { b.textContent = Sfx.enabled ? '🔊' : '🔇'; }); const b2 = document.querySelector('[data-act="sound2"]'); if (b2) b2.textContent = Sfx.enabled ? 'Звук: вкл' : 'Звук: выкл'; },
-  showHud(on) { $('hud-btns').classList.toggle('hidden', !on); if (!on) { this.setTray(false); $('chat').classList.add('hidden'); } },
+  syncKeyHints() {
+    const label = (id, title, mouse = '') => {
+      const key = Keys.label(id), parts = key === '—' ? [] : [key]; if (mouse) parts.push(mouse);
+      return title + (parts.length ? ' (' + parts.join(' / ') + ')' : '');
+    };
+    document.querySelectorAll('[data-act="sound"]').forEach(b => { b.title = label('sound', 'Звук'); });
+    document.querySelectorAll('#hud-btns [data-act="tray"]').forEach(b => { b.title = label('tray', 'Оружие', 'ПКМ'); });
+    document.querySelectorAll('#hud-btns [data-act="pause"]').forEach(b => { b.title = label('menu', 'Меню'); });
+  },
+  updateSoundIcon() {
+    this.syncKeyHints(); document.querySelectorAll('[data-act="sound"]').forEach(b => { b.textContent = Sfx.enabled ? '🔊' : '🔇'; });
+    const b = document.querySelector('[data-act="sound2"]'); if (b) b.textContent = Sfx.enabled ? 'Звук: включён' : 'Звук: выключен';
+  },
+  showHud(on) { this.syncKeyHints(); const hb = $('hud-btns'); if (hb) hb.classList.add('hidden'); if (!on) { this.setTray(false); $('chat').classList.add('hidden'); } },
   /* ---------- настройка ---------- */
   openSetup(mode, opts = {}) {
     this.mode = mode;
     // реванш в комнате — прежний набор боя остаётся; иначе — копия основного набора игрока
     if (!(opts.keep && this.work)) {
-      this.work = snapCopy(Profile.base); this.workSrc = Profile.data.defaultId || 'base'; this.linked = mode === 'cpu' || mode === 'hotseat';
+      this.work = snapCopy(Profile.base); this.workSrc = Profile.data.defaultId || 'base'; this.linked = false;
       this.work.settings.simul = !!opts.simul && mode !== 'hotseat';   // вход из «Непрерывный бой» — одновременные ходы
     }
     this.bindWork(!!opts.keep);
@@ -139,9 +159,9 @@ const UI = {
     $('o-ai-wrap').classList.toggle('hidden', mode !== 'cpu');
     $('o-simul-wrap').classList.toggle('hidden', mode === 'hotseat');   // на одном экране — только по очереди
     const guest = mode === 'guest';
-    document.querySelectorAll('#opts select, #opts input, #ammo-box input, #ammo-box button').forEach(s => { s.disabled = guest; }); this.syncTurnInf();
+    document.querySelectorAll('#opts select, #opts input, #ammo-box input, #ammo-box button').forEach(s => { s.disabled = guest; }); this.syncTurnInf(); this.syncFirstTurn();
     $('btn-start').classList.toggle('hidden', guest);
-    this.setNote(guest ? 'Хост выбирает карту и настройки. Вы можете настроить свою команду.' : mode === 'host' ? 'Отправьте код другу. Когда он подключится — жмите «В бой!»' : '');
+    this.setNote(guest ? 'Хост выбирает карту и настройки. Вы можете настроить свою команду.' : mode === 'host' ? 'Отправьте код другу. Когда он подключится, нажмите «В бой!»' : '');
     this.buildTeams(); this.markMap(); this.buildKeys(); this.refreshCfgBar(); this.show('s-setup');
     Keys.set(this.work.keys);
     if (mode === 'host' || mode === 'guest') this.cfgNote('Настройки этого боя временные: после боя у вас и у друга остаются свои. Сохранить их можно кнопками выше.');
@@ -161,7 +181,7 @@ const UI = {
   workChanged() {
     if (!this.work) return;
     if (this.linked) Profile.setBase(this.work);
-    this.refreshCfgBar();
+    this.refreshCfgBar(); this.syncKeyHints();
   },
   cfgNote(t) { $('cfg-note').textContent = t || ''; },
   /** список конфигураций и состояние кнопок; ★ — основной набор */
@@ -186,7 +206,7 @@ const UI = {
     if (this.mode === 'guest') w.settings = this.work.settings;
     w.settings.simul = this.mode !== 'hotseat' && !!this.work.settings.simul;   // режим ходов задаёт вход в бой
     this.work = w; this.workSrc = id;
-    this.linked = (this.mode === 'cpu' || this.mode === 'hotseat') && (id === 'base' || id === Profile.data.defaultId);
+    this.linked = false;   // выбор набора не включает сохранение в основной — только галочка
     this.bindWork(); this.applySettings(this.settings); this.buildTeams(); this.markMap(); this.buildKeys();
     Keys.set(w.keys); Sfx.apply && Sfx.apply(w.sound); this.updateSoundIcon(); $('volume').value = Math.round(Sfx.volume * 100);
     if (this.mode === 'guest') this.app.onTeamEdited(1); else if (this.mode === 'host') this.app.sendLobby();
@@ -198,7 +218,7 @@ const UI = {
     if (on) { Profile.makeDefault(this.work, this.workSrc !== 'base' ? this.workSrc : null); this.linked = true; this.cfgNote('Эти настройки теперь основные: загрузятся при запуске и в новых боях'); }
     else {
       this.linked = false;
-      this.cfgNote(Profile.undoDefault() ? 'Возвращены прежние основные настройки' : 'Набор больше не сохраняется в основные: правки — только для этого боя');
+      this.cfgNote(Profile.undoDefault() ? 'Возвращены прежние основные настройки' : 'Изменения больше не сохраняются в основных настройках: они действуют только в этом бою');
     }
     this.refreshCfgBar();
   },
@@ -207,7 +227,7 @@ const UI = {
     const name = $('cfg-name').value.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 28);
     if (!name) { $('cfg-name').focus(); return; }
     $('cfg-name-box').classList.add('hidden');
-    if (this.nameMode === 'rename') { Profile.renameConfig(this.workSrc, name); this.cfgNote('Переименовано: «' + name + '»'); }
+    if (this.nameMode === 'rename') { Profile.renameConfig(this.workSrc, name); this.cfgNote('Конфигурация переименована: «' + name + '»'); }
     else {
       const wasLinked = this.linked;
       this.workSrc = Profile.createConfig(name, this.work);
@@ -221,8 +241,10 @@ const UI = {
     const g = $('keys-grid'); if (!g || !this.work) return; g.innerHTML = '';
     const K = this.work.keys;
     for (const [id, title] of KEY_ACTIONS) {
+      if (id === 'binoc') continue;
       const row = document.createElement('div'); row.className = 'key-row';
       const t = document.createElement('span'); t.className = 'key-act'; t.textContent = title; row.appendChild(t);
+      if (id === 'prev' || id === 'next' || id === 'optic') { const key = document.createElement('kbd'); key.textContent = id === 'prev' ? 'Q' : id === 'next' ? 'E' : 'Ctrl'; row.appendChild(key); g.appendChild(row); continue; }
       (K[id] || []).forEach((code, i) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'key-chip' + (this.keyWait && this.keyWait.id === id && this.keyWait.i === i ? ' wait' : '');
         b.textContent = this.keyWait && this.keyWait.id === id && this.keyWait.i === i ? 'нажмите клавишу…' : keyLabel(code);
@@ -244,19 +266,21 @@ const UI = {
   /** нажатая клавиша назначается действию; если она была у другого действия — там снимается (одна клавиша — одно действие) */
   assignKey(code) {
     const w = this.keyWait; this.keyWait = null; if (!w || !this.work) return;
+    if (code === 'F11') { this.buildKeys(); $('keys-note').textContent = 'F11 переключает полный экран и не переназначается.'; return; }
+    if (/^Arrow|^(Digit|Numpad)\d$/.test(code) || ['KeyQ', 'KeyE', 'ControlLeft', 'ControlRight'].includes(code)) { this.buildKeys(); $('keys-note').textContent = 'Стрелки — камера, верхние цифры — бойцы, Num — оружие, Q/E — листание, Ctrl — оптика. Эти клавиши закреплены.'; return; }
     const K = this.work.keys; let moved = '';
-    for (const [id, title] of KEY_ACTIONS) { const L = K[id] || []; const j = L.indexOf(code); if (j >= 0 && id !== w.id) { L.splice(j, 1); moved = title; } }
+    for (const [id, title] of KEY_ACTIONS) { const L = K[id] || []; const j = L.indexOf(code); if (j >= 0 && id !== w.id) { L.splice(j, 1); moved = id === 'binoc' ? 'другого действия' : `«${title}»`; } }
     const L = K[w.id] || (K[w.id] = []);
     if (w.i >= 0 && w.i < L.length) L[w.i] = code; else if (!L.includes(code)) L.push(code);
     Keys.set(K); this.buildKeys(); this.workChanged();
-    $('keys-note').textContent = keyLabel(code) + (moved ? ` — снята с «${moved}»` : ' назначена');
+    $('keys-note').textContent = keyLabel(code) + (moved ? ` — снята с ${moved}` : ' назначена');
   },
   setRoomCode(code) { $('room-code').textContent = code; },
   setPeerStatus(ok, txt) { const s = $('peer-status'); s.textContent = txt || (ok ? '● друг подключился' : '○ ждём друга…'); s.classList.toggle('ok', !!ok); },
   readSettings() {
     const S = this.settings;
     S.walk = $('o-walk').value === 'free' ? 'free' : 'limited'; S.simul = this.mode !== 'hotseat' && $('o-simul').value === '1';
-    S.perTeam = +$('o-perTeam').value; { const hp = Math.round(+$('o-hp').value); if (Number.isFinite(hp) && hp >= 1) S.hp = Math.min(1000, hp); } S.wind = $('o-wind').value === '1'; S.side = $('o-side').value;
+    S.perTeam = +$('o-perTeam').value; { const hp = Math.round(+$('o-hp').value); if (Number.isFinite(hp) && hp >= 1) S.hp = Math.min(1000, hp); } S.wind = $('o-wind').value === '1'; S.side = $('o-side').value; S.first = $('o-first').value; delete S.firstTeam;
     // время хода: 0 — без ограничения (ход длится до выстрела или пропуска)
     const tt = Math.round(+$('o-turnTime').value);
     if ($('o-turnInf').checked) S.turnTime = 0;
@@ -268,11 +292,21 @@ const UI = {
   },
   /** «без лимита» выключает поле секунд (у гостя настройки и так недоступны) */
   syncTurnInf() { $('o-turnTime').disabled = this.mode === 'guest' || $('o-turnInf').checked; },
+  syncFirstTurn() {
+    const simultaneous = this.mode !== 'hotseat' && $('o-simul').value === '1';
+    $('o-first').disabled = this.mode === 'guest' || simultaneous;
+    const options = $('o-first').options;
+    if (options && options.length >= 3) {
+      const labels = this.mode === 'cpu' ? ['Вы', 'Компьютер'] : this.mode === 'host' ? ['Вы (хост)', 'Друг'] : this.mode === 'guest' ? ['Хост', 'Вы'] : ['Команда 1', 'Команда 2'];
+      options[1].textContent = labels[0]; options[2].textContent = labels[1];
+    }
+    $('o-first-note').textContent = simultaneous ? 'Обе команды начинают одновременно.' : 'Очередность не зависит от стороны карты.';
+  },
   applySettings(S) {
     const inf = !(S.turnTime > 0); $('o-turnInf').checked = inf; if (!inf || !$('o-turnTime').value) $('o-turnTime').value = String(inf ? 45 : S.turnTime); this.syncTurnInf();
     $('o-perTeam').value = String(S.perTeam); $('o-hp').value = String(S.hp); $('o-wind').value = S.wind ? '1' : '0';
-    $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal'; $('o-side').value = S.side || 'random';
-    $('o-walk').value = S.walk === 'free' ? 'free' : 'limited'; $('o-simul').value = S.simul ? '1' : '0';
+    $('o-arsenal').value = S.arsenal; $('o-ai').value = S.ai || 'normal'; $('o-side').value = S.side || 'random'; $('o-first').value = S.first || 'random';
+    $('o-walk').value = S.walk === 'free' ? 'free' : 'limited'; $('o-simul').value = S.simul ? '1' : '0'; this.syncFirstTurn();
     this.fillAmmo(S.ammo || makeAmmo(S.arsenal));
   },
   /** редактор атак: галочка — оружие есть в бою, число — сколько раз его можно применить (пусто — без ограничения) */
@@ -310,9 +344,12 @@ const UI = {
     }
     return m;
   },
-  onSettingsChanged() { if (this.mode === 'guest') return; this.readSettings(); this.app.onLobbyChanged(); },
+  onSettingsChanged() { if (this.mode === 'guest') return; this.readSettings(); this.syncFirstTurn(); this.app.onLobbyChanged(); },
   buildMaps() {
     const g = $('map-grid'); g.innerHTML = '';
+    const random = document.createElement('button'); random.type = 'button'; random.className = 'map-card map-random'; random.dataset.map = 'random'; random.title = 'Выбирать из восьми карт при каждом старте боя';
+    random.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3c4 0 8 10 12 10h3M17 13l4 4-4 4M3 17h3c2 0 4-3 6-5M15 8c1-1 2-1 3-1h3M17 3l4 4-4 4"/></svg><span>Случайная карта</span><small>Выбор из 8</small>';
+    random.addEventListener('click', () => { if (this.mode === 'guest') return; Sfx.play('select'); this.settings.mapId = 'random'; this.markMap(); this.app.onLobbyChanged(); }); g.appendChild(random);
     for (const m of MAPS) {
       const card = document.createElement('button'); card.type = 'button'; card.className = 'map-card'; card.dataset.map = m.id; card.title = m.desc;
       const img = document.createElement('img'); img.src = `assets/maps/${m.id}-thumb.webp`; img.alt = m.name; card.appendChild(img);
@@ -325,7 +362,7 @@ const UI = {
   markMap() {
     const id = this.settings ? this.settings.mapId : 'valley';
     document.querySelectorAll('.map-card').forEach(c => c.classList.toggle('on', c.dataset.map === id));
-    const m = MAP_BY_ID[id]; if (m && $('map-desc')) $('map-desc').textContent = `${m.W} × ${m.H} · ${m.desc}`;
+    const m = MAP_BY_ID[id]; if ($('map-desc')) $('map-desc').textContent = id === 'random' ? 'Одна из восьми карт выбирается при старте боя. Хост и друг получают одно и то же поле.' : m ? `${m.W} × ${m.H} · ${m.desc}` : ''; 
   },
   buildTeams() {
     const focused = document.activeElement;
@@ -373,6 +410,7 @@ const UI = {
   refreshTeams(teams) { this.teamsCfg = teams.map(t => Object.assign({}, t)); if (this.cur === 's-setup') this.buildTeams(); },
   /** справка: клавиши — из текущей таблицы (после перенастройки в «Клавиши управления» видны новые) */
   buildHelpKeys() {
+    this.syncKeyHints();
     const t = $('help-keys'); if (!t) return; t.textContent = '';
     const row = (keys, text) => {
       const tr = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td');
@@ -385,30 +423,47 @@ const UI = {
       b.textContent = text; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
     };
     row(['left', 'right'], 'Ходьба (запас шагов ограничен, если ход не «на любую дистанцию»)');
-    row(['jump'], 'Прыжок; пока бежит робо-бомба — её прыжок');
-    row(['up', 'down', '#у лестницы'], 'Подъём / спуск; влево/вправо — сойти, прыжок — отпрыгнуть');
-    row(['aimUp', 'aimDown', '#, ', 'precise'], 'Прицел (с «точнее» — медленнее). У снайперки «следующее оружие» включает и выключает оптику, в оптике наводите мышью');
-    row(['fire', '#/ ЛКМ'], 'Выстрел. Для базуки и гранат зажмите: сила — на шкале слева и на кольце прицела');
-    row(['#Мышь в бою'], 'Захвачена игрой: стрелки не видно, за край экрана она не уходит; бой идёт во весь экран (Chrome, Edge — «Играть.cmd» открывает игру в них). Отпустить мышь — клавиша меню; вернуть — клик по полю боя');
+    row(['jump'], 'Прыжок бойца; пока движется робо-бомба — её прыжок');
+    row(['up', 'down', '#у лестницы'], 'Подъём / спуск; клавиши движения влево и вправо — сойти с лестницы, клавиша прыжка — отпрыгнуть');
+    row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки. Мышью можно вести оптику по всей карте; после остановки мыши прицел быстро стабилизируется');
+    row(['fire', '#/ ЛКМ'], 'Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела');
+    row(['#Мышь в бою'], 'Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру');
     row(['tray', '#/ ПКМ'], 'Панель оружия');
-    row(['prev', 'next', '#, ', 'cat1', 'cat2', 'cat3', 'cat4', 'cat5', 'cat6'], 'Сменить оружие / категорию');
-    row(['binoc', '#/ удерживать ПКМ'], 'Бинокль: обзор плавно едет туда, куда ведёте мышь');
-    row(['camera', '#/ колесо'], 'Вернуть камеру к бойцу / немного приблизить или отдалить');
-    row(['rotate'], 'Повернуть балку / подкрутка гранаты');
-    row(['skip'], 'Пропустить ход (сделал всё, что хотел)');
+    row(['prev', 'next'], 'Предыдущее / следующее доступное оружие в порядке панели: слева направо, сверху вниз');
+    row(['#Num 1–41'], 'Выбрать оружие по номеру на правой цифровой панели. 1–9 — сразу; 10–41 — сначала Num 0, затем две цифры номера. Номера постоянные, даже если боеприпасы закончились');
+    row(['#Верхние цифры'], 'В одновременном бою выбрать своего бойца: 1–9 — сразу, двузначный номер — 0 и две цифры. После атаки боец недоступен до следующего цикла команды. Таймер и запас ходьбы не сбрасываются');
+    row(['#← / → / ↑ / ↓'], 'Сдвинуть камеру, оставляя бойца в кадре. В конце хода обзор возвращается; стрелки не двигают бойца и прицел');
+    row(['optic'], 'Скрыть / показать оптику снайперки');
+    row(['camera'], 'Вернуть камеру к бойцу');
+    row(['#Колесо'], 'Приблизить или отдалить обзор до полного вида карты');
+    row(['#Зажатое колесо + прокрутка'], 'Скорость обзора: вперёд — быстрее, назад — медленнее');
+    row(['rotate'], 'Повернуть балку / подкрутить гранату');
+    row(['skip'], 'Пропустить ход');
     row(['holster'], 'Убрать оружие из рук; ещё раз — вернуть (мышь остаётся в игре)');
     row(['menu'], 'Меню (пауза), мышь свободна');
     row(['chat', '#/ ', 'sound'], 'Чат по сети / звук');
-    row(['#Клавиши'], 'Меняются в настройке боя: «Клавиши управления» (сохраняются вместе с конфигурацией)');
+    row(['#Клавиши'], 'Меняются в настройках боя: «Клавиши управления» (сохраняются вместе с конфигурацией)');
   },
   buildHelp() {
     const box = $('help-weapons'); box.innerHTML = '';
-    for (const w of WEAPONS) {
-      const row = document.createElement('div'); row.className = 'hw';
-      const ic = weaponIcon(w.id, 72); const cv = makeCanvas(72, 72); cv.getContext('2d').drawImage(ic, 0, 0); row.appendChild(cv);
-      const txt = document.createElement('div'); const b = document.createElement('b'); b.textContent = w.name + (w.ammo < 0 ? ' · ∞' : ` · ×${w.ammo}`); const sp = document.createElement('span'); sp.textContent = w.desc;
-      txt.appendChild(b); txt.appendChild(sp); row.appendChild(txt); box.appendChild(row);
-    }
+    WEAPON_CATS.forEach((name, category) => {
+      const list = WEAPON_ORDER.filter(w => w.cat === category), section = document.createElement('section'); section.className = 'arsenal-section';
+      const heading = document.createElement('h4'); heading.className = 'arsenal-heading'; heading.id = 'arsenal-category-' + category; heading.textContent = name;
+      const range = document.createElement('span'); range.textContent = list[0].number + '–' + list.at(-1).number; heading.appendChild(range); section.setAttribute('aria-labelledby', heading.id); section.appendChild(heading);
+      const grid = document.createElement('div'); grid.className = 'arsenal-cards';
+      for (const w of list) {
+        const card = document.createElement('article'); card.className = 'hw arsenal-card'; card.dataset.weapon = w.id; card.dataset.number = w.number;
+        const cv = makeCanvas(72, 72); cv.getContext('2d').drawImage(weaponIcon(w.id, 72), 0, 0); card.appendChild(cv);
+        const content = document.createElement('div'); content.className = 'arsenal-content';
+        const title = document.createElement('div'); title.className = 'arsenal-title';
+        const number = document.createElement('span'); number.className = 'arsenal-number'; number.textContent = w.number;
+        const label = document.createElement('b'); label.textContent = w.name;
+        const ammo = document.createElement('span'); ammo.className = 'arsenal-ammo'; ammo.textContent = w.ammo < 0 ? '∞' : String(w.ammo); ammo.title = w.ammo < 0 ? 'Неограниченный запас' : 'Боеприпасы в исходном наборе: ' + w.ammo;
+        title.append(number, label, ammo); content.appendChild(title);
+        const desc = document.createElement('p'); desc.textContent = w.desc; content.appendChild(desc); card.appendChild(content); grid.appendChild(card);
+      }
+      section.appendChild(grid); box.appendChild(section);
+    });
   },
   /* ---------- панель оружия ---------- */
   setTray(on) { this.trayOpen = on; $('tray').classList.toggle('hidden', !on); this.traySig = ''; },
@@ -422,17 +477,19 @@ const UI = {
     WEAPON_CATS.forEach((cn, ci) => {
       const lab = document.createElement('div'); lab.className = 'tray-cat'; lab.textContent = cn; g.appendChild(lab);
       const list = WEAPONS.filter(w => w.cat === ci);
-      for (let k = 0; k < Math.ceil(list.length / 6) * 6; k++) {
+      for (let k = 0; k < list.length; k++) {
         const w = list[k]; const it = document.createElement('div');
         if (!w) { g.appendChild(document.createElement('div')); continue; }
         const am = tm ? tm.ammo[w.id] : undefined; const locked = w.minRound && round < w.minRound;
         const off = am === undefined || am === 0 || locked;
         it.className = 'tray-item' + (off ? ' off' : '') + (T.weapon === w.id ? ' on' : '');
-        it.title = w.name + ' — ' + w.desc; it.setAttribute('role', 'button'); it.setAttribute('aria-label', w.name); it.tabIndex = off ? -1 : 0;
+        it.dataset.weapon = w.id; it.dataset.number = w.number; it.title = w.number + '. ' + w.name + ' — ' + w.desc; it.setAttribute('role', 'button'); it.setAttribute('aria-label', w.name); it.tabIndex = off ? -1 : 0;
         it.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); it.click(); } });
-        const cv = makeCanvas(44, 44); cv.getContext('2d').drawImage(weaponIcon(w.id, 44), 0, 0); it.appendChild(cv);
+        const number = document.createElement('span'); number.className = 'weapon-number'; number.textContent = w.number; it.appendChild(number);
+        const name = document.createElement('span'); name.className = 'weapon-name'; name.textContent = w.name; it.appendChild(name);
+        const cv = makeCanvas(64, 64); cv.getContext('2d').drawImage(weaponIcon(w.id, 64), 0, 0); it.appendChild(cv);
         const a = document.createElement('span'); a.className = 'am'; a.textContent = am === undefined ? '' : am < 0 ? '∞' : am; it.appendChild(a);
-        if (locked) { const l = document.createElement('span'); l.className = 'lock'; l.textContent = `с ${w.minRound} р.`; it.appendChild(l); }
+        if (locked) { const l = document.createElement('span'); l.className = 'lock'; l.textContent = `с ${w.minRound}-го`; it.appendChild(l); }
         it.addEventListener('mouseenter', () => { const inf = $('tray-info'); inf.innerHTML = ''; const b = document.createElement('b'); b.textContent = w.name; inf.appendChild(b); inf.appendChild(document.createElement('br')); inf.appendChild(document.createTextNode(w.desc)); });
         it.addEventListener('click', () => { if (off || !mine) { Sfx.play('denied'); return; } ctl.select(w.id); this.setTray(false); });
         g.appendChild(it);
@@ -465,9 +522,9 @@ const UI = {
     const win = sc.teams[ev.win];
     const title = $('over-title');
     if (!win) { title.textContent = 'Ничья!'; title.style.color = '#fff'; }
-    else { title.textContent = (myTeams.length === 1 ? (myTeams[0] === ev.win ? 'Победа! ' : 'Поражение… ') : '') + `Победили «${win.name}»`; title.style.color = win.color; }
+    else { title.textContent = (myTeams.length === 1 ? (myTeams[0] === ev.win ? 'Победа! ' : 'Поражение… ') : '') + `Победила команда «${win.name}»`; title.style.color = win.color; }
     const st = $('over-stats'); st.innerHTML = '';
-    const head = document.createElement('div'); head.className = 'over-row muted'; head.innerHTML = '<span>Команда</span><span>Урон</span><span>Убийства</span><span>Живых</span>'; st.appendChild(head);
+    const head = document.createElement('div'); head.className = 'over-row muted'; head.innerHTML = '<span>Команда</span><span>Урон</span><span>Убийства</span><span>В строю</span>'; st.appendChild(head);
     (ev.stats || []).forEach((s, i) => {
       const tm = sc.teams[i]; if (!tm) return; const row = document.createElement('div'); row.className = 'over-row';
       const n = document.createElement('b'); n.textContent = tm.name; n.style.color = tm.color; row.appendChild(n);

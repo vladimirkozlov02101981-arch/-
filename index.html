@@ -2,7 +2,11 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0f16">
 <title>Территория войны — Frontlines</title>
 <link rel="stylesheet" href="css/fonts.css">
 <link rel="stylesheet" href="css/style.css">
@@ -13,23 +17,55 @@
 
 <div id="ui">
   <!-- Главное меню -->
-  <section class="screen" id="s-main">
+  <section class="screen" id="s-main" aria-label="Главное меню">
     <div class="menu-art" id="menu-art"></div><div class="menu-shade"></div>
-    <header class="menu-header"><a class="brand" href="#" aria-label="Главная"><span class="brand-symbol">✦</span> TERRITORY <b>WAR</b><span class="brand-edition">FRONTLINES</span></a><div class="header-right"><span class="build-label">ТАКТИКА. ХАРАКТЕР. БОЛЬШОЙ КАЛИБР.</span><button class="icon-btn" data-act="sound" title="Звук (M)" aria-label="Переключить звук"></button></div></header>
-    <div class="menu-wrap">
-      <div class="eyebrow"><span></span> ПОШАГОВЫЕ БОИ БЕЗ КОМПРОМИССОВ</div>
-      <h1 class="logo"><span class="l1">ТЕРРИТОРИЯ</span><span class="l2">ВОЙНЫ<span class="title-dot">.</span></span></h1>
-      <p class="tagline">Большие пушки. Маленькие бойцы.<br>И целый мир, который можно разнести.</p>
-      <div class="menu-btns">
-        <button class="btn big" data-act="online"><span class="btn-symbol">↗</span> Играть с другом <span class="btn-end">ОНЛАЙН</span></button>
-        <div class="local-modes"><button class="btn secondary" data-act="cpu">Против компьютера <span>↗</span></button><button class="btn secondary" data-act="hotseat">На одном экране <span>↗</span></button></div>
-        <div class="simul-modes"><span class="simul-label">Непрерывный бой (ходят одновременно):</span><button class="btn tiny secondary" data-act="online-simul" title="По сети с другом: каждый ходит своими бойцами по номерам, не дожидаясь соперника">с другом онлайн</button><button class="btn tiny" data-act="cpu-simul" title="Против компьютера: вы и компьютер ходите одновременно">с компьютером</button></div>
-        <button class="btn ghost" data-act="help"><span>⌘</span> Управление и арсенал</button>
+    <header class="menu-header">
+      <a class="brand" href="#" aria-label="Главная"><span class="brand-symbol" aria-hidden="true">✦</span> TERRITORY <b>WAR</b><span class="brand-edition">FRONTLINES</span></a>
+      <div class="header-right"><span class="build-label">ТАКТИКА. ХАРАКТЕР. БОЛЬШОЙ КАЛИБР.</span><button class="icon-btn" data-act="fullscreen" title="На весь экран" aria-label="Полный экран">⛶</button><button class="icon-btn" data-act="sound" title="Звук (M)" aria-label="Переключить звук"></button></div>
+    </header>
+    <div class="menu-body">
+      <div class="menu-wrap">
+        <div class="eyebrow"><span></span> ТАКТИКА НА ВАШИХ УСЛОВИЯХ</div>
+        <h1 class="logo"><span class="l1">ТЕРРИТОРИЯ</span><span class="l2">ВОЙНЫ<span class="title-dot">.</span></span></h1>
+        <p class="tagline">Большие пушки. Маленькие бойцы.<br> И целый мир, который можно разнести.</p>
+        <div class="mode-heading">ВЫБЕРИТЕ РЕЖИМ БОЯ</div>
+        <div class="menu-modes" aria-label="Режимы игры">
+          <div class="mode-card mode-online">
+            <button class="mode-primary" data-act="online">
+              <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17v-4a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v4M12 9V4M8 4h8M7 17h.01M17 17h.01"/></svg></span>
+              <span class="mode-copy"><strong>С другом онлайн</strong><span>Закрытая комната для двоих</span></span><span class="mode-arrow" aria-hidden="true">↗</span>
+            </button>
+            <button class="mode-alternate" data-act="online-simul" aria-label="Непрерывный бой с другом онлайн" title="Непрерывный бой по сети: обе команды ходят одновременно"><span aria-hidden="true">⇄</span> Непрерывный бой <span class="alternate-note">Одновременно</span></button>
+          </div>
+          <div class="mode-card">
+            <button class="mode-primary" data-act="cpu">
+              <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span>
+              <span class="mode-copy"><strong>Против компьютера</strong><span>Тренируйтесь и выбирайте сложность</span></span><span class="mode-arrow" aria-hidden="true">→</span>
+            </button>
+            <button class="mode-alternate" data-act="cpu-simul" aria-label="Непрерывный бой против компьютера" title="Непрерывный бой с компьютером: обе команды ходят одновременно"><span aria-hidden="true">⇄</span> Непрерывный бой <span class="alternate-note">Одновременно</span></button>
+          </div>
+          <div class="mode-card">
+            <button class="mode-primary" data-act="hotseat">
+              <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M7 20h10M8 10h8"/></svg></span>
+              <span class="mode-copy"><strong>На одном компьютере</strong><span>Две команды. Один экран.</span></span><span class="mode-arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+        <button class="btn ghost menu-help" data-act="help"><span aria-hidden="true">⌘</span> Управление и арсенал <span class="help-arrow" aria-hidden="true">↗</span></button>
+        <div class="menu-facts"><div><strong>41</strong><span>вид оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока<br>на одном поле</span></div></div>
       </div>
-      <div class="menu-facts"><div><strong>41</strong><span>вида оружия<br>и снаряжения</span></div><div><strong>08</strong><span>постоянных<br>полей боя</span></div><div><strong>02</strong><span>игрока.<br>один победитель.</span></div></div>
+      <div class="featured-map" aria-label="Выбор карты">
+        <div class="featured-visual"><div id="random-map-badge" class="random-map-badge hidden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3c4 0 8 10 12 10h3M17 13l4 4-4 4M3 17h3c2 0 4-3 6-5M15 8c1-1 2-1 3-1h3M17 3l4 4-4 4"/></svg><strong>Случайная карта</strong><span>Выбор из восьми полей боя</span></div><img id="featured-preview" src="assets/maps/valley-thumb.webp" alt="Карта «Зелёная долина»"><div class="visual-tag"><span>ВАШЕ ПОЛЕ БОЯ</span><span>6400 × 1800</span></div></div>
+        <div class="featured-info">
+          <span class="eyebrow">ВЫБРАННАЯ КАРТА</span>
+          <div class="featured-title"><span id="featured-number">01 / 08</span><h2 id="featured-name">Зелёная долина</h2><div><button class="arrow-btn" data-act="map-prev" aria-label="Предыдущая карта">←</button><button class="arrow-btn" data-act="map-next" aria-label="Следующая карта">→</button></div></div>
+          <p id="featured-desc">Мельница с тайным погребом, акведук над ущельем, башня и склеп, шахта в Орлиной горе</p>
+          <div class="map-controls"><div class="map-dots" id="map-dots" aria-label="Карты"></div><button id="map-random" class="map-random-btn" data-act="map-random" aria-pressed="false" title="Выбирать случайную карту при каждом новом бое"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3c4 0 8 10 12 10h3M17 13l4 4-4 4M3 17h3c2 0 4-3 6-5M15 8c1-1 2-1 3-1h3M17 3l4 4-4 4"/></svg>Случайная</button></div>
+          <div class="static-label" id="featured-rule">Фиксированная карта · Разрушаемое окружение</div>
+        </div>
+      </div>
     </div>
-    <div class="featured-map"><span class="eyebrow">ВЫБЕРИ СВОЁ ПОЛЕ БОЯ</span><div class="featured-title"><span id="featured-number">01 / 08</span><h2 id="featured-name">Зелёная долина</h2><div><button class="arrow-btn" data-act="map-prev" aria-label="Предыдущая карта">←</button><button class="arrow-btn" data-act="map-next" aria-label="Следующая карта">→</button></div></div><p id="featured-desc">Мельница на холме, пруд с мостом и тоннель под большим холмом</p><div class="map-dots" id="map-dots"></div><div class="static-label">◇ Фиксированная карта · Разрушаемое окружение</div></div>
-    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.02-20</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.06-33</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
   </section>
 
   <!-- Онлайн -->
@@ -37,7 +73,7 @@
     <div class="panel narrow">
       <div class="eyebrow">02 ИГРОКА / ОДНО ПОЛЕ БОЯ</div><h2>ВСТРЕТИМСЯ В БОЮ</h2>
       <p class="muted">Создайте комнату и отправьте другу приглашение. Он откроет ту же игру и присоединится по ссылке или коду. В комнате — только вы двое.</p>
-      <div id="srv-box" class="srv-box hidden"><label>Ссылка от друга или адрес сервера<input id="srv-link" placeholder="https://….lhr.life/#join=КОД" autocomplete="off" spellcheck="false"></label><p class="muted small">Подключаетесь к другу — вставьте ссылку, которую он прислал, и нажмите «Подключиться» (или просто откройте эту ссылку в браузере). Создаёте комнату сами — запустите «Играть онлайн.cmd»: игра откроется, ссылка для друга уже будет скопирована, а в комнате её даёт кнопка «Ссылка другу».</p></div>
+      <div id="srv-box" class="srv-box hidden"><label>Ссылка от друга или адрес сервера<input id="srv-link" placeholder="https://….lhr.life/#join=КОД" autocomplete="off" spellcheck="false"></label><p class="muted small">Подключаетесь к другу — вставьте ссылку, которую он прислал, и нажмите «Подключиться» (или просто откройте эту ссылку в браузере). Создаёте комнату сами — запустите «Играть онлайн.cmd»: игра откроется, ссылка для друга уже будет скопирована, а в комнате её можно получить кнопкой «Ссылка другу».</p></div>
       <div class="cards2">
         <div class="card">
           <h3>Создать комнату</h3>
@@ -72,7 +108,7 @@
         <button type="button" class="btn tiny secondary" data-act="cfg-save" title="Записать текущие настройки в выбранную конфигурацию">Сохранить в неё</button>
         <button type="button" class="btn tiny secondary" data-act="cfg-rename" title="Переименовать выбранную конфигурацию">Переименовать</button>
         <button type="button" class="btn tiny secondary" data-act="cfg-del" title="Удалить выбранную конфигурацию">Удалить</button>
-        <label class="cfg-def" title="Эти настройки станут основными: загружаются при запуске игры и при создании новых боёв. Снимите галочку — вернутся прежние основные (пока вы не вышли в главное меню)"><input type="checkbox" id="cfg-default"> Использовать по умолчанию</label>
+        <label class="cfg-def" title="Всегда открывается выключенной: без неё изменения — только для этого боя. Поставьте галочку — эти настройки станут основными (загружаются при запуске игры и в новых боях), а дальнейшие изменения сохраняются сами. Снимите — основными снова станут прежние (пока вы не вышли в главное меню); в текущем бою настройки не меняются"><input type="checkbox" id="cfg-default"> Использовать по умолчанию</label>
         <span class="cfg-name hidden" id="cfg-name-box"><input id="cfg-name" maxlength="28" placeholder="Название конфигурации" autocomplete="off" spellcheck="false"><button type="button" class="btn tiny" data-act="cfg-name-ok">OK</button><button type="button" class="btn tiny secondary" data-act="cfg-name-cancel">Отмена</button></span>
         <span id="cfg-note" class="small muted"></span>
       </div>
@@ -81,22 +117,44 @@
         <div class="col-maps">
           <h3>Поле боя <span class="small muted">/ 8 постоянных карт</span></h3>
           <div id="map-grid" class="map-grid"></div>
-          <div class="opts" id="opts">
-            <label>Бойцов в команде<select id="o-perTeam"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></label>
-            <label>Здоровье<input id="o-hp" type="number" min="1" max="1000" step="1" value="100"></label>
-            <div class="opt-cell">Время хода, с<div class="tt-row"><input id="o-turnTime" type="number" min="5" max="600" step="1" value="45" aria-label="Время хода в секундах"><label class="tt-inf" title="Ход не ограничен по времени: длится до выстрела или пропуска хода"><input id="o-turnInf" type="checkbox">∞ без лимита</label></div></div>
-            <label>Моя сторона<select id="o-side"><option value="random" selected>Случайно</option><option value="left">Левая</option><option value="right">Правая</option></select></label>
-            <label>Ветер<select id="o-wind"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
-            <label>Арсенал (заготовка)<select id="o-arsenal"><option value="all" selected>Все 41 вид</option><option value="classic">Классический</option><option value="tw3">Как в Territory War 3</option></select></label>
-            <label id="o-ai-wrap">Сложность компьютера<select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
-            <label title="Ограничен — за ход боец проходит только отмеченный пунктиром отрезок; на любую дистанцию — сколько угодно">Ход бойца<select id="o-walk"><option value="limited" selected>Ограничен дистанцией</option><option value="free">На любую дистанцию</option></select></label>
-            <label id="o-simul-wrap" title="По очереди — как обычно; одновременно — непрерывный бой: обе команды ходят сразу, после хода следующий по номеру боец своей команды начинает новый ход">Ходы<select id="o-simul"><option value="0" selected>По очереди</option><option value="1">Одновременно (непрерывный бой)</option></select></label>
+          <div class="opts" id="opts" aria-label="Параметры боя">
+            <fieldset class="settings-group">
+              <legend>Команда</legend>
+              <div class="settings-grid settings-grid-team">
+                <label class="setting"><span class="setting-label">Бойцов в команде</span><select id="o-perTeam"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option><option>17</option><option>18</option><option>19</option><option>20</option></select></label>
+                <label class="setting"><span class="setting-label">Здоровье бойца</span><input id="o-hp" type="number" min="1" max="1000" step="1" value="100"></label>
+                <label class="setting setting-side"><span class="setting-label">Моя сторона</span><select id="o-side" title="Расположение вашей команды на карте; не влияет на первый ход"><option value="random" selected>Случайно</option><option value="left">Левая</option><option value="right">Правая</option></select></label>
+              </div>
+            </fieldset>
+            <fieldset class="settings-group">
+              <legend>Правила боя</legend>
+              <div class="settings-grid settings-grid-rules">
+                <div class="setting setting-time">
+                  <label for="o-turnTime" class="setting-label">Время хода</label>
+                  <div class="tt-row">
+                    <div class="time-value"><input id="o-turnTime" type="number" min="5" max="600" step="1" value="45" aria-label="Время хода в секундах"><span aria-hidden="true">сек.</span></div>
+                    <label class="tt-inf" title="Ход не ограничен по времени: длится до выстрела или пропуска хода"><input id="o-turnInf" type="checkbox"><span class="tt-symbol" aria-hidden="true">∞</span><span>Без лимита</span></label>
+                  </div>
+                </div>
+                <label class="setting" id="o-simul-wrap" title="По очереди — как обычно; одновременно — непрерывный бой: обе команды ходят сразу, после хода следующий по номеру боец своей команды начинает новый ход"><span class="setting-label">Порядок ходов</span><select id="o-simul"><option value="0" selected>По очереди</option><option value="1">Одновременно</option></select></label>
+                <label class="setting"><span class="setting-label">Первый ход</span><select id="o-first" aria-describedby="o-first-note"><option value="random" selected>Случайно</option><option value="team1">Команда 1</option><option value="team2">Команда 2</option></select><span class="setting-note" id="o-first-note">Очередность не зависит от стороны карты.</span></label>
+                <label class="setting" title="Ограничен — за ход боец проходит только отмеченный пунктиром отрезок; на любую дистанцию — сколько угодно"><span class="setting-label">Перемещение</span><select id="o-walk"><option value="limited" selected>Ограничено дистанцией</option><option value="free">На любую дистанцию</option></select></label>
+                <label class="setting"><span class="setting-label">Ветер</span><select id="o-wind"><option value="1" selected>Есть</option><option value="0">Нет</option></select></label>
+              </div>
+            </fieldset>
+            <fieldset class="settings-group">
+              <legend>Арсенал и соперник</legend>
+              <div class="settings-grid settings-grid-arsenal">
+                <label class="setting"><span class="setting-label">Набор оружия</span><select id="o-arsenal"><option value="all" selected>Полный арсенал (41 вид)</option><option value="classic">Классический</option><option value="tw3">Как в Territory War 3</option></select></label>
+                <label class="setting" id="o-ai-wrap"><span class="setting-label">Сложность компьютера</span><select id="o-ai"><option value="easy">Лёгкая</option><option value="normal" selected>Нормальная</option><option value="hard">Сложная</option></select></label>
+              </div>
+            </fieldset>
           </div>
           <details class="ammo-box" id="ammo-box"><summary>Атаки и их количество <span class="small muted">— одинаково для обеих команд. Пустое поле — без ограничения, 0 или снятая галочка — этого оружия в бою нет</span></summary>
             <div class="ammo-tools"><button type="button" class="btn secondary small" id="ammo-all" title="Включить всё оружие с обычным запасом">Включить все</button><button type="button" class="btn secondary small" id="ammo-none" title="Выключить всё оружие — затем отметьте нужное">Снять все</button><button type="button" class="btn secondary small" id="ammo-reset" title="Вернуть набор и количество из выбранной заготовки «Арсенал (заготовка)» — ваши правки списка отменятся">Сбросить к заготовке</button><span class="muted small">Заготовка — готовый набор из списка «Арсенал (заготовка)»: все 41 вид, классический или как в Territory War 3. Ниже его можно поправить вручную.</span></div>
             <div class="ammo-grid" id="ammo-grid"></div>
           </details>
-          <details class="ammo-box keys-box" id="keys-box"><summary>Клавиши управления <span class="small muted">— по физической клавише: раскладка (рус, укр, англ) не важна. Щёлкните по клавише и нажмите новую; ✕ — убрать, + — добавить ещё одну</span></summary>
+          <details class="ammo-box keys-box" id="keys-box"><summary>Клавиши управления <span class="small muted">— по физической клавише: раскладка (русская, украинская или английская) не важна. Щёлкните по клавише и нажмите новую; ✕ — убрать, + — добавить ещё одну</span></summary>
             <div class="ammo-tools"><button type="button" class="btn secondary small" data-act="keys-reset" title="Вернуть клавиши по умолчанию">Клавиши по умолчанию</button><span id="keys-note" class="muted small"></span></div>
             <div class="keys-grid" id="keys-grid"></div>
           </details>
@@ -118,26 +176,29 @@
         <div>
           <h3>Управление</h3>
           <table class="keys" id="help-keys">
-            <tr><td><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></td><td>Ходьба (запас шагов ограничен)</td></tr>
+            <tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Ходьба (запас шагов ограничен)</td></tr>
             <tr><td><kbd>Пробел</kbd></td><td>Прыжок</td></tr>
-            <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти, пробел — отпрыгнуть</td></tr>
-            <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Прицел (<kbd>Shift</kbd> — точнее). У снайперки <kbd>E</kbd> включает и выключает оптику, в оптике наводите мышью</td></tr>
+            <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти с лестницы, пробел — отпрыгнуть</td></tr>
+            <tr><td><kbd>I</kbd> <kbd>K</kbd></td><td>Наведение прицела (<kbd>Shift</kbd> — точнее). У снайперки <kbd>Ctrl</kbd> скрывает и показывает оптику. Мышью ведите оптику по всей карте; после остановки мыши прицел быстро стабилизируется</td></tr>
             
-            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат зажмите: сила — на шкале слева и на кольце прицела. Прицел стоит на коротком расстоянии строго по направлению ствола.</td></tr>
-            <tr><td>Мышь в бою</td><td>Захвачена игрой: стрелки не видно, за край экрана она не уходит; бой идёт во весь экран (Chrome, Edge — «Играть.cmd» открывает игру в них). Отпустить мышь — <kbd>Backspace</kbd> (меню); вернуть в игру — клик по полю боя</td></tr>
+            <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела. Кольцо прицела стоит на коротком расстоянии по направлению ствола.</td></tr>
+            <tr><td>Мышь в бою</td><td>Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру</td></tr>
             <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия</td></tr>
-            <tr><td><kbd>Q</kbd> <kbd>E</kbd>, <kbd>1</kbd>–<kbd>6</kbd></td><td>Сменить оружие / категорию</td></tr>
-            <tr><td>Удерживать ПКМ / <kbd>B</kbd></td><td>Бинокль: обзор плавно едет туда, куда ведёте мышь</td></tr>
-            <tr><td>Колесо / <kbd>C</kbd></td><td>Немного приблизить или отдалить / вернуть камеру к бойцу</td></tr>
-            <tr><td><kbd>R</kbd></td><td>Повернуть балку / подкрутка гранаты</td></tr>
+            <tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Предыдущее / следующее оружие по номеру</td></tr>
+            <tr><td>Num <kbd>1</kbd>–<kbd>9</kbd></td><td>Выбрать оружие. Для номеров 10–41: Num 0, затем две цифры номера</td></tr>
+            <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Выбрать своего бойца в непрерывном бою. Для 10–20: 0, затем две цифры номера</td></tr>
+            <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Сдвинуть камеру, оставляя бойца в кадре</td></tr>
+            <tr><td>Колесо / <kbd>C</kbd></td><td>Масштаб / вернуть обзор к бойцу. Зажатое колесо и прокрутка — скорость перемещения камеры</td></tr>
+            <tr><td><kbd>R</kbd></td><td>Повернуть балку / подкрутить гранату</td></tr>
             <tr><td><kbd>P</kbd></td><td>Пропустить ход</td></tr>
             <tr><td><kbd>T</kbd></td><td>Чат (в онлайне)</td></tr>
-            <tr><td><kbd>Esc</kbd></td><td>Убрать оружие из рук (мышь остаётся в игре)</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Убрать оружие из рук; ещё раз — вернуть (мышь остаётся в игре)</td></tr>
+            <tr><td><kbd>F11</kbd></td><td>Полный экран / оконный режим. Эта клавиша не переназначается.</td></tr>
             <tr><td><kbd>M</kbd> / <kbd>Backspace</kbd></td><td>Звук / меню (пауза, мышь свободна)</td></tr>
           </table>
           <h3>Правила</h3>
           <p class="muted">Команды ходят по очереди (или одновременно — «Непрерывный бой»), бойцы — по номерам. Перемещение, прыжки и подъём по лестницам расходуют запас движения (если ход не «на любую дистанцию»). За ход — одна атака (дробовик: 2 выстрела, револьвер: 3). После атаки есть 3 секунды для отступления. Вода и лава смертельны.</p>
-          <h3>Рельеф решает</h3><p class="muted">Все восемь карт постоянные, шириной 6400 пикселей; на востоке каждой — укреплённый район с многоэтажной крепостью, подвалом, подземным ходом, бункером и вышкой. Тоннели позволяют обойти высоты, стены поглощают взрывную волну. Металл и бетон труднее разрушить; лёд сильнее отражает гранаты. У пуль есть скорость и падение, ветер сильнее влияет на ракеты. Всю карту сразу не увидеть: осматривайте поле боя в бинокль, а с оружием, которому выбирают точку на карте, просто ведите курсор к краю экрана — обзор поедет сам. Бомбы самолёта сбрасываете сами, на глаз (ЛКМ или F): по инерции они летят вперёд, так что нужно упреждение, а не успели — сброс у края экрана; тучу молнии сносит ветром, орбитальный луч надо довести, у ракет есть разброс.</p>
+          <h3>Рельеф решает</h3><p class="muted">Все восемь карт постоянные, шириной 6400 пикселей; на востоке каждой — укреплённый район с многоэтажной крепостью, подвалом, подземным ходом, бункером и вышкой. Тоннели позволяют обойти высоты, стены поглощают взрывную волну. Металл и бетон труднее разрушить; лёд сильнее отражает гранаты. Пули летят с конечной скоростью и снижаются; ветер сильнее влияет на ракеты. Колесом можно отдалить обзор до границ карты. С оружием, которому выбирают точку на карте, ведите курсор к краю экрана — обзор поедет сам. Бомбы самолёта сбрасывайте сами — ЛКМ или клавишей выстрела. По инерции они летят вперёд, поэтому выбирайте момент сброса на глаз, с упреждением. Если не успели, бомбы сбросятся у края экрана. Грозовую тучу сносит ветром, орбитальный луч нужно довести до цели, у ракет есть разброс.</p>
         </div>
         <div>
           <h3>Арсенал</h3>
@@ -187,6 +248,48 @@
   </div>
   <div id="tray" class="tray hidden"><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
   <div id="chat" class="chat hidden"><div id="chat-log" class="chat-log"></div><input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Сообщение… (Enter — отправить)"></div>
+
+  <!-- Сенсорное управление для Android и сенсорных экранов -->
+  <div id="touch-controls" class="touch-controls hidden">
+    <div class="touch-bar-top">
+      <div class="touch-bar-group touch-bar-left">
+        <button type="button" class="touch-pill" data-touch="menu" aria-label="Меню" title="Меню (пауза)">☰</button>
+        <button type="button" class="touch-pill" data-touch="sound" aria-label="Звук" title="Звук">🔊</button>
+        <button type="button" class="touch-pill" data-touch="full" aria-label="Полный экран" title="Полный экран">⛶</button>
+      </div>
+      <div class="touch-bar-group touch-bar-right">
+        <button type="button" class="touch-pill" data-touch="camera" aria-label="Центрировать камеру" title="Вернуть камеру к бойцу">🎯</button>
+        <button type="button" class="touch-pill" data-touch="binoc" aria-label="Бинокль" title="Бинокль (свободный осмотр)">👁</button>
+        <button type="button" class="touch-pill" data-touch="skip" aria-label="Пропустить ход" title="Пропустить ход">⏭</button>
+        <button type="button" class="touch-pill touch-fighter-btn hidden" data-touch="fighter" aria-label="Смена бойца" title="Следующий боец">👤</button>
+      </div>
+    </div>
+
+    <!-- Левый блок: перемещение бойца -->
+    <div class="touch-cluster touch-left">
+      <button type="button" class="touch-btn touch-dpad touch-dpad-up" data-touch="jump" aria-label="Прыжок / Вверх">▲</button>
+      <button type="button" class="touch-btn touch-dpad touch-dpad-left" data-touch="left" aria-label="Влево">◀</button>
+      <button type="button" class="touch-btn touch-dpad touch-dpad-down" data-touch="down" aria-label="Вниз">▼</button>
+      <button type="button" class="touch-btn touch-dpad touch-dpad-right" data-touch="right" aria-label="Вправо">▶</button>
+    </div>
+
+    <!-- Правый блок: огонь, прицел, оружие -->
+    <div class="touch-cluster touch-right">
+      <div class="touch-aim-col">
+        <button type="button" class="touch-btn touch-aim-btn" data-touch="aimUp" aria-label="Прицел выше" title="Поднять ствол">▲</button>
+        <button type="button" class="touch-btn touch-aim-btn" data-touch="aimDown" aria-label="Прицел ниже" title="Опустить ствол">▼</button>
+        <button type="button" class="touch-btn touch-aim-btn touch-rot-btn hidden" data-touch="rotate" aria-label="Повернуть" title="Повернуть / подкрутить">↻</button>
+      </div>
+      <div class="touch-wpn-col">
+        <button type="button" class="touch-btn touch-wpn-main" data-touch="tray" aria-label="Выбрать оружие" title="Арсенал оружия">⚔</button>
+        <div class="touch-wpn-arrows">
+          <button type="button" class="touch-btn touch-wpn-arrow" data-touch="prev" aria-label="Предыдущее оружие">◀</button>
+          <button type="button" class="touch-btn touch-wpn-arrow" data-touch="next" aria-label="Следующее оружие">▶</button>
+        </div>
+      </div>
+      <button type="button" class="touch-btn touch-fire-btn" data-touch="fire" aria-label="Огонь" title="Выстрел (удерживайте для силы броска)">🔥</button>
+    </div>
+  </div>
 </div>
 
 <script src="js/util.js"></script>

@@ -8,49 +8,52 @@
 const WEAPON_CATS = ['Ракеты', 'Гранаты', 'Огнестрел', 'Взрывчатка', 'С воздуха', 'Снаряжение'];
 const WEAPONS = [
   { id: 'assault', name: 'Штурмовая винтовка', cat: 2, ammo: -1, mode: 'instant', desc: 'Очередь из пяти пуль. Прицел можно вести; эффективна на средней дистанции.' },
-  { id: 'revolver', name: 'Револьвер «Шериф»', cat: 2, ammo: 3, mode: 'instant', shots: 3, desc: 'Три точных выстрела по 18 урона за ход. Между выстрелами можно сменить цель.' },
-  { id: 'magnum', name: 'Магнум', cat: 2, ammo: -1, mode: 'instant', desc: 'Патроны не кончаются. Один точный выстрел: 35 урона, в голову — 50. Пуля почти не снижается.' },
+  { id: 'revolver', name: 'Револьвер «Шериф»', cat: 2, ammo: 3, mode: 'instant', shots: 3, desc: 'Три точных выстрела по 18 единиц урона за ход. Между выстрелами можно сменить цель.' },
+  { id: 'magnum', name: 'Магнум', cat: 2, ammo: -1, mode: 'instant', desc: 'Патроны не кончаются. Один точный выстрел: урон — 35, при попадании в голову — 50. Пуля почти не снижается.' },
   { id: 'uzi', name: 'Узи', cat: 2, ammo: 2, mode: 'instant', desc: 'Очередь из десяти пуль с заметным разбросом. Ствол можно вести во время стрельбы; лучше всего вблизи.' },
-  { id: 'acid', name: 'Кислотомёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Ближний бой: струя бьёт лишь на ~28 м. Кислота летит почти прямо, прожигает землю и стены и задевает всех на пути — 25 урона каждому. Струёй можно вести, как из шланга; в конце она опадает.' },
+  { id: 'acid', name: 'Кислотомёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Ближний бой: струя бьёт лишь на расстояние около 28 м. Кислота летит почти прямо, прожигает землю и стены и задевает всех на пути — по 25 единиц урона. Струю можно направлять, как струю из шланга; в конце она опадает.' },
   { id: 'plasma', name: 'Плазменная пушка', cat: 0, ammo: 3, mode: 'charge', desc: 'Энергетический шар отскакивает от стен и взрывается при касании бойца или через 3 секунды.' },
   { id: 'autocannon', name: 'Автопушка', cat: 0, ammo: 2, mode: 'instant', desc: 'Три скоростных разрывных снаряда: летят по небольшой дуге, каждый взрывается отдельно.' },
-  { id: 'tesla', name: 'Тесла-карабин', cat: 2, ammo: 2, mode: 'instant', desc: 'Направленный разряд: 32 урона цели, затем перескакивает ещё на двух соседей. Сквозь стены не бьёт.' },
+  { id: 'tesla', name: 'Тесла-карабин', cat: 2, ammo: 2, mode: 'instant', desc: 'Направленный разряд наносит цели 32 единицы урона, затем перескакивает ещё на двух соседей. Сквозь стены не бьёт.' },
   { id: 'repulsor', name: 'Импульсная пушка', cat: 2, ammo: 2, mode: 'instant', desc: 'Конус ударной волны: отбрасывает противников вблизи и не разрушает землю.' },
-  { id: 'rpg', name: 'РПГ', cat: 0, ammo: 3, mode: 'instant', desc: 'Ракета летит прямо, ветер её не сносит, но она закручивается по спирали и примерно через секунду теряет управление. Взрыв: до 70 урона плюс осколки; урон плавно спадает к краю зоны осколков.' },
-  { id: 'bazooka', name: 'Базука', cat: 0, ammo: -1, mode: 'charge', desc: 'Ракета летит по дуге, её сносит ветром. Взрыв при попадании: до 70 урона плюс осколки; урон плавно спадает к краю зоны осколков.' },
+  { id: 'rpg', name: 'РПГ', cat: 0, ammo: 3, mode: 'instant', desc: 'Ракета летит прямо, ветер её не сносит, но она закручивается по спирали и примерно через секунду теряет управление. Взрыв: до 70 единиц урона плюс осколки; урон плавно спадает к краю зоны осколков.' },
+  { id: 'bazooka', name: 'Базука', cat: 0, ammo: -1, mode: 'charge', desc: 'Ракета летит по дуге, её сносит ветром. Взрыв при попадании: до 70 единиц урона плюс осколки; урон плавно спадает к краю зоны осколков.' },
   { id: 'homing', name: 'Самонаводка', cat: 0, ammo: 2, mode: 'tcharge', desc: 'Кликните по цели и стреляйте. Головка захватывает цель с ошибкой и поворачивает плавно — за угол не залетит.' },
   { id: 'mortar', name: 'Миномёт', cat: 0, ammo: 3, mode: 'charge', desc: 'Стреляет очень далеко. Мина отскакивает от стен и потолков и взрывается, коснувшись пола. Радиус как у гранаты, урон чуть выше.' },
   { id: 'drill', name: 'Бур-ракета', cat: 0, ammo: 2, mode: 'charge', desc: 'Вгрызается в землю и взрывается глубоко внутри.' },
   { id: 'salvo', name: 'Ракетный залп', cat: 0, ammo: 1, mode: 'charge', desc: 'Пять ракет подряд с небольшим разбросом.' },
-  { id: 'grenade', name: 'Граната', cat: 1, ammo: -1, mode: 'charge', desc: 'Отскакивает от стен и взрывается через 3 секунды: до 60 урона взрывом плюс много осколков; урон плавно спадает с расстоянием. R — подкрутка вперёд/назад: после удара граната катится дальше или отскакивает назад.' },
+  { id: 'grenade', name: 'Граната', cat: 1, ammo: -1, mode: 'charge', desc: 'Отскакивает от стен и взрывается через 3 секунды: до 60 единиц урона взрывом плюс много осколков; урон плавно спадает с расстоянием. Подкрутка вперёд или назад: после удара граната катится дальше или отскакивает назад.' },
   { id: 'cluster', name: 'Кассетная граната', cat: 1, ammo: 3, mode: 'charge', desc: 'Взрывается и разбрасывает пять мини-бомб.' },
   { id: 'sticky', name: 'Липучка', cat: 1, ammo: 2, mode: 'charge', desc: 'Прилипает к земле или к бойцу и взрывается через 2,5 секунды.' },
   { id: 'molotov', name: 'Коктейль Молотова', cat: 1, ammo: 2, mode: 'charge', desc: 'Разбивается и заливает всё вокруг огнём.' },
   { id: 'blackhole', name: 'Чёрная дыра', cat: 1, ammo: 1, mode: 'charge', desc: 'Открывает сингулярность, которая затягивает бойцов и пожирает землю.' },
   { id: 'shotgun', name: 'Дробовик', cat: 2, ammo: -1, mode: 'instant', shots: 2, desc: 'Два выстрела за ход. Дробь сильно бьёт вблизи.' },
-  { id: 'sniper', name: 'Снайперка', cat: 2, ammo: 3, mode: 'instant', desc: 'Дальний выстрел: 45 урона, в голову — 60. Прицел качается в такт дыханию; Shift ненадолго задерживает дыхание.' },
+  { id: 'sniper', name: 'Снайперка', cat: 2, ammo: 3, mode: 'instant', desc: 'Дальний выстрел: урон — 45, при попадании в голову — 60. Оптику можно вести мышью по всей карте. Во время наведения есть небольшое колебание; остановите мышь — прицел быстро стабилизируется.' },
   { id: 'minigun', name: 'Миниган', cat: 2, ammo: 2, mode: 'instant', desc: 'Шквал пуль. Прицел можно вести во время стрельбы.' },
-  { id: 'flamer', name: 'Огнемёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Струя огня на ближней дистанции, поджигает землю.' },
+  { id: 'flamer', name: 'Огнемёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Струя огня на ближней дистанции. Поджигает землю.' },
   { id: 'railgun', name: 'Рельсотрон', cat: 2, ammo: 1, mode: 'instant', desc: 'Луч пробивает землю и всех бойцов на своём пути.' },
   { id: 'dynamite', name: 'Динамит', cat: 3, ammo: 2, mode: 'drop', desc: 'Бросьте под ноги и бегите: мощный взрыв через 4 секунды.' },
   { id: 'mine', name: 'Мина', cat: 3, ammo: 3, mode: 'drop', desc: 'Взводится за 2 секунды и срабатывает, если кто-то подойдёт.' },
-  { id: 'robot', name: 'Робо-бомба', cat: 3, ammo: 1, mode: 'drop', desc: 'Шагает вперёд и сама перепрыгивает стенки. Пробел — прыжок через своих бойцов и препятствия, повторное нажатие атаки — взрыв.' },
-  { id: 'boot', name: 'Ботинок', cat: 3, ammo: -1, mode: 'instant', desc: 'Пинок вплотную: 15 урона, противник улетает почти горизонтально — удобно сбрасывать с обрыва.' },
+  { id: 'robot', name: 'Робо-бомба', cat: 3, ammo: 1, mode: 'drop', desc: 'Шагает вперёд и сама перепрыгивает стенки. Клавиша прыжка — прыжок через своих бойцов и препятствия; повторное нажатие кнопки выстрела — взрыв.' },
+  { id: 'boot', name: 'Ботинок', cat: 3, ammo: -1, mode: 'instant', desc: 'Пинок вплотную: 15 единиц урона, противник улетает почти горизонтально — удобно сбрасывать с обрыва.' },
   { id: 'bat', name: 'Бейсбольная бита', cat: 3, ammo: -1, mode: 'instant', desc: 'Удар вблизи: противник улетает далеко-далеко.' },
-  { id: 'airstrike', name: 'Авиаудар', cat: 4, ammo: 1, mode: 'target', desc: 'Кликните по цели: самолёт пройдёт над ней. Сброс — на глаз, ЛКМ или F: серия из пяти бомб уходит вперёд по инерции самолёта и тормозит в воздухе — сбрасывайте с упреждением. Не сбросили — бомбы уйдут сами, когда самолёт долетит до края экрана. Цель за экраном — ведите курсор к краю.' },
+  { id: 'airstrike', name: 'Авиаудар', cat: 4, ammo: 1, mode: 'target', desc: 'Кликните по цели: самолёт пройдёт над ней. Сбрасывайте бомбы ЛКМ или клавишей выстрела: серия из пяти бомб летит вперёд по инерции самолёта и тормозит в воздухе. Выбирайте момент сброса на глаз, с упреждением. Не сбросили — бомбы уйдут сами, когда самолёт долетит до края экрана. Цель за экраном — ведите курсор к краю.' },
   { id: 'lightning', name: 'Молния', cat: 4, ammo: 1, mode: 'target', desc: 'Над точкой собирается туча, её сносит ветром. Молния бьёт в самую высокую точку под тучей и перескакивает на соседей.' },
-  { id: 'orbital', name: 'Орбитальный лазер', cat: 4, ammo: 1, mode: 'target', desc: 'Спутник наводится с ошибкой. Луч прожигает всё насквозь и не отбрасывает бойцов: 150 урона в секунду, пока цель в луче. Ведите его клавишами A/D.' },
+  { id: 'orbital', name: 'Орбитальный лазер', cat: 4, ammo: 1, mode: 'target', desc: 'Спутник наводится с ошибкой. Луч прожигает всё насквозь и не отбрасывает бойцов: 150 единиц урона в секунду, пока цель в луче. Ведите его клавишами движения влево и вправо.' },
   { id: 'nuke', name: 'Ядерный удар', cat: 4, ammo: 1, mode: 'target', minRound: 3, desc: 'Огромный взрыв. Ракету сносит ветром, разброс около 60 м. Доступен с 3-го раунда.' },
   { id: 'tpgrenade', name: 'Телепортер', cat: 5, ammo: 2, mode: 'charge', ends: true, desc: 'Бросается как граната. Когда устройство остановится, боец переносится к нему, а вокруг расчищается место. Упадёт в воду — пропадёт. Завершает ход.' },
   { id: 'teleport', name: 'Телепорт', cat: 5, ammo: 2, mode: 'target', ends: true, desc: 'Мгновенное перемещение в любую свободную точку. Завершает ход.' },
-  { id: 'jetpack', name: 'Джетпак', cat: 5, ammo: 2, mode: 'active', free: true, desc: 'Полёт: W или пробел — вверх, A/D — в стороны. Ход продолжается.' },
-  { id: 'girder', name: 'Балка', cat: 5, ammo: 3, mode: 'place', free: true, desc: 'Постройте стальную балку. R — повернуть. Ход продолжается.' },
+  { id: 'jetpack', name: 'Джетпак', cat: 5, ammo: 2, mode: 'active', free: true, desc: 'Полёт: клавиши подъёма или прыжка — вверх, клавиши движения — в стороны. Ход продолжается.' },
+  { id: 'girder', name: 'Балка', cat: 5, ammo: 3, mode: 'place', free: true, desc: 'Постройте стальную балку. Клавиша поворота меняет её наклон. Ход продолжается.' },
   { id: 'pickaxe', name: 'Кирка', cat: 5, ammo: 4, mode: 'instant', desc: 'Прорубает проход в сторону прицела — можно копать вниз, вверх и вбок. Выручает из ловушек.' },
-  { id: 'medkit', name: 'Аптечка', cat: 5, ammo: 1, mode: 'self', desc: 'Восстанавливает бойцу 35 здоровья.' },
-  { id: 'skip', name: 'Пропуск хода', cat: 5, ammo: -1, mode: 'self', ends: true, desc: 'Передаёт ход сопернику.' },
+  { id: 'medkit', name: 'Аптечка', cat: 5, ammo: 1, mode: 'self', desc: 'Восстанавливает бойцу 35 единиц здоровья.' },
+  { id: 'skip', name: 'Пропуск хода', cat: 5, ammo: -1, mode: 'self', ends: true, desc: 'Завершает ход текущего бойца.' },
 ];
 // оружие, которому можно задать подкрутку (клавиша R)
 const SPIN_WEAPONS = new Set(['grenade', 'cluster', 'tpgrenade']);
+// Один порядок: категории сверху вниз, внутри строки слева направо. Номера не меняются от расхода патронов.
+const WEAPON_ORDER = WEAPON_CATS.flatMap((_, cat) => WEAPONS.filter(w => w.cat === cat));
+WEAPON_ORDER.forEach((w, i) => { w.number = i + 1; });
 const WEAPON = Object.fromEntries(WEAPONS.map((w, i) => [w.id, Object.assign(w, { idx: i })]));
 const CLASSIC = ['bazooka', 'grenade', 'cluster', 'shotgun', 'sniper', 'dynamite', 'mine', 'bat', 'airstrike', 'teleport', 'girder', 'skip'];
 // набор как в Territory War 3: десять видов оружия оригинала (+ пропуск хода)
@@ -97,9 +100,13 @@ function _tube(c, x, y, w, h, col) {
   c.fillStyle = g; rrect(c, x, y, w, h, h / 2.4); c.fill(); c.lineWidth = 0.5; c.strokeStyle = 'rgba(8,10,12,0.75)'; c.stroke();
 }
 function _glowDot(c, x, y, r, col, a = 1) { c.save(); c.globalAlpha *= a; c.shadowColor = col; c.shadowBlur = 5; c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); c.restore(); }
-/* реалистичные модели (рендер Blender, dev/blender/make_weapons.py): кадр 48×24 ед., рукоять в начале координат */
-const HELD_SPRITE = { bazooka: 'wpn_bazooka', rpg: 'wpn_rpg', assault: 'wpn_assault', sniper: 'wpn_sniper', shotgun: 'wpn_shotgun', revolver: 'wpn_revolver',
-  magnum: 'wpn_magnum', uzi: 'wpn_uzi', minigun: 'wpn_minigun', flamer: 'wpn_flamer', autocannon: 'wpn_autocannon', mortar: 'wpn_mortar', homing: 'wpn_homing' };
+/** удары по выбранной на карте точке: при запуске обзор встаёт точно по центру клика (render.js, Camera.pickFrame) */
+const PICK_STRIKE = new Set(['airstrike', 'lightning', 'orbital', 'nuke']);
+/* реалистичные модели всего оружия (рендер Blender, dev/blender/make_weapons2.py): кадр 48×24 ед., рукоять в начале координат;
+   метательное — у руки в том же кадре. Нет файла — рисуется прежний рисунок ниже */
+const HELD_SPRITE = Object.fromEntries(['assault', 'revolver', 'magnum', 'uzi', 'acid', 'plasma', 'autocannon', 'tesla', 'repulsor', 'rpg', 'bazooka', 'homing', 'mortar', 'drill', 'salvo',
+  'grenade', 'cluster', 'sticky', 'molotov', 'blackhole', 'shotgun', 'sniper', 'minigun', 'flamer', 'railgun', 'dynamite', 'mine', 'robot', 'boot', 'bat',
+  'airstrike', 'lightning', 'orbital', 'nuke', 'tpgrenade', 'teleport', 'girder', 'pickaxe', 'medkit', 'skip', 'jetpack'].map(id => [id, 'wpn_' + id]));
 function drawHeld(c, id, t = 0) {
   const spr = typeof TexLib !== 'undefined' && HELD_SPRITE[id] && TexLib.data[HELD_SPRITE[id]];
   if (spr) { c.drawImage(spr.canvas, -16, -12, 48, 24); return; }
@@ -167,12 +174,68 @@ function drawHeld(c, id, t = 0) {
 
 /* ---------- иконки для панели оружия ---------- */
 const _iconCache = new Map();
+/** непрозрачная часть спрайта (для иконок по размеру предмета) */
+function spriteBounds(spr) {
+  if (spr.bounds) return spr.bounds;
+  const W = spr.w, H = spr.h, d = spr.d; let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (d[(y * W + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  return (spr.bounds = x1 < 0 ? [0, 0, W, H] : [x0, y0, x1 - x0 + 2, y1 - y0 + 2]);
+}
 function weaponIcon(id, size = 44) {
   const key = id + size; if (_iconCache.has(key)) return _iconCache.get(key);
   const cv = makeCanvas(size, size); const c = cv.getContext('2d');
+  const spr = typeof TexLib !== 'undefined' && HELD_SPRITE[id] && TexLib.data[HELD_SPRITE[id]];
+  const physicalGun = ['assault', 'revolver', 'magnum', 'uzi', 'shotgun', 'sniper', 'minigun', 'rpg', 'bazooka', 'homing', 'mortar', 'drill', 'salvo', 'plasma', 'tesla', 'repulsor', 'railgun'];
+  if (spr && spr.d && physicalGun.includes(id)) {   // узнаваемый силуэт оружия, без обрезанных краёв
+    const [bx, by, bw, bh] = spriteBounds(spr), angle = bw > bh * 1.6 ? -0.22 : 0;
+    const rw = bw * Math.cos(angle) + bh * Math.abs(Math.sin(angle)), rh = bh * Math.cos(angle) + bw * Math.abs(Math.sin(angle));
+    const k = Math.min(size * 0.85 / rw, size * 0.85 / rh);
+    c.translate(size / 2, size / 2); c.rotate(angle); c.imageSmoothingQuality = 'high';
+    c.shadowColor = '#dbe8e5'; c.shadowBlur = size / 44;
+    c.drawImage(spr.canvas, bx, by, bw, bh, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
+    _iconCache.set(key, cv); return cv;
+  }
   c.translate(size / 2, size / 2); const k = size / 44; c.scale(k, k);
   const glow = (col) => { c.shadowColor = col; c.shadowBlur = 8; };
+  const shape = (points, color) => { c.fillStyle = color; c.strokeStyle = '#081519'; c.lineWidth = 1.4; c.beginPath(); points.forEach(([x,y],i) => i ? c.lineTo(x,y) : c.moveTo(x,y)); c.closePath(); c.fill(); c.stroke(); };
+  const box = (x,y,w,h,col,r=2) => { c.fillStyle=col; c.strokeStyle='#081519'; c.lineWidth=1.3; rrect(c,x,y,w,h,r); c.fill(); c.stroke(); };
+  const circle = (x,y,r,col) => { c.fillStyle=col; c.strokeStyle='#081519'; c.lineWidth=1.2; circ(c,x,y,r); c.stroke(); };
+  const bolt = (x,y,k=1) => { c.save();c.translate(x,y);c.scale(k,k);shape([[3,-18],[-9,2],[-1,2],[-5,18],[9,-4],[1,-4],[7,-18]],'#fff36b');c.restore(); };
   switch (id) {
+    case 'acid':
+      box(-12,-13,24,29,'#c4e9df',4); box(-7,-18,14,5,'#8398a0'); box(-9,-2,18,14,'#74ee5d',2);
+      circle(-3,2,2,'#e9ffc1');circle(5,7,1.7,'#e9ffc1');shape([[12,-8],[17,0],[14,5],[10,0]],'#74ee5d');break;
+    case 'flamer':
+      shape([[0,-19],[5,-9],[12,-14],[15,0],[11,12],[0,18],[-12,11],[-16,0],[-8,-12],[-6,-3]],'#ff763e');
+      shape([[1,-5],[7,5],[4,13],[-3,14],[-8,5],[-4,-2]],'#ffde72');break;
+    case 'grenade': case 'cluster': case 'sticky': case 'tpgrenade': {
+      const col={grenade:'#84a95b',cluster:'#ebbb54',sticky:'#ee8383',tpgrenade:'#bc8cff'}[id];
+      box(-5,-17,10,7,'#dbe5d0');circle(0,4,13,col);c.strokeStyle='#293c24';c.lineWidth=1.4;
+      if(id==='grenade'){for(const y of [-2,5,11]){c.beginPath();c.moveTo(-10,y);c.lineTo(10,y);c.stroke();}c.beginPath();c.moveTo(0,-8);c.lineTo(0,16);c.stroke();}
+      if(id==='cluster'){for(const [x,y]of[[-7,4],[0,8],[7,3]])circle(x,y,3.1,'#fff0bb');}
+      if(id==='sticky'){for(let i=0;i<8;i++){const a=i*TAU/8;circle(Math.cos(a)*14,4+Math.sin(a)*14,2.4,'#ffb4ac');}}
+      if(id==='tpgrenade'){c.strokeStyle='#f2deff';c.lineWidth=2.5;c.beginPath();c.arc(0,4,7,.2,5.4);c.stroke();shape([[5,-4],[10,0],[4,3]],'#f2deff');}break;
+    }
+    case 'blackhole':
+      c.save();c.rotate(-.4);c.strokeStyle='#bc86fc';c.lineWidth=3;c.beginPath();c.ellipse(0,0,19,8,0,0,TAU);c.stroke();circle(0,0,11,'#05070e');c.strokeStyle='#efe2ff';c.lineWidth=1.5;c.beginPath();c.arc(0,0,12,3.6,5.8);c.stroke();c.restore();break;
+    case 'molotov':
+      box(-5,-13,10,26,'#c9d77b',3);box(-3,-18,6,7,'#87aa68',1);box(-3,0,6,11,'#b97932',1);
+      shape([[3,-17],[7,-13],[12,-18],[11,-8],[7,-6],[4,-9]],'#ff9b45');break;
+    case 'mine':
+      box(-17,1,34,11,'#9caa71',5);box(-10,-5,20,10,'#c3cf93',4);box(-3,-10,6,7,'#ff7768');
+      c.strokeStyle='#26372d';c.lineWidth=2;for(let i=-12;i<=12;i+=6){c.beginPath();c.moveTo(i,6);c.lineTo(i,10);c.stroke();}break;
+    case 'dynamite':
+      for(const x of[-10,-3,4])box(x,-11,6,26,'#e7664c',2);box(-11,-2,22,4,'#f2d397',1);
+      c.strokeStyle='#e9d9b5';c.lineWidth=2;c.beginPath();c.moveTo(0,-11);c.bezierCurveTo(0,-21,12,-18,12,-12);c.stroke();shape([[12,-18],[15,-14],[11,-11],[8,-15]],'#ffde62');break;
+    case 'robot':
+      box(-12,-8,24,20,'#a3b8c4',4);box(-8,-17,16,10,'#dae5ec',3);box(-11,12,8,6,'#647a87');box(3,12,8,6,'#647a87');
+      circle(-4,-12,1.8,'#fb696b');circle(4,-12,1.8,'#fb696b');box(-7,-2,14,5,'#ff6b67');break;
+    case 'boot':
+      shape([[-13,-17],[-1,-17],[-1,-2],[11,0],[17,7],[17,13],[-15,13],[-15,5]],'#ddad6e');box(-15,10,33,5,'#657b83',1);break;
+    case 'bat':
+      c.rotate(.55);box(-4,-19,8,27,'#dcb884',4);box(-2,6,4,13,'#8f623b',1);box(-4,17,8,3,'#dcb884',1);break;
+    case 'pickaxe':
+      c.rotate(-.4);box(-2,-8,4,29,'#c99764',1);shape([[-19,-9],[-9,-15],[6,-15],[17,-8],[20,2],[12,-5],[-8,-8]],'#b8d1d8');break;
     case 'airstrike':
       c.fillStyle = '#b8c2d0'; c.beginPath(); c.moveTo(-16, -6); c.lineTo(10, -6); c.lineTo(16, -3); c.lineTo(10, 0); c.lineTo(-16, 0); c.closePath(); c.fill();
       c.fillStyle = '#8a95a6'; c.beginPath(); c.moveTo(-4, -4); c.lineTo(-10, -14); c.lineTo(-4, -14); c.lineTo(4, -4); c.closePath(); c.fill(); c.beginPath(); c.moveTo(-16, -6); c.lineTo(-18, -12); c.lineTo(-13, -12); c.lineTo(-10, -6); c.fill();

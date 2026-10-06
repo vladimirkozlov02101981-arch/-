@@ -6,19 +6,21 @@
 const TRAIL_RATE = { acid: 0.045, rocket: 0.012, mini: 0.02, homing: 0.012, nukem: 0.008, drill: 0.02, mortar: 0.03, frag: 0.05, bomb: 0.035, bomblet: 0.05, dynamite: 0.03, fire: 0.07, bhole: 0.008, jet: 0.02, orbital: 0.02, molotov: 0.04 };
 const ENT_LIGHT = { rocket: ['#ffae3a', 70], homing: ['#9fd8ff', 70], mini: ['#ffae3a', 45], nukem: ['#ffd070', 120], fire: ['#ff7a1a', 60], flame: ['#ffa22a', 40], bhole: ['#a060ff', 160], molotov: ['#ffa22a', 40], orbital: ['#ff5ae0', 200], dynamite: ['#ffd35a', 26], jet: ['#ffa23a', 50] };
 
+/** высота плашки начала хода (экранные px) */
+const TURN_BANNER_H = 76, TURN_BANNER_PAD = 40;
 TRAIL_RATE.plasma = .014; ENT_LIGHT.plasma = ['#80e6ff', 95];
 
 class FX {
-  constructor() { this.isLocalTeam = () => true; this.onOver = null; this.onTurn = null; this.reset(null); }
+  constructor() { this.localTeams = null; this.isLocalTeam = () => true; this.onOver = null; this.onTurn = null; this.reset(null); }
   reset(sc) {
-    this.P = new Particles(); this.P.onRest = (p) => this.litterAdd(p.t === 4 ? 2 : p.t === 7 ? 3 : 4, p.x, p.y, p.rot || 0, p.col, p.s);
+    this.P = new Particles(); this.P.onRest = (p) => this.withCombat(p.settleMask || 0, () => this.litterAdd(p.t === 4 ? 2 : p.t === 7 ? 3 : 4, p.x, p.y, p.rot || 0, p.col, p.s));
     this.litter = []; this.flyers = [];   // всё, что упало на карту, убирается в начале следующего хода; летящие осколки
     this.lights = []; this.texts = []; this.banners = []; this.traces = []; this.bolts = [];
     this.shake = 0; this.flash = 0; this.flashCol = '#ffffff'; this.focus = null; this.trailAcc = new Map(); this.frameLights = [];
     this.weather = sc ? new Weather(sc.theme.weather) : null; this.propAcc = 0; this.t = 0; this.lightCv = null;
   }
   /** предмет на карте до конца боя: 0 осколок, 1 пуля в преграде, 2 пятно крови, 3 гильза, 4 обломок */
-  litterAdd(k, x, y, rot = 0, col, s = 2) { if (this.litter.length > 9000) this.litter.splice(0, 500); this.litter.push({ k, x, y, rot, col, s, vy: 0 }); }
+  litterAdd(k, x, y, rot = 0, col, s = 2) { if (this.litter.length > 9000) this.litter.splice(0, 500); this.litter.push({ k, x, y, rot, col, s, vy: 0, settleMask: this.P.settleMask || 0 }); }
   /** после разрушения земли то, что лежало на ней, падает вниз; застрявшее в стене выпадает вместе с куском */
   litterSettle(sc, dt) {
     const T = sc.terrain, wy = sc.waterY;
@@ -30,12 +32,54 @@ class FX {
       if (o.y > wy + 4 || o.y > T.H) this.litter.splice(i, 1);
     }
   }
-  banner(txt, col = '#fff', big = false, life = 2.2) { this.banners.push({ txt, col, big, life, max: life }); if (this.banners.length > 4) this.banners.shift(); }
+  banner(txt, col = '#fff', big = false, life = 2.2, detail = null) { this.banners.push(Object.assign({ txt, col, big, life, max: life }, detail)); if (this.banners.length > 4) this.banners.shift(); }
   text(txt, x, y, col, size = 18, id) { const o = { txt, x, y, vy: -38, life: 1.4, max: 1.4, col, size, id }; this.texts.push(o); return o; }
   name(sc, id) { const s = sc.soldiers.find(o => o.id === id); return s ? s.name : ''; }
+  /** Цвет потери определяется командой погибшего и личной стороной игрока, а не ходом или автором атаки. */
+  deathRelation(sc, id) {
+    const s = sc.soldiers.find(o => o.id === id);
+    const teams = typeof this.localTeams === 'function' ? this.localTeams() : [];
+    const owner = Array.isArray(teams) && teams.length === 1 ? teams[0] : Array.isArray(teams) && teams.length > 1 && sc.turn && teams.includes(sc.turn.team) ? sc.turn.team : null;
+    if (!s || !Number.isInteger(owner) || owner < 0 || !Number.isInteger(s.team) || s.team < 0) return 'neutral';
+    return s.team === owner ? 'ally' : 'enemy';
+  }
+  deathNotice(sc, ev) {
+    const s = sc.soldiers.find(o => o.id === ev.id); if (!s || !s.name) return '';
+    const relation = this.deathRelation(sc, ev.id), who = relation === 'ally' ? 'Ваш боец' : relation === 'enemy' ? 'Боец противника' : 'Боец';
+    return `${who} ${s.name} ${ev.how === 'drown' ? 'утонул' : 'погиб'}!`;
+  }
+  /** Только последствия атаки задерживают ход; погода, факелы и надписи — нет. */
+  withCombat(mask, fn) {
+    const P = this.P, previous = P.settleMask || 0;
+    const lists = [this.flyers, this.lights, this.traces, this.bolts, this.litter], starts = lists.map(a => a.length);
+    P.settleMask = mask;
+    try { return fn(); }
+    finally {
+      for (let k = 0; k < lists.length; k++) for (let i = starts[k]; i < lists[k].length; i++) if (mask) lists[k][i].settleMask = mask;
+      P.settleMask = previous;
+    }
+  }
+  combatBusy(team = -1) {
+    const relevant = o => o.settleMask && (team < 0 || (o.settleMask & (1 << team)));
+    const activeP = p => {
+      if (p.t === 1 || p.t === 5 || p.t === 2) return true;
+      if (p.t === 3 || p.t === 4) return Math.hypot(p.vx, p.vy) > 30;
+      if (p.t === 0) return (p.max - p.life) < 0.65 || Math.hypot(p.vx, p.vy) > 50;
+      return false;
+    };
+    return (this.P.a || []).some(p => p.life > 0 && relevant(p) && activeP(p)) || this.flyers.some(relevant) ||
+      [this.lights, this.traces, this.bolts].some(a => a.some(o => o.life > 0 && relevant(o))) ||
+      this.litter.some(o => relevant(o) && Math.abs(o.vy || 0) > 0);
+  }
   /* ---------- события ---------- */
   handle(ev, sc, isHost) {
-    const P = this.P;
+    const cosmetic = ['footstep', 'turn', 'msg', 'siren', 'crate', 'over', 'water', 'carve', 'tidy', 'cline'];
+    const team = Number.isInteger(ev.L) ? ev.L : sc.turn && sc.turn.team;
+    const mask = cosmetic.includes(ev.t) ? 0 : (ev.M || (Number.isInteger(team) && team >= 0 ? 1 << team : 0));
+    return this.withCombat(mask, () => this.handleEvent(ev, sc, isHost));
+  }
+  handleEvent(ev, sc, isHost) {
+    const P = this.P; this.evL = ev.L;   // чей ход (одновременные ходы): обзор не бросается к чужим взрывам, если игрок так выбрал
     switch (ev.t) {
       case 'footstep': Sfx.play('footstep',ev); break;
       case 'impact':
@@ -71,10 +115,13 @@ class FX {
       }
       case 'heal': this.text('+' + ev.v, ev.x, ev.y - 42, '#5dff8a', 18); Sfx.play('pickup', ev); for (let i = 0; i < 12; i++) P.glow(ev.x + rand(-10, 10), ev.y - rand(0, 30), 0, rand(-60, -20), 3, rand(0.5, 1), '#5dff8a'); break;
       case 'die': {
-        const nm = this.name(sc, ev.id);
+        const nm = this.deathNotice(sc, ev);
         for (let i = 0; i < 10; i++) P.smoke(ev.x + rand(-8, 8), ev.y - rand(5, 25), rand(-20, 20), rand(-40, -10), rand(5, 9), rand(0.8, 1.5), '#9a9a9a', 2, 0.6);
         Sfx.play('die', ev);
-        if (nm) this.banner(ev.how === 'drown' ? `Боец №${nm} утонул!` : `Боец №${nm} выбывает!`, '#ff8a7a', false, 1.8);
+        if (nm) {
+          const relation = this.deathRelation(sc, ev.id), col = relation === 'enemy' ? '#81ffc1' : relation === 'ally' ? '#ff9da8' : '#f5d77b';
+          this.banner(nm, col, false, 3.6, { kind: 'death', relation });
+        }
         break;
       }
       case 'splash': this.splash(ev.x, sc.waterY, ev.s || 0, sc); break;
@@ -97,7 +144,7 @@ class FX {
         this.bolts.push({ pts: ev.pts, life: 0.5, max: 0.5 }); this.flash = Math.max(this.flash, 0.35); this.flashCol = '#cfe6ff';
         const e = ev.pts[ev.pts.length - 1]; this.lights.push({ x: e[0], y: e[1], r: 260, life: 0.4, max: 0.4, col: '#9fd0ff' });
         // главный удар молнии камера показывает: место удара и разряд над ним остаются в кадре, пока не осядут бойцы
-        if (ev.m) this.focus = { x: e[0], y: e[1] - 110, t: 1.8 };
+        if (ev.m) this.focus = { x: e[0], y: e[1] - 110, t: 1.8, L: this.evL };
         for (let i = 0; i < 14; i++) P.spark(e[0], e[1], rand(-260, 260), rand(-320, -40), rand(0.3, 0.6), '#bfe6ff');
         Sfx.play('zap', { x: e[0], y: e[1] }); this.shake = Math.max(this.shake, 8);
         break;
@@ -112,7 +159,14 @@ class FX {
         Sfx.play('teleport', { x: ev.x2, y: ev.y2 }); break;
       case 'pickup': this.text(ev.txt, ev.x, ev.y - 20, '#ffd23a', 16); Sfx.play('pickup', ev); break;
       case 'msg': if (ev.to === undefined || this.isLocalTeam(ev.to)) { this.banner(ev.txt, ev.c || '#fff', !!ev.big); if (ev.to !== undefined) Sfx.play('denied'); } break;
-      case 'turn': this.litter.length = 0; this.flyers.length = 0; if (this.onTurn) this.onTurn(ev, sc); Sfx.play('turn'); break;   // обломки и осколки исчезают после хода
+      case 'turn': {
+        const ended = sc.simul && Number.isInteger(ev.team) ? 1 << ev.team : -1;
+        const retain = o => { o.settleMask = (o.settleMask || 0) & ~ended; return !!o.settleMask; };
+        if (sc.simul) { this.litter = this.litter.filter(retain); this.flyers = this.flyers.filter(retain); }
+        else { this.litter.length = 0; this.flyers.length = 0; }
+        for (const list of [this.P.a || [], this.lights, this.traces, this.bolts]) for (const o of list) retain(o);
+        if (this.onTurn) this.onTurn(ev, sc); Sfx.play('turn'); break;
+      }   // обломки и осколки исчезают после хода
       case 'water': sc.waterY = ev.y; break;
       case 'siren': Sfx.play('siren'); this.banner('☢ ЯДЕРНЫЙ УДАР! ☢', '#ffd23a', true, 2.4); break;
       case 'plane': Sfx.play('plane'); break;
@@ -166,7 +220,7 @@ class FX {
     }
     this.shake = Math.max(this.shake, Math.min(22, r * 0.28));
     Sfx.play(r > 35 ? 'explosion' : 'small', { x, y }, r / 45);
-    if (r > 25) this.focus = { x, y, t: 0.9 };
+    if (r > 25) this.focus = { x, y, t: 0.9, L: this.evL };
     if (y > sc.waterY - 30) this.splash(x, sc.waterY, 1, sc);
   }
   nukeFx(x, y, sc) {
@@ -204,7 +258,7 @@ class FX {
     P.update(dt, sc);
     // полёт осколков: по ломаной (рикошеты, пробития), на изломах — искры; в конце осколок остаётся на карте
     for (let i = this.flyers.length - 1; i >= 0; i--) {
-      const f = this.flyers[i]; f.px = f.x; f.py = f.y; let step = f.sp * dt; f.sp *= 1 - 0.9 * dt;
+      const f = this.flyers[i]; P.settleMask = f.settleMask || 0; f.px = f.x; f.py = f.y; let step = f.sp * dt; f.sp = Math.max(180, f.sp * Math.exp(-0.9 * dt));
       while (step > 0 && f.seg < f.path.length) {
         const [x1, y1] = f.path[f.seg - 1], [x2, y2] = f.path[f.seg], L = Math.hypot(x2 - x1, y2 - y1) || 1, left = L * (1 - f.u);
         if (step < left) { f.u += step / L; step = 0; f.x = x1 + (x2 - x1) * f.u; f.y = y1 + (y2 - y1) * f.u; }
@@ -216,16 +270,20 @@ class FX {
         this.flyers[i] = this.flyers[this.flyers.length - 1]; this.flyers.pop();
       }
     }
+    P.settleMask = 0;
     this.litterSettle(sc, dt);
     for (const e of sc.entities) {
       const rate = TRAIL_RATE[e.k]; if (!rate) continue;
+      P.settleMask = (e.settleTeams || 0) | (e.team >= 0 ? 1 << e.team : 0);
       if (e.k === 'drill' && e.s === 1) { if (Math.random() < dt * 30) P.debris(e.x, e.y, rand(-80, 80), rand(-120, -20), rand(1.5, 3), pick(sc.theme.ground.strata), 0.8); continue; }
       let acc = (this.trailAcc.get(e.id) || 0) + dt;
       while (acc >= rate) { acc -= rate; this.trail(e, sc); }
       this.trailAcc.set(e.id, acc);
     }
+    P.settleMask = 0;
     if (this.trailAcc.size > 300) { const ids = new Set(sc.entities.map(e => e.id)); for (const k of this.trailAcc.keys()) if (!ids.has(k)) this.trailAcc.delete(k); }
-    for (const s of sc.soldiers) if (s.thrust && !s.gone && Math.random() < dt * 40) { const bx = s.x - (s.face || 1) * 7.5; P.fire(bx, s.y - 10, rand(-20, 20), rand(60, 140), rand(3, 5), 0.25); P.smoke(bx, s.y - 6, rand(-10, 10), rand(40, 80), 3, 0.6, '#aaaaaa', 2.4, 0.35); }
+    for (const s of sc.soldiers) if (s.thrust && !s.gone && Math.random() < dt * 40) { P.settleMask = (s.settleTeams || 0) | (1 << s.team); const bx = s.x - (s.face || 1) * 7.5; P.fire(bx, s.y - 10, rand(-20, 20), rand(60, 140), rand(3, 5), 0.25); P.smoke(bx, s.y - 6, rand(-10, 10), rand(40, 80), 3, 0.6, '#aaaaaa', 2.4, 0.35); }
+    P.settleMask = 0;
     this.propAcc += dt;
     if (this.propAcc > 0.22) {
       this.propAcc = 0;
@@ -362,6 +420,162 @@ class FX {
     for (const l of this.frameLights) { if (l.r < 60 && !amb) continue; c.globalAlpha = Math.min(1, l.a) * (amb ? 0.28 : 0.4); c.drawImage(glowSprite(l.col), l.x - l.r * 0.6, l.y - l.r * 0.6, l.r * 1.2, l.r * 1.2); }
     c.restore();
   }
+  /** Плашка потери — экранный слой поверх вспышки, с постоянной тёмной подложкой на любой карте. */
+  deathBannerLayout(c, b, sw) {
+    const w = Math.min(440, Math.max(1, sw - 32)), compact = sw < 440, font = compact ? 16 : 18, pad = compact ? 14 : 18;
+    const textX = pad + 46, available = Math.max(1, w - textX - pad), lines = [];
+    c.font = `700 ${font}px ${FONT_UI}`;
+    let line = '';
+    for (const word of b.txt.split(/\s+/)) {
+      const next = line ? line + ' ' + word : word;
+      if (line && c.measureText(next).width > available) { lines.push(line); line = word; } else line = next;
+    }
+    if (line) lines.push(line);
+    const lineH = font + 5, h = 43 + lines.length * lineH;
+    return { w, h, pad, font, textX, available, lineH, lines, title: b.relation === 'enemy' ? 'ПРОТИВНИК УСТРАНЁН' : b.relation === 'ally' ? 'ПОТЕРЯ В КОМАНДЕ' : 'БОЕЦ ПОГИБ' };
+  }
+  drawDeathBanner(c, b, sw, y, layout) {
+    const L = layout || this.deathBannerLayout(c, b, sw), age = b.max - b.life;
+    const alpha = clamp(Math.min(age / 0.14, b.life / 0.35), 0, 1), lift = 6 * (1 - easeOut(clamp(age / 0.18, 0, 1)));
+    const enemy = b.relation === 'enemy', ally = b.relation === 'ally', accent = enemy ? '#65f2a0' : ally ? '#ff7586' : '#f5d77b';
+    c.save(); c.globalAlpha = alpha; c.translate((sw - L.w) / 2, y - lift);
+    c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 18; c.shadowOffsetY = 5;
+    rrect(c, 0, 0, L.w, L.h, 14); c.fillStyle = '#0e1721'; c.fill(); c.shadowBlur = 0; c.shadowOffsetY = 0;
+    const fill = c.createLinearGradient(0, 0, L.w, 0); fill.addColorStop(0, enemy ? '#16342b' : ally ? '#3b1d29' : '#302b1b'); fill.addColorStop(1, '#0e1721');
+    rrect(c, 0.5, 0.5, L.w - 1, L.h - 1, 13.5); c.fillStyle = fill; c.fill(); c.strokeStyle = accent; c.lineWidth = 1; c.stroke();
+    c.fillStyle = accent; rrect(c, 0, 12, 4, L.h - 24, 2); c.fill();
+    const ix = L.pad + 16, iy = L.h / 2;
+    c.fillStyle = enemy ? '#1c4b37' : ally ? '#572431' : '#514524'; c.beginPath(); c.arc(ix, iy, 17, 0, TAU); c.fill();
+    c.strokeStyle = accent; c.lineWidth = 1.5; c.stroke();
+    // Небольшой одинаковый знак гибели; сторону передают цвет и явная подпись.
+    c.fillStyle = b.col; rrect(c, ix - 7, iy - 9, 14, 12, 5); c.fill(); rrect(c, ix - 4, iy + 1, 8, 7, 2); c.fill();
+    c.fillStyle = '#0e1721'; for (const dx of [-3, 3]) { c.beginPath(); c.arc(ix + dx, iy - 3, 1.7, 0, TAU); c.fill(); }
+    c.strokeStyle = '#0e1721'; c.lineWidth = 1; for (const dx of [-2, 1]) { c.beginPath(); c.moveTo(ix + dx, iy + 4); c.lineTo(ix + dx, iy + 8); c.stroke(); }
+    c.textAlign = 'left'; c.textBaseline = 'middle'; c.font = `700 11px ${FONT_UI}`; c.fillStyle = accent; c.fillText(L.title, L.textX, 19);
+    c.font = `700 ${L.font}px ${FONT_UI}`; c.fillStyle = b.col;
+    L.lines.forEach((line, i) => c.fillText(line, L.textX, 43 + i * L.lineH));
+    c.restore(); return L.h;
+  }
+  deathStackLayout(c, entries, sw) {
+    const w = Math.min(440, Math.max(1, sw - 32)), font = 16, textX = 36, available = Math.max(1, w - textX - 18), rows = [];
+    c.font = `700 ${font}px ${FONT_UI}`;
+    let y = 43;
+    for (const b of entries) {
+      const lines = []; let line = '';
+      for (const word of b.txt.split(/\s+/)) {
+        const next = line ? line + ' ' + word : word;
+        if (line && c.measureText(next).width > available) { lines.push(line); line = word; } else line = next;
+      }
+      if (line) lines.push(line);
+      rows.push({ b, lines, y }); y += lines.length * 21 + 5;
+    }
+    return { w, h: y - 6, font, textX, available, rows };
+  }
+  screenBannerLayout(c, sc, sw, sh) {
+    const entries = this.banners.filter(b => b.kind === 'death');
+    const isTurn = (b) => b.kind === 'turn' || (typeof b.txt === 'string' && b.txt.startsWith('Ход:')), hasTurn = this.banners.some(isTurn);
+    const ordinary = this.banners.filter(b => b.kind !== 'death').reduce((h, b) => h + (isTurn(b) ? TURN_BANNER_H + 12 : b.big ? 48 : 36), 0);
+    const normal = entries.reduce((h, b) => h + this.deathBannerLayout(c, b, sw).h + 10, ordinary);
+    const settings = sc.settings || sc.cfg && sc.cfg.settings || {}, bottom = Math.max(90, sc.teams ? sc.teams.length * 30 + 26 : 90);
+    const top = Math.max(90, settings.wind !== false ? (sc.simul ? 138 : 106) : sc.simul ? 110 : 90);
+    const compact = entries.length > 0 && normal > sh - top - bottom;
+    const stack = compact ? this.deathStackLayout(c, entries, sw) : null, h = compact ? ordinary + stack.h : normal;
+    // плашка хода — сразу под верхней панелью хода и ветром (где игрок и так смотрит, чей ход); остальное — ниже неё
+    return { compact, stack, entries, bottom, top, h, y: hasTurn ? top + 6 : Math.max(top, Math.min(sh * 0.25, sh - bottom - h)) };
+  }
+  drawDeathStack(c, L, sw, y) {
+    const alphaFor = b => clamp(Math.min((b.max - b.life) / 0.14, b.life / 0.35), 0, 1);
+    const alpha = Math.max(0, ...L.rows.map(r => alphaFor(r.b)));
+    c.save(); c.globalAlpha = alpha; c.translate((sw - L.w) / 2, y);
+    c.shadowColor = 'rgba(0,0,0,0.65)'; c.shadowBlur = 18; c.shadowOffsetY = 5;
+    rrect(c, 0, 0, L.w, L.h, 14); c.fillStyle = '#0e1721'; c.fill(); c.shadowBlur = 0; c.shadowOffsetY = 0;
+    c.strokeStyle = '#466079'; c.lineWidth = 1; c.stroke();
+    c.textAlign = 'left'; c.textBaseline = 'middle'; c.font = `700 11px ${FONT_UI}`; c.fillStyle = '#d1dfed'; c.fillText('СОБЫТИЯ БОЯ', 18, 20);
+    c.font = `700 ${L.font}px ${FONT_UI}`;
+    for (const row of L.rows) {
+      c.globalAlpha = alphaFor(row.b); c.fillStyle = row.b.col;
+      c.beginPath(); c.arc(21, row.y, 4, 0, TAU); c.fill();
+      row.lines.forEach((line, i) => c.fillText(line, L.textX, row.y + i * 21));
+    }
+    c.restore();
+  }
+  /** начало хода: широкая плашка под верхней панелью хода. Слева — цветной знак команды с номером бойца, в середине — чей ход
+      и команда, справа — раунд и время хода; плашка раскрывается от середины, полоса внизу показывает, сколько она ещё видна.
+      Неподвижная часть рисуется один раз в отдельный холст (тень и градиенты не пересчитываются каждый кадр) */
+  drawTurnBanner(c, b, sw, y) {
+    const W = Math.round(Math.min(600, sw - 24)), H = TURN_BANNER_H, age = b.max - b.life;
+    const tin = clamp(age / 0.4, 0, 1), tout = clamp(b.life / 0.5, 0, 1), ein = 1 - Math.pow(1 - tin, 3), eout = tout * tout * (3 - 2 * tout);
+    const alpha = Math.min(1, ein * 1.5) * eout; if (alpha <= 0.01) return H;
+    const dpr = Math.max(1, Math.min(3, Math.abs(c.getTransform().a) || 1)), img = this.turnBannerImage(b, W, H, dpr), P = TURN_BANNER_PAD;
+    const x0 = Math.round((sw - W) / 2), yy = Math.round(y - 12 * (1 - ein) - 10 * (1 - eout)), r = 10, bw = W < 420 ? 74 : 92, slant = 16;
+    c.save(); c.globalAlpha = alpha;
+    // раскрытие от середины
+    const cw = W * (0.3 + 0.7 * ein); c.beginPath(); c.rect(sw / 2 - cw / 2, yy - P, cw, H + 2 * P); c.clip();
+    c.drawImage(img, x0 - P, yy - P, W + 2 * P, H + 2 * P);
+    // полоса показа: тает слева направо, пока плашка на экране
+    const pk = clamp((b.life - 0.5) / Math.max(0.1, b.max - 0.9), 0, 1), px0 = x0 + bw + slant * 0.2, pw = (x0 + W - px0 - r) * pk;
+    c.fillStyle = 'rgba(255,255,255,0.07)'; c.fillRect(px0, yy + H - 3, x0 + W - px0 - r, 2);
+    c.fillStyle = b.teamColor || b.col || '#ffd166'; c.fillRect(px0, yy + H - 3, pw, 2);
+    c.restore();
+    return H;
+  }
+  /** неподвижная часть плашки хода (с запасом TURN_BANNER_PAD под тень), кэшируется в самой плашке */
+  turnBannerImage(b, W, H, dpr) {
+    const P = TURN_BANNER_PAD, key = W + 'x' + H + '@' + dpr;
+    if (b.img && b.imgKey === key) return b.img;
+    const cv = makeCanvas(Math.ceil((W + 2 * P) * dpr), Math.ceil((H + 2 * P) * dpr)), c = cv.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, P * dpr, P * dpr);
+    const col = b.teamColor || b.col || '#ffd166', rgb = hex2rgb(col), lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    const num = String(b.soldier || (typeof b.txt === 'string' && /(\d+)/.test(b.txt) ? b.txt.match(/(\d+)/)[1] : ''));
+    const tmName = b.teamName || (typeof b.txt === 'string' && b.txt.match(/«([^»]+)»/) ? b.txt.match(/«([^»]+)»/)[1] : '');
+    const isMine = b.isMine !== undefined ? b.isMine : b.relation === 'ally';
+    const over = b.hotseat ? 'ХОД КОМАНДЫ' : isMine ? 'ВАШ ХОД' : 'ХОД СОПЕРНИКА';
+    const x0 = 0, yy = 0, r = 10, bw = W < 420 ? 74 : 92, slant = 16;
+    const spaced = (s) => { if ('letterSpacing' in c) c.letterSpacing = s; };
+    c.textBaseline = 'middle';
+    // подложка: тёмное стекло, мягкая тень, тонкая рамка
+    c.save(); c.shadowColor = 'rgba(0,0,0,0.6)'; c.shadowBlur = 26; c.shadowOffsetY = 8;
+    rrect(c, x0, yy, W, H, r); const bg = c.createLinearGradient(x0, yy, x0 + W, yy + H);
+    bg.addColorStop(0, 'rgba(7,12,19,0.96)'); bg.addColorStop(1, 'rgba(15,23,34,0.93)'); c.fillStyle = bg; c.fill(); c.restore();
+    c.save(); rrect(c, x0, yy, W, H, r); c.clip();
+    // свечение цвета команды из-под знака
+    const glow = c.createRadialGradient(x0 + bw * 0.6, yy + H / 2, 4, x0 + bw * 0.6, yy + H / 2, W * 0.55);
+    glow.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.20)`); glow.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
+    c.fillStyle = glow; c.fillRect(x0, yy, W, H);
+    // знак команды: скошенный край, градиент цвета команды, «БОЕЦ» и крупный номер
+    c.beginPath(); c.moveTo(x0, yy); c.lineTo(x0 + bw + slant, yy); c.lineTo(x0 + bw - slant * 0.25, yy + H); c.lineTo(x0, yy + H); c.closePath();
+    const bg2 = c.createLinearGradient(x0, yy, x0 + bw, yy + H); bg2.addColorStop(0, css(shadec(rgb, 1.12))); bg2.addColorStop(1, css(shadec(rgb, 0.72)));
+    c.fillStyle = bg2; c.fill();
+    const hl = c.createLinearGradient(0, yy, 0, yy + H); hl.addColorStop(0, 'rgba(255,255,255,0.28)'); hl.addColorStop(0.45, 'rgba(255,255,255,0)'); c.fillStyle = hl; c.fill();
+    const ink = lum > 150 ? '#08111a' : '#ffffff', inkSoft = lum > 150 ? 'rgba(8,17,26,0.72)' : 'rgba(255,255,255,0.78)';
+    const mid = x0 + (bw + slant * 0.4) / 2;
+    c.textAlign = 'center'; c.fillStyle = inkSoft; c.font = `700 10px ${FONT_UI}`; spaced('2.5px');
+    c.fillText('БОЕЦ', mid + 1, yy + 17); spaced('0px');
+    c.fillStyle = ink; c.font = `${num.length > 1 ? 36 : 40}px ${FONT_TITLE}`; c.fillText(num || '—', mid, yy + H / 2 + 9);
+    c.restore();
+    // рамка и верхний блик
+    rrect(c, x0 + 0.5, yy + 0.5, W - 1, H - 1, r - 0.5); c.strokeStyle = 'rgba(255,255,255,0.11)'; c.lineWidth = 1; c.stroke();
+    const top = c.createLinearGradient(x0, 0, x0 + W, 0); top.addColorStop(0, 'rgba(255,255,255,0)'); top.addColorStop(0.5, 'rgba(255,255,255,0.22)'); top.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = top; c.fillRect(x0 + r, yy + 0.5, W - 2 * r, 1);
+    // текст: чей ход (цвет команды, разрядка), название команды, справа — раунд и время хода
+    const tx = x0 + bw + slant + 18, wide = W >= 470;
+    c.textAlign = 'left'; c.fillStyle = col; c.font = `700 11px ${FONT_UI}`; spaced('3px');
+    c.fillText(over, tx, yy + 22); spaced('0px');
+    c.fillStyle = '#ffffff'; c.font = `${W < 420 ? 22 : 26}px ${FONT_TITLE}`;
+    let name = tmName || (b.txt || ''); const maxName = (wide ? x0 + W - 150 : x0 + W - 18) - tx;
+    while (name.length > 3 && c.measureText(name).width > maxName) name = name.slice(0, -2) + '…';
+    c.fillText(name, tx, yy + H / 2 + 9);
+    if (wide) {
+      const rx = x0 + W - 20; c.textAlign = 'right';
+      c.fillStyle = 'rgba(255,255,255,0.10)'; c.fillRect(rx - 118, yy + 16, 1, H - 32);
+      c.font = `600 10px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.5)'; spaced('2px');
+      c.fillText('РАУНД', rx, yy + 22); spaced('0px');
+      c.font = `20px ${FONT_TITLE}`; c.fillStyle = 'rgba(255,255,255,0.92)'; c.fillText(String(b.round || 1), rx, yy + 43);
+      c.font = `500 11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.55)';
+      c.fillText(b.time > 0 ? `${b.time} с на ход` : 'время без лимита', rx, yy + 61);
+    }
+    b.img = cv; b.imgKey = key; return cv;
+  }
   drawScreen(c, sc, cam, sw, sh) {
     c.save(); c.textAlign = 'center'; c.textBaseline = 'middle';
     for (const o of this.texts) {
@@ -369,8 +583,14 @@ class FX {
       c.globalAlpha = Math.min(1, k * 2.5); c.font = `${o.size + (1 - k) * 2}px ${FONT_TITLE}`;
       textOutlined(c, o.txt, x, y, o.col, 'rgba(0,0,0,0.85)', 4);
     }
-    let by = sh * 0.3;
+    const plan = this.screenBannerLayout(c, sc, sw, sh); let by = plan.y; const deaths = [];
     for (const b of this.banners) {
+      if (b.kind === 'death') { if (!plan.compact) { const layout = this.deathBannerLayout(c, b, sw); deaths.push({ b, y: by, layout }); by += layout.h + 10; } continue; }
+      if (b.kind === 'turn' || (typeof b.txt === 'string' && b.txt.startsWith('Ход:'))) {
+        const th = this.drawTurnBanner(c, b, sw, by);
+        by += th + 12;
+        continue;
+      }
       const k = b.life / b.max; const inn = Math.min(1, (1 - k) * b.max * 5); const a = Math.min(inn, k * b.max * 2.5);
       c.globalAlpha = clamp(a, 0, 1); c.font = `${b.big ? 36 : 24}px ${FONT_TITLE}`;
       const s = 0.9 + 0.1 * easeOutBack(clamp(inn, 0, 1));
@@ -379,5 +599,7 @@ class FX {
     }
     c.globalAlpha = 1; c.restore();
     if (this.flash > 0) { c.save(); c.globalAlpha = Math.min(1, this.flash); c.fillStyle = this.flashCol; c.fillRect(0, 0, sw, sh); c.restore(); }
+    for (const o of deaths) this.drawDeathBanner(c, o.b, sw, o.y, o.layout);
+    if (plan.compact) this.drawDeathStack(c, plan.stack, sw, by);
   }
 }

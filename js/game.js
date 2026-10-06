@@ -4,6 +4,7 @@
    взрывы, урон, ящики, внезапная смерть, снимки для сети
    ========================================================= */
 const RETREAT_TIME = 3;
+const TURN_QUIET_TIME = 0.5;
 const WALK_BUDGET = 420;
 const MAX_WIND = 170;
 
@@ -16,15 +17,17 @@ class Game {
     this.terrain.materials = this.raster.mat;
     this.props = resolveProps(this.terrain, map);
     const S = cfg.settings;
-    this.teams = cfg.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(S.arsenal, S.ammo), next: 0, lastW: 'bazooka', dmg: 0, kills: 0, order: [] }));
+    this.teams = cfg.teams.map((t, i) => ({ idx: i, name: t.name, color: t.color, hat: t.hat, ammo: makeAmmo(S.arsenal, S.ammo), next: 0, lastW: 'bazooka', dmg: 0, kills: 0, order: [], usedSids: [], cycleOrigins: {} }));
     this.soldiers = []; this.entities = []; this.events = []; this.pending = [];
-    this.nextId = 1; this.time = 0; this.round = 0; this.over = null; this.teamsDirty = true; this.sdStarted = false;
+    this.nextId = 1; this.time = 0; this.finalQuiet = 0; this.round = 0; this.over = null; this.teamsDirty = true; this.sdStarted = false;
     // «на любую дистанцию» — запас хода не ограничен; «одновременно» — у каждой команды свой ход (своя «дорожка»):
     // обе ходят сразу, после хода следующий по номеру боец той же команды начинает свой ход, не дожидаясь соперника
     this.freeWalk = S.walk === 'free';
     this.simul = !!S.simul && this.teams.length === 2;
+    // Первый ход выбран отдельно от размещения сторон и уже разрешён хостом.
+    this.firstTeam = !this.simul && S.firstTeam === 1 && this.teams.length === 2 ? 1 : 0;
     this.cur = 0; this.viewLane = 0; this.wind = 0; this.windT = 0;
-    const fresh = (team, delay) => ({ team, sid: 0, time: 0, phase: 'wait', delay, wind: 0, weapon: 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: 0 });
+    const fresh = (team, delay) => ({ team, sid: 0, time: 0, phase: 'wait', delay, wind: 0, weapon: 'bazooka', walk: WALK_BUDGET, retreat: 0, shots: 0, target: null, preview: null, charge: -1, rot: 0, spin: 0, round: 0, usedSids: [] });
     if (this.simul) this.lanes = this.teams.map((t, i) => ({ turn: fresh(i, 1.8 + i * 0.35), usage: null, ctrl: null }));
     else { this.turn = fresh(-1, 1.8); this.usage = null; this.ctrl = null; }
     this.spawnSoldiers();
@@ -75,8 +78,18 @@ class Game {
     }
   }
   /* ---------- утилиты ---------- */
-  emit(ev) { this.events.push(ev); }
-  spawn(e) { this.entities.push(e); }
+  /** событие для эффектов (у хоста и у гостя); при одновременных ходах — с номером хода (команды), в котором оно случилось */
+  emit(ev) { if (this.simul) ev.L = this.cur; if (['impact', 'girder', 'boom', 'frags', 'nuke', 'dmg', 'heal', 'die', 'splash', 'shot', 'trace', 'bolt', 'launch', 'land', 'beep', 'tp', 'storm', 'bat', 'gib', 'charge'].includes(ev.t)) ev.M = this.impactMask(); this.events.push(ev); }
+  spawn(e, impactSource = null) {
+    const mask = (this.activeImpactMask || 0) | (impactSource && impactSource.settleTeams || 0);
+    if (mask) e.settleTeams = (e.settleTeams || 0) | mask;
+    if (e.k === 'tomb') {
+      const causes = mask || (this.turn.team >= 0 ? 1 << this.turn.team : 0);
+      const turns = this.simul ? this.lanes.map(l => l.turn) : [this.turn];
+      for (const T of turns) if (causes & (1 << T.team)) { if (!T.graves) T.graves = []; T.graves.push(e.id); }
+    }
+    this.entities.push(e);
+  }
   active() { return this.soldierById(this.turn.sid); }
   soldierById(id) { for (const s of this.soldiers) if (s.id === id) return s; return null; }
   fallbackWeapon(team) { return this.canUse(team, 'bazooka') ? 'bazooka' : (WEAPONS.find(w => this.canUse(team, w.id)) || WEAPON.skip).id; }
@@ -97,8 +110,20 @@ class Game {
     const boxes = T.touches.slice(this.tidyN).map(b => [Math.round(b[0]) - 6, Math.round(b[1]) - 6, Math.round(b[2]) + 6, Math.round(b[3]) + 6]);
     T.tidy(boxes); this.tidyN = T.touches.length; this.emit({ t: 'tidy', b: boxes });
   }
-  carve(x, y, r, scorch = true) { x = Math.round(x); y = Math.round(y); r = Math.round(r); if (r <= 0) return; this.terrain.carve(x, y, r, scorch); this.emit({ t: 'carve', x, y, r, s: scorch ? 1 : 0 }); }
-  carveLine(x1, y1, x2, y2, r) { x1 = Math.round(x1); y1 = Math.round(y1); x2 = Math.round(x2); y2 = Math.round(y2); r = Math.round(r); this.terrain.carveLine(x1, y1, x2, y2, r); this.emit({ t: 'cline', x1, y1, x2, y2, r }); }
+  carve(x, y, r, scorch = true) {
+    x = Math.round(x); y = Math.round(y); r = Math.round(r); if (r <= 0) return;
+    const supported = this.simul ? this.soldiers.filter(s => !s.gone && Math.abs(s.x - x) <= r + 8 && Math.abs(s.y - y) <= r + 8 && onGround(this.terrain, s.x, s.y)) : [];
+    this.terrain.carve(x, y, r, scorch);
+    for (const s of supported) if (!onGround(this.terrain, s.x, s.y)) this.markImpact(s);
+    this.emit({ t: 'carve', x, y, r, s: scorch ? 1 : 0 });
+  }
+  carveLine(x1, y1, x2, y2, r) {
+    x1 = Math.round(x1); y1 = Math.round(y1); x2 = Math.round(x2); y2 = Math.round(y2); r = Math.round(r);
+    const supported = this.simul ? this.soldiers.filter(s => !s.gone && s.x >= Math.min(x1, x2) - r - 8 && s.x <= Math.max(x1, x2) + r + 8 && s.y >= Math.min(y1, y2) - r - 8 && s.y <= Math.max(y1, y2) + r + 8 && onGround(this.terrain, s.x, s.y)) : [];
+    this.terrain.carveLine(x1, y1, x2, y2, r);
+    for (const s of supported) if (!onGround(this.terrain, s.x, s.y)) this.markImpact(s);
+    this.emit({ t: 'cline', x1, y1, x2, y2, r });
+  }
   splash(x, size) { this.emit({ t: 'splash', x: R1(x), s: size }); }
   explode(x, y, R, D, o = {}) {
     x = Math.round(x); y = Math.round(y);
@@ -127,6 +152,7 @@ class Game {
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
       // тело весит ~80 кг: вблизи его подбрасывает и крутит, на среднем расстоянии сбивает с ног, вдали — лишь толкает
       const imp = Math.min(760, knock * 1.35) * Math.pow(fw, 1.35) * shielding;
+      if (imp >= 40) this.markImpact(s, o.owner);
       if (imp >= 140) { s.vx += dx * imp; s.vy += dy * imp - imp * 0.18; s.fly(); s.vrot = (s.vrot || 0) + (dx >= 0 ? 1 : -1) * Math.min(14, imp / 45); }
       else if (imp >= 40) { s.vx += dx * imp * 0.8; s.vy += Math.min(0, dy * imp) - 60; s.fly(); s.vrot = (dx >= 0 ? 1 : -1) * imp / 60; }
       else if (imp >= 8 && s.st !== 'fly') s.x += dx * Math.min(3, imp / 12);   // слабая волна — лишь качнуло
@@ -137,9 +163,10 @@ class Game {
     if (o.frag && FRAGS[o.frag]) this.fragments(x, y - 3, FRAGS[o.frag], o.owner, o.vx, o.vy);
     for (const e of this.entities) {
       if (e.dead) continue; const d = Math.hypot(e.x - x, e.y - y); if (d > (R + 20) * 1.6) continue;
-      if (e.k === 'mine') { e.trigger(this, true); }
-      else if (e.k === 'crate') { e.dead = true; if (e.s === 1) this.pending.push([e.x, e.y, 'crate']); else this.emit({ t: 'boom', x: R1(e.x), y: R1(e.y), r: 12, k: 1 }); continue; }
+      if (e.k === 'mine') { this.markImpact(e, o.owner); e.trigger(this, true); }
+      else if (e.k === 'crate') { e.dead = true; if (e.s === 1) this.pending.push([e.x, e.y, 'crate', this.impactMask(o.owner)]); else this.emit({ t: 'boom', x: R1(e.x), y: R1(e.y), r: 12, k: 1 }); continue; }
       const f = 1 - d / ((R + 20) * 1.6); let dx = e.x - x, dy = e.y - y - 6; const l = Math.hypot(dx, dy) || 1;
+      if (e.pushable && knock * f !== 0) this.markImpact(e, o.owner);
       e.push(dx / l * knock * f * 0.8, dy / l * knock * f * 0.8);
     }
   }
@@ -229,16 +256,61 @@ class Game {
     if (!s.alive || v <= 0) return;
     if (s.wound) { const part = isNum(hx) ? s.partAt(hx, hy) : 1; if (s.wound(part, Math.min(v, s.hp), heavy)) this.emit({ t: 'gib', id: s.id, p: part, x: R1(s.x), y: R1(s.y), f: s.face }); }
     v = Math.min(Math.round(v), s.hp); s.hp -= v; s.hurt = 0.3;
+    this.markImpact(s, owner);
     const ot = owner ? owner.team : -1; if (ot >= 0 && ot !== s.team) this.teams[ot].dmg += v;
     this.emit({ t: 'dmg', id: s.id, v, x: R1(s.x), y: R1(s.y) });
     if (s.hp <= 0) { s.die(this, 'hit'); if (ot >= 0 && ot !== s.team) this.teams[ot].kills++; this.teamsDirty = true; }
   }
   heal(s, v) { if (!s.alive) return; const n = Math.min(v, s.maxHp - s.hp); if (n <= 0) return; s.hp += n; this.emit({ t: 'heal', id: s.id, v: n, x: R1(s.x), y: R1(s.y) }); }
-  anyBusy() {
-    const own = this.simul ? this.turn.team : -1;
-    for (const s of this.soldiers) if (!s.gone && (own < 0 || s.team === own) && (s.st === 'air' || s.st === 'fly' || s.st === 'jet' || s.st === 'dead')) return true;
-    for (const e of this.entities) if (e.busy && (own < 0 || e.team === own)) return true;
-    return false;
+  impactMask(owner) {
+    const team = owner && Number.isInteger(owner.team) ? owner.team : this.activeImpactMask ? -1 : this.turn?.team ?? -1;
+    return (team >= 0 ? 1 << team : 0) | (this.activeImpactMask || 0);
+  }
+  markImpact(object, owner) { object.settleTeams = (object.settleTeams || 0) | this.impactMask(owner); }
+  anyBusy(own = this.simul ? this.turn.team : -1) {
+    for (const s of this.soldiers) if (!s.gone && (own < 0 || s.team === own || ((s.settleTeams || 0) & (1 << own))) && (s.st === 'air' || s.st === 'fly' || s.st === 'jet' || s.st === 'dead')) return true;
+    for (const e of this.entities) if (!e.dead && (e.busy || e.k === 'fire' && e.f > 0) && (own < 0 || e.team === own || ((e.settleTeams || 0) & (1 << own)))) return true;
+    for (const pending of this.pending || []) if (own < 0 || ((pending[3] || 0) & (1 << own))) return true;
+    // Если могилка уже встала, финал атаки отсчитывается от неё. Без могилки — от последних частиц удара.
+    if (this.visualBusy && this.events.some(ev => ev.M && (own < 0 || (ev.M & (1 << own))))) return true;
+    const graves = own < 0 && this.simul ? this.lanes.flatMap(l => l.turn.graves || []) : this.turn.graves || [];
+    const graveRest = graves.some(id => this.entities.some(e => e.id === id && e.k === 'tomb' && !e.dead && e.rest));
+    return !graveRest && !!(this.visualBusy && this.visualBusy(own));
+  }
+  /** Все живые бойцы получают один ход за цикл; выбор бойца не начинает новый цикл. */
+  prepareSoldierCycle(team, reset = false) {
+    const alive = this.soldiers.filter(s => s.team === team.idx && s.alive && !s.gone);
+    if (!Array.isArray(team.usedSids)) team.usedSids = [];
+    const exhausted = reset && alive.length && alive.every(s => team.usedSids.includes(s.id));
+    if (exhausted) {
+      team.usedSids = []; team.cycleOrigins = {};
+    }
+    if (!team.cycleOrigins) team.cycleOrigins = {};
+    // Запас отсчитывается с первой реальной активации, а не с начала общего цикла.
+    // Неактивного бойца до его хода может отбросить взрыв или опустить разрушенная земля.
+    const T = this.turn;
+    if (!exhausted && T.team === team.idx && alive.some(s => s.id === T.sid) && isNum(T.ox) &&
+        !Object.prototype.hasOwnProperty.call(team.cycleOrigins, T.sid)) team.cycleOrigins[T.sid] = T.ox;
+    return alive;
+  }
+  selectSoldier(team, number) {
+    const T = this.turn, current = this.active();
+    if (!Number.isInteger(number) || number < 1 || number > 20 || T.team !== team || this.over ||
+        T.phase !== 'aim' || T.shots !== 0 || !(T.charge < 0) || this.usage || !current || !current.alive || current.gone) return false;
+    if (['air', 'fly', 'jet'].includes(current.st) || this.entities.some(e => !e.dead && e.busy &&
+        (e.team === team || e.owner && e.owner.team === team))) return false;
+    const squad = this.teams[team]; if (!squad) return false;
+    const target = this.soldiers.find(s => s.team === team && s.alive && !s.gone && s.name === String(number));
+    if (!target || target === current || ['air', 'fly', 'jet'].includes(target.st)) return false;
+    this.prepareSoldierCycle(squad);
+    if (squad.usedSids.includes(target.id)) return false;
+    if (!Object.prototype.hasOwnProperty.call(squad.cycleOrigins, target.id)) squad.cycleOrigins[target.id] = target.x;
+    current.wpn = null; this.ctrl = null;
+    Object.assign(T, { sid: target.id, ox: squad.cycleOrigins[target.id], target: null, preview: null, look: null, pick: null, charge: -1,
+      walk: this.freeWalk ? WALK_BUDGET : Math.max(0, WALK_BUDGET - Math.abs(target.x - squad.cycleOrigins[target.id])), usedSids: squad.usedSids.slice() });
+    target.wpn = T.weapon;
+    this.emit({ t: 'turn', team, sid: target.id });
+    return true;
   }
   /* ---------- команды игрока ---------- */
   cmd(team, c) {
@@ -250,10 +322,16 @@ class Game {
     if (T.team !== team) return;
     const s = this.active(); if (!s) return;
     switch (c.c) {
+      case 'soldier': return this.selectSoldier(team, c.number);
       case 'ctrl':
         this.ctrl = { l: !!c.l, r: !!c.r, u: !!c.u, d: !!c.d };
         if (isNum(c.aim) && (T.phase === 'aim' || T.phase === 'use' || T.phase === 'retreat')) s.setAim(c.aim);
         T.charge = (isNum(c.pw) && c.pw >= 0 && T.phase === 'aim') ? clamp(c.pw, 0, 1) : -1;
+        // Живая мировая точка наведения; это ещё не захват цели и не выстрел.
+        const W = WEAPON[T.weapon];
+        if (T.phase === 'aim' && W && (W.mode === 'target' || W.mode === 'place' || W.mode === 'tcharge' || W.id === 'sniper') && isNum(c.tx) && isNum(c.ty)) {
+          T.preview = { x: clamp(c.tx, -500, this.W + 500), y: clamp(c.ty, -1500, this.H) };
+        }
         break;
       case 'jump':
         if (T.phase === 'aim' || T.phase === 'retreat') s.jump(this, c.d === -1 || c.d === 1 ? c.d : 0);
@@ -262,11 +340,11 @@ class Game {
       // быстрые пули: перед выстрелом обзор переходит к месту попадания (render.js, Camera); x, y — где пули встретят цель
       case 'look': if (T.phase === 'aim' && isNum(c.x) && isNum(c.y)) T.look = [clamp(Math.round(c.x), -500, this.W + 500), clamp(Math.round(c.y), -1500, this.H), (T.look ? T.look[2] : this.round * 100) + 1]; break;
       case 'weapon':
-        if (T.phase === 'aim' && T.shots === 0 && typeof c.id === 'string' && this.canUse(this.teams[team], c.id)) { T.weapon = c.id; T.target = null; }
+        if (T.phase === 'aim' && T.shots === 0 && typeof c.id === 'string' && this.canUse(this.teams[team], c.id)) { T.weapon = c.id; T.target = null; T.preview = null; }
         break;
       case 'target': if (T.phase === 'aim' && isNum(c.x) && isNum(c.y)) T.target = { x: clamp(c.x, -500, this.W + 500), y: clamp(c.y, -1500, this.H) }; break;
       case 'untarget': if (T.phase === 'aim') T.target = null; break;   // Tab: отменить выбранную точку
-      case 'holster': if (T.phase === 'aim' && T.shots === 0) { T.weapon = null; T.target = null; T.charge = -1; } break;   // Esc: убрать оружие из рук
+      case 'holster': if (T.phase === 'aim' && T.shots === 0) { T.weapon = null; T.target = null; T.preview = null; T.charge = -1; } break;   // Esc: убрать оружие из рук
       case 'rot': T.rot = ((T.rot + (c.d > 0 ? 1 : -1)) % 8 + 8) % 8; break;
       // подкрутка броска: 0 — нет, 1 — вперёд, -1 — назад
       case 'spin': if (T.phase === 'aim') T.spin = T.spin === 0 ? 1 : T.spin === 1 ? -1 : 0; break;
@@ -285,6 +363,7 @@ class Game {
     let res;
     try { res = FIRE[W.id](this, s, p); } catch (e) { console.error(e); return; }
     if (res === false) return;
+    if (PICK_STRIKE.has(W.id) && isNum(p.tx)) T.pick = [Math.round(p.tx), Math.round(isNum(p.ty) ? p.ty : this.terrain.findTop(clamp(Math.round(p.tx), 0, this.W - 1), 0)), W.id];   // точка клика — центр обзора удара
     if (T.shots === 0 && team.ammo[W.id] > 0) { team.ammo[W.id]--; this.teamsDirty = true; }
     T.shots++; team.lastW = W.id; T.charge = -1;
     if (res && res.usage) { this.usage = res.usage; T.phase = 'use'; return; }
@@ -318,12 +397,28 @@ class Game {
     }
     const lanes = this.simul ? this.lanes.map((_, k) => this.inLane(k, () => this.laneControl())) : [this.laneControl()];
     for (const s of this.soldiers) {
+      if (s.gone || ['climb', 'jet'].includes(s.st) || (['stand', 'walk'].includes(s.st) && onGround(this.terrain, s.x, s.y))) s.settleTeams = 0;
       const k = lanes.findIndex(o => o.act === s);
-      if (k >= 0) this.inLane(k, () => s.update(this, dt, lanes[k].ctrl)); else this.inLane(this.simul ? s.team : 0, () => s.update(this, dt, null));
+      const previous = this.activeImpactMask; this.activeImpactMask = s.settleTeams || 0;
+      try { if (k >= 0) this.inLane(k, () => s.update(this, dt, lanes[k].ctrl)); else this.inLane(this.simul ? s.team : 0, () => s.update(this, dt, null)); }
+      finally { this.activeImpactMask = previous; }
     }
-    for (let i = 0; i < this.entities.length; i++) { const e = this.entities[i]; if (!e.dead) this.inLane(this.simul && e.team >= 0 && e.team < this.lanes.length ? e.team : this.cur, () => e.update(this, dt)); }
-    if (this.pending.length) { const p = this.pending; this.pending = []; for (const [x, y, k] of p) { const B = BLAST[k]; this.explode(x, y, B.R, B.D, { knock: B.K, frag: k }); } }
+    for (let i = 0; i < this.entities.length; i++) {
+      const e = this.entities[i]; if (e.dead) continue;
+      const previous = this.activeImpactMask; this.activeImpactMask = e.settleTeams || 0;
+      try { this.inLane(this.simul && e.team >= 0 && e.team < this.lanes.length ? e.team : this.cur, () => e.update(this, dt)); }
+      finally { this.activeImpactMask = previous; }
+    }
+    if (this.pending.length) {
+      const p = this.pending; this.pending = [];
+      for (const [x, y, k, mask] of p) {
+        const previous = this.activeImpactMask; this.activeImpactMask = mask || 0;
+        try { const B = BLAST[k]; this.explode(x, y, B.R, B.D, { knock: B.K, frag: k }); }
+        finally { this.activeImpactMask = previous; }
+      }
+    }
     this.entities = this.entities.filter(e => !e.dead);
+    this.finalQuiet = this.aliveTeams().length <= 1 ? (this.anyBusy(-1) ? 0 : this.finalQuiet + dt) : 0;
     if (this.simul) { for (let k = 0; k < this.lanes.length; k++) this.inLane(k, () => this.turnTick(dt, lanes[k].act)); this.cur = this.viewLane; }
     else this.turnTick(dt, lanes[0].act);
   }
@@ -341,7 +436,10 @@ class Game {
     else if (T.ox !== undefined && act && act.alive && (T.phase === 'aim' || T.phase === 'retreat')) T.walk = Math.max(0, WALK_BUDGET - Math.abs(act.x - T.ox));
     const limited = this.cfg.settings.turnTime > 0;
     switch (T.phase) {
-      case 'wait': T.delay -= dt; if (T.delay <= 0) this.beginTurn(); break;
+      case 'wait':
+        T.delay -= dt;
+        if (T.sid && T.quiet !== undefined && this.anyBusy()) { T.phase = 'settle'; T.quiet = 0; T.delay = TURN_QUIET_TIME; }
+        else if (T.delay <= 0) this.beginTurn(); break;
       case 'crate': T.delay -= dt; if ((T.delay <= 0 && !this.anyBusy()) || T.delay < -6) this.nextTurn(); break;
       // время хода 0 — без ограничения: ход длится до выстрела или пропуска
       case 'aim': if (limited) T.time -= dt; if (!act || !act.alive) this.endTurn(); else if (limited && T.time <= 0) { T.time = 0; this.endTurn(); } break;
@@ -353,20 +451,33 @@ class Game {
         // отступление заканчивается сразу, как всё успокоилось и игрок не двигается
         T.retreat -= dt; const c = this.ctrl, moving = c && (c.l || c.r || c.u || c.d);
         T.idle = !moving && act && act.st === 'stand' && !this.anyBusy() ? (T.idle || 0) + dt : 0;
-        if (T.retreat <= 0 || !act || !act.alive || T.idle > 0.6) this.endTurn(); break;
+        if (T.retreat <= 0 || !act || !act.alive || T.idle + 1e-9 >= TURN_QUIET_TIME) this.endTurn(T.idle || 0); break;
       }
-      case 'settle': T.delay -= dt; if ((T.delay <= 0 && !this.anyBusy()) || T.delay < -14) { T.phase = 'wait'; T.delay = 0; } break;
+      case 'settle': {
+        // Пауза начинается после последнего снаряда, смерти и посадки могилки.
+        // Новое движение/повторный взрыв обнуляет непрерывный период покоя.
+        T.quiet = this.aliveTeams().length <= 1 ? this.finalQuiet : this.anyBusy() ? 0 : (T.quiet || 0) + dt;
+        T.delay = Math.max(0, TURN_QUIET_TIME - T.quiet);
+        if (T.quiet + 1e-9 >= TURN_QUIET_TIME) { T.phase = 'wait'; T.delay = 0; }
+        break;
+      }
     }
   }
-  endTurn() {
+  endTurn(quietElapsed = 0) {
     const T = this.turn; if (T.phase === 'settle' || T.phase === 'over' || T.phase === 'wait' || T.phase === 'crate') return;
-    T.phase = 'settle'; T.delay = 0.1; T.charge = -1; this.usage = null; this.ctrl = null;
+    const team = this.teams[T.team];
+    if (team) {
+      this.prepareSoldierCycle(team);
+      if (T.sid && !team.usedSids.includes(T.sid)) team.usedSids.push(T.sid);
+      T.usedSids = team.usedSids.slice();
+    }
+    T.phase = 'settle'; T.quiet = clamp(quietElapsed, 0, TURN_QUIET_TIME); T.delay = TURN_QUIET_TIME - T.quiet; T.charge = -1; this.usage = null; this.ctrl = null;
     const a = this.active(); if (a && a.st === 'jet') a.st = 'air';
   }
   aliveTeams() { return this.teams.filter(t => this.soldiers.some(s => s.team === t.idx && s.alive)); }
   beginTurn() {
     const alive = this.aliveTeams();
-    if (alive.length <= 1) { this.finish(alive[0] || null); return; }
+    if (alive.length <= 1) { this.finishWhenQuiet(alive[0] || null); return; }
     if (false && this.cfg.settings.crates && this.round > 0 && Math.random() < 0.35 && this.dropCrate()) { this.turn.phase = 'crate'; this.turn.delay = 0.6; return; }
     this.nextTurn();
   }
@@ -387,27 +498,35 @@ class Game {
     this.tidyTerrain();
     const T = this.turn; const alive = this.aliveTeams();
     if (alive.length <= 1) { this.finish(alive[0] || null); return; }
-    let ti = T.team;
+    let ti = T.team < 0 && !this.simul ? (this.firstTeam - 1 + this.teams.length) % this.teams.length : T.team;
     if (this.simul) { T.round = (T.round || 0) + 1; this.round = Math.max(...this.lanes.map(l => l.turn.round || 0)); }   // свой счёт ходов у каждой команды
     else {
       for (let k = 0; k < this.teams.length; k++) { ti = (ti + 1) % this.teams.length; if (alive.includes(this.teams[ti])) break; }
-      if (T.team < 0 || ti <= T.team) this.round++;
+      const order = team => (team - this.firstTeam + this.teams.length) % this.teams.length;
+      if (T.team < 0 || order(ti) <= order(T.team)) this.round++;
     }
-    const team = this.teams[ti]; let s = null;
+    const team = this.teams[ti]; this.prepareSoldierCycle(team, true); let s = null;
     for (let k = 0; k < team.order.length; k++) {
       const o = this.soldierById(team.order[(team.next + k) % team.order.length]);
-      if (o && o.alive) { s = o; team.next = (team.next + k + 1) % team.order.length; break; }
+      if (o && o.alive && !o.gone && !team.usedSids.includes(o.id)) { s = o; team.next = (team.next + k + 1) % team.order.length; break; }
     }
     if (!s) { this.finish(null); return; }
+    if (!this.simul || !Object.prototype.hasOwnProperty.call(team.cycleOrigins, s.id)) team.cycleOrigins[s.id] = s.x;
     const sd = this.cfg.settings.sd;
     if (sd && this.round > sd) {
       this.waterY -= 16; this.emit({ t: 'water', y: this.waterY });
       if (!this.sdStarted) { this.sdStarted = true; this.emit({ t: 'msg', txt: 'ВНЕЗАПНАЯ СМЕРТЬ: вода поднимается!', c: '#4fc3ff', big: 1 }); }
     }
     const wind = this.simul ? this.wind : this.cfg.settings.wind ? Math.round(rand(-1, 1) * MAX_WIND) : 0;
-    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : this.fallbackWeapon(team), walk: WALK_BUDGET, ox: s.x, retreat: 0, shots: 0, target: null, charge: -1, rot: 0, spin: 0, round: this.simul ? T.round : this.round, look: null });
+    Object.assign(T, { team: ti, sid: s.id, time: this.cfg.settings.turnTime, phase: 'aim', delay: 0, wind, weapon: this.canUse(team, team.lastW) ? team.lastW : this.fallbackWeapon(team), walk: this.freeWalk ? WALK_BUDGET : Math.max(0, WALK_BUDGET - Math.abs(s.x - team.cycleOrigins[s.id])), ox: team.cycleOrigins[s.id], usedSids: team.usedSids.slice(), retreat: 0, shots: 0, target: null, preview: null, charge: -1, rot: 0, spin: 0, round: this.simul ? T.round : this.round, look: null, pick: null, graves: [] });
     this.ctrl = null; this.usage = null;
     this.emit({ t: 'turn', team: ti, sid: s.id });
+  }
+  finishWhenQuiet(team) {
+    if (this.anyBusy(-1) || this.finalQuiet + 1e-9 < TURN_QUIET_TIME) {
+      const T = this.turn; T.phase = 'settle'; T.quiet = this.finalQuiet; T.delay = Math.max(0, TURN_QUIET_TIME - this.finalQuiet); return;
+    }
+    this.finish(team);
   }
   finish(team) {
     if (this.simul) for (const ln of this.lanes) { ln.turn.phase = 'over'; ln.usage = null; ln.ctrl = null; } else this.turn.phase = 'over';
@@ -423,7 +542,7 @@ class Game {
     };
   }
   turnSnap(T = this.turn) {
-    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.simul ? T.round : this.round, ro: T.rot, sp: T.spin | 0, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0, lk: T.look || 0 };
+    return { tm: T.team, sid: T.sid, t: Math.round(T.time * 10), ph: T.phase, wd: T.wind, w: T.weapon, wk: Math.round(T.walk), ox: T.ox === undefined ? undefined : Math.round(T.ox), rt: Math.round(T.retreat * 10), sh: T.shots, ch: T.charge >= 0 ? Math.round(T.charge * 100) : -1, rd: this.simul ? T.round : this.round, ro: T.rot, sp: T.spin | 0, tg: T.target ? [Math.round(T.target.x), Math.round(T.target.y)] : 0, pv: T.preview ? [Math.round(T.preview.x), Math.round(T.preview.y)] : 0, lk: T.look || 0, pk: T.pick || 0, us: (T.usedSids || []).slice() };
   }
   teamsSnap() { return this.teams.map(t => ({ a: t.ammo, d: t.dmg, k: t.kills })); }
   snapshot() {

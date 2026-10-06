@@ -15,7 +15,7 @@ const hash=()=>{let h=2166136261;for(const v of App.sc.terrain.mask)h=Math.imul(
     const code=await host.locator('#room-code').textContent();
     await guest.goto(base+'/#join='+code);await guest.waitForFunction(()=>UI.mode==='guest'&&UI.cur==='s-setup');
     await host.uncheck('#o-turnInf');await host.fill('#o-turnTime','90');await host.dispatchEvent('#o-turnTime','change');
-    await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game?.turn.phase==='aim');await guest.waitForFunction(()=>App.mode==='guest'&&App.remote?.turn.phase==='aim');
+    await host.selectOption('#o-side','left');await host.selectOption('#o-first','team1');await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game?.turn.phase==='aim');await guest.waitForFunction(()=>App.mode==='guest'&&App.remote?.turn.phase==='aim');
     const initial=await host.evaluate(hash);assert.equal(initial,await guest.evaluate(hash));
     assert.equal(await host.evaluate(()=>App.game.soldiers.length),8);
     console.log('Public invitation and initial state PASS',base,code);

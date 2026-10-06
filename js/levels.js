@@ -37,6 +37,9 @@ function buildLevel(def, fn) {
       B.add(Sh.band(x1, y1, x2, y2, { thick, sag: o.sag || 0, mat, pal: o.pal }));
       for (const px of o.posts || []) { const t = (px - x1) / (x2 - x1); const py = y1 + (y2 - y1) * t + (o.sag || 0) * 2 * t * (1 - t) * 2; B.add(Sh.rect(px - 5, py + thick - 2, 10, (o.postTo || def.water + 60) - py, { mat, pal: o.pal })); }
       if (o.rails) L.fixtures.push({ k: 'rail', x1, y1, x2, y2, sag: o.sag || 0, col: o.railCol });
+      if (o.truss || (def.theme === 'alien' && (o.mat === 'crystal' || o.mat === 'metal'))) {
+        L.fixtures.push({ k: 'truss', x1, y1, x2, y2, sag: o.sag || 0, thick });
+      }
       return B;
     },
     /** здание/башня с этажами изнутри.
@@ -348,7 +351,7 @@ const MAP_PIRATE = buildLevel({
 });
 
 /* =========================================================
-   7. Два замка
+   7. Замок
    ========================================================= */
 function castle(B, x0, flip, pal) {
   const X = (x, w) => flip ? 2 * x0 + 1000 - x - w : x;           // зеркало в пределах 1000 px
@@ -363,8 +366,8 @@ function castle(B, x0, flip, pal) {
   B.tunnel(flip ? pts.reverse() : pts, 72, { arch: 8 });
 }
 const MAP_CASTLES = buildLevel({
-  id: 'castles', name: 'Два замка', theme: 'castle', W: 6400, H: 1800, water: 1700, seed: 707,
-  desc: 'Замки с донжонами и подземельями, галереи на стенах, подкопы к реке и каменный мост',
+  id: 'castles', name: 'Замок', theme: 'castle', W: 6400, H: 1800, water: 1700, seed: 707,
+  desc: 'Замок с донжоном и подземельями, галереи на стенах, подкопы к реке и каменный мост',
 }, (B) => {
   B.ground([[-40, 1810], [40, 1700], [70, 1500], [90, 1300], [110, 1180, 1], [180, 1158], [300, 1150], [500, 1148], [700, 1148], [900, 1148], [1100, 1150], [1300, 1156], [1420, 1170], [1540, 1200], [1660, 1250], [1760, 1310], [1860, 1380], [1960, 1440], [2060, 1480], [2140, 1500], [2182, 1508, 1], [2196, 1600], [2200, 1810]]);
   B.ground([[2600, 1810], [2604, 1600], [2618, 1508, 1], [2660, 1500], [2740, 1480], [2840, 1440], [2940, 1380], [3040, 1310], [3140, 1250], [3260, 1200], [3380, 1170], [3500, 1156], [3700, 1150], [3900, 1148], [4100, 1148], [4300, 1148], [4500, 1150], [4620, 1158], [4690, 1180, 1], [4710, 1300], [4730, 1500], [4760, 1700], [4840, 1810]]);
@@ -436,6 +439,39 @@ function drawTacticalRoutes(c, map) {
       c.strokeStyle = f.col || 'rgba(60,40,24,0.9)'; c.lineWidth = 2;
       const cx = (f.x1 + f.x2) / 2, cy = (f.y1 + f.y2) / 2 + f.sag;
       c.beginPath(); c.moveTo(f.x1, f.y1 - 16); c.quadraticCurveTo(cx, cy - 16, f.x2, f.y2 - 16); c.stroke();
+    } else if (f.k === 'truss') {
+      const x1 = f.x1, y1 = f.y1, x2 = f.x2, y2 = f.y2, sag = f.sag || 0, thick = f.thick || 13;
+      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+      const segs = Math.max(4, Math.round(len / 34));
+      const ptAt = (t) => [x1 + dx * t, y1 + dy * t + sag * 4 * t * (1 - t)];
+      const trussDepth = 18 + Math.min(14, len * 0.05);
+      c.save();
+      c.lineWidth = 2.2; c.strokeStyle = 'rgba(70,85,110,0.85)';
+      c.beginPath();
+      for (let s = 0; s <= segs; s++) { const [px, py] = ptAt(s / segs); if (s === 0) c.moveTo(px, py + thick); else c.lineTo(px, py + thick); }
+      c.stroke();
+      c.beginPath();
+      for (let s = 0; s <= segs; s++) { const [px, py] = ptAt(s / segs); if (s === 0) c.moveTo(px, py + thick + trussDepth); else c.lineTo(px, py + thick + trussDepth); }
+      c.stroke();
+      c.lineWidth = 1.6; c.strokeStyle = 'rgba(95,120,150,0.78)';
+      c.beginPath();
+      for (let s = 0; s < segs; s++) {
+        const [px0, py0] = ptAt(s / segs), [px1, py1] = ptAt((s + 1) / segs);
+        const top0 = py0 + thick, bot0 = top0 + trussDepth, top1 = py1 + thick, bot1 = top1 + trussDepth;
+        c.moveTo(px0, top0); c.lineTo(px0, bot0);
+        if (s % 2 === 0) { c.moveTo(px0, top0); c.lineTo(px1, bot1); }
+        else { c.moveTo(px0, bot0); c.lineTo(px1, top1); }
+      }
+      const [lastPx, lastPy] = ptAt(1);
+      c.moveTo(lastPx, lastPy + thick); c.lineTo(lastPx, lastPy + thick + trussDepth);
+      c.stroke();
+      c.fillStyle = 'rgba(160,200,240,0.9)';
+      for (let s = 0; s <= segs; s++) {
+        const [px, py] = ptAt(s / segs);
+        c.beginPath(); c.arc(px, py + thick, 1.8, 0, TAU); c.fill();
+        c.beginPath(); c.arc(px, py + thick + trussDepth, 1.8, 0, TAU); c.fill();
+      }
+      c.restore();
     }
   }
   const kind = map.theme === 'city' ? 'steelY' : map.theme === 'alien' ? 'steel' : 'wood';

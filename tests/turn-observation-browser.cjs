@@ -1,0 +1,41 @@
+'use strict';
+const { chromium } = require('playwright');
+const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+const base = process.env.TEST_URL || 'http://127.0.0.1:3001';
+const output = process.env.TURN_RESULTS || path.join(__dirname,'../test-results/turn30');
+fs.mkdirSync(output,{recursive:true});
+(async()=>{
+  const browser=await chromium.launch({channel:'chrome',headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding']});
+  const errors=[],report={pass:false,errors,liveAim:[],quiet:[],initiative:[]};
+  async function page(url=base){const c=await browser.newContext({viewport:{width:1280,height:720}});await c.route('**/profile',r=>r.fulfill({status:200,contentType:'application/json',body:'{}'}));const p=await c.newPage();p.setDefaultTimeout(90000);p.on('pageerror',e=>errors.push(e.message));await p.goto(url,{waitUntil:'domcontentloaded'});await p.waitForFunction(()=>UI.cur==='s-main'||UI.mode==='guest'&&UI.cur==='s-setup');return p;}
+  async function settings(host,guest,simul=false){await host.evaluate(simul=>{Object.assign(UI.settings,{mapId:'valley',side:'left',first:'team1',perTeam:3,hp:100,turnTime:0,wind:false,walk:'free',simul});UI.applySettings(UI.settings);UI.markMap();App.onLobbyChanged();},simul);await guest.waitForFunction(simul=>UI.settings.simul===simul&&UI.settings.first==='team1',simul);}
+  async function start(host,guest){await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game?.turn.phase==='aim');await guest.waitForFunction(()=>App.mode==='guest'&&App.remote?.turn.phase==='aim');}
+  async function rematch(host,guest){await host.evaluate(()=>App.game.finish(App.game.teams[0]));await host.waitForSelector('#s-over.show');await guest.waitForSelector('#s-over.show');await host.evaluate(()=>App.rematch());await host.waitForSelector('#s-setup.show');await guest.waitForSelector('#s-setup.show');}
+  async function aim(player,viewer,weapon,actor){await player.evaluate(id=>App.ctl.send({c:'weapon',id}),weapon);await viewer.waitForFunction(id=>App.sc.turn.weapon===id,weapon);await player.mouse.move(940,430);await viewer.waitForFunction(()=>App.sc.turn.preview&&App.cam.observeAim);await viewer.waitForTimeout(120);const a=await viewer.evaluate(()=>({p:{...App.sc.turn.preview},x:App.cam.x,y:App.cam.y}));await player.mouse.move(680,350);await viewer.waitForTimeout(500);const b=await viewer.evaluate(()=>({p:{...App.sc.turn.preview},x:App.cam.x,y:App.cam.y,observe:App.cam.observeAim,entities:App.sc.entities.length}));const d=Math.hypot(a.p.x-b.p.x,a.p.y-b.p.y);assert(d>20,JSON.stringify({actor,weapon,a,b}));assert.equal(b.observe,true);assert.equal(b.entities,0);report.liveAim.push({actor,weapon,a,b,movement:d});}
+  async function grave(host,guest,simul){
+    await guest.evaluate(()=>{const sc=App.remote,old=window.qaOriginalCut||(window.qaOriginalCut=App.cam.cut.bind(App.cam));window.qaGuest={sid:sc.turn.sid,cuts:[]};App.cam.cut=(...args)=>{qaGuest.cuts.push({t:sc.time,sid:args[2]?.id});return old(...args);};});
+    await host.evaluate(()=>{
+      const g=App.game,T=g.turn,s=g.active(),victim=g.soldiers.find(v=>v.team===1&&v.alive),oldStep=g.step.bind(g),oldCut=App.cam.cut.bind(App.cam);
+      const q=window.qaQuiet={sid:T.sid,team:T.team,start:g.time,gone:null,graveRest:null,next:null,cuts:[],trace:[],victim:victim.id};
+      g.step=dt=>{oldStep(dt);const v=g.soldierById(q.victim),grave=g.entities.find(e=>e.k==='tomb'&&e.team===1);if(v?.gone&&q.gone===null)q.gone=g.time;if(grave&&!grave.busy&&q.graveRest===null)q.graveRest=g.time;if(g.turn.sid!==q.sid&&q.next===null)q.next=g.time;if(q.next===null||q.trace.length<10)q.trace.push({t:g.time,sid:g.turn.sid,phase:g.turn.phase,quiet:g.turn.quiet||0,corpse:!!v?.gone,tomb:grave?{busy:grave.busy,y:grave.y,cause:grave.settleTeams||0}:null});};
+      App.cam.cut=(...args)=>{q.cuts.push({t:g.time,sid:args[2]?.id});return oldCut(...args);};
+      // Place a low-health enemy in reach, then execute the actual bat weapon and its death/grave physics.
+      victim.x=s.x+13;victim.y=s.y;victim.vx=victim.vy=0;victim.st='stand';victim.hp=15;s.face=1;
+      g.cmd(0,{c:'weapon',id:'bat'});App.ctl.send({c:'fire',aim:-.35,pw:1});App.sendSnap();
+    });
+    await host.waitForFunction(()=>qaQuiet.next!==null,{},{timeout:45000});
+    await guest.waitForFunction(()=>App.remote.turn.sid!==qaGuest.sid);await guest.waitForTimeout(160);
+    const h=await host.evaluate(()=>qaQuiet),r=await guest.evaluate(()=>({sid:App.remote.turn.sid,phase:App.remote.turn.phase,simul:App.remote.simul,turn:App.remote.turn.team,grave:App.remote.entities.find(e=>e.k==='tomb'&&e.team===1)?.y,cuts:qaGuest.cuts}));
+    assert(h.gone!==null&&h.graveRest!==null,JSON.stringify(h));const quiet=h.next-h.graveRest;assert(quiet>=.5-1/60-1e-7,JSON.stringify({simul,quiet,h}));assert(quiet<.8,JSON.stringify({simul,quiet}));assert(h.trace.every(t=>t.sid===h.sid||t.t>=h.graveRest+.5-1/60-1e-7));assert(h.cuts.length>0);assert(h.cuts.every(c=>c.sid===h.sid||c.t>=h.graveRest+.5-1/60-1e-7),JSON.stringify(h.cuts));assert(r.cuts.length>0);assert(r.cuts.every(c=>c.t>=h.graveRest+.5-1/60-1e-7),JSON.stringify({simul,r,rest:h.graveRest}));
+    report.quiet.push({simul,gone:h.gone-h.start,graveRest:h.graveRest-h.start,next:h.next-h.start,quiet,cuts:h.cuts,guest:r,trace:h.trace});await host.screenshot({path:path.join(output,simul?'continuous-grave.png':'ordinary-grave.png')});
+  }
+  try{
+    const host=await page();await host.click('[data-act="online"]');await host.click('[data-act="host"]');await host.waitForSelector('#s-setup.show');const code=(await host.locator('#room-code').textContent()).trim(),guest=await page(base+'/#join='+code);await guest.waitForFunction(()=>UI.mode==='guest'&&UI.cur==='s-setup');await host.waitForFunction(()=>!!App.guestTeam&&Net.connected);
+    await settings(host,guest);await host.screenshot({path:path.join(output,'first-turn-setting.png')});await start(host,guest);await host.evaluate(()=>{App.game.round=5;App.game.turn.round=5;App.sendSnap();});
+    await aim(host,guest,'nuke','host');await host.evaluate(()=>App.ctl.send({c:'skip'}));await host.waitForFunction(()=>App.game.turn.team===1&&App.game.turn.phase==='aim');await guest.waitForFunction(()=>App.remote.turn.team===1&&App.remote.turn.phase==='aim');await aim(guest,host,'sniper','guest');await guest.evaluate(()=>App.ctl.send({c:'skip'}));await host.waitForFunction(()=>App.game.turn.team===0&&App.game.turn.phase==='aim');await guest.waitForFunction(()=>App.remote.turn.team===0&&App.remote.turn.phase==='aim');
+    await grave(host,guest,false);console.log('Ordinary actual bat/death/grave and live online nuke/sniper preview PASS');
+    await rematch(host,guest);await settings(host,guest,true);await start(host,guest);await grave(host,guest,true);console.log('Continuous own-cause actual death/grave hold PASS');
+    for(const value of [.1,.9]){await rematch(host,guest);await host.evaluate(()=>{UI.settings.simul=false;UI.settings.side='random';UI.settings.first='random';UI.applySettings(UI.settings);App.onLobbyChanged();});await host.evaluate(value=>{const old=Math.random;Math.random=()=>value;try{App.startFromSetup();}finally{Math.random=old;}},value);await host.waitForFunction(()=>App.game?.turn.phase==='aim'&&App.mode==='host');await guest.waitForFunction(()=>App.remote?.turn.phase==='aim'&&App.mode==='guest');const h=await host.evaluate(()=>({swap:App.game.cfg.settings.swap,first:App.game.cfg.settings.first,firstTeam:App.game.cfg.settings.firstTeam,team:App.game.turn.team})),r=await guest.evaluate(()=>({swap:App.remote.settings.swap,first:App.remote.settings.first,firstTeam:App.remote.settings.firstTeam,team:App.remote.turn.team}));const expected=value<.5?0:1;assert.equal(h.team,expected);assert.equal(r.team,expected);assert.equal(h.firstTeam,expected);assert.equal(r.firstTeam,expected);assert.equal(h.swap,value<.5);assert.deepEqual(h,r);report.initiative.push({value,host:h,guest:r});}
+    assert.deepEqual(errors,[]);report.pass=true;console.log('Independent online initiative and synchronized host/guest state PASS');
+  }finally{fs.writeFileSync(path.join(output,'report.json'),JSON.stringify(report,null,2));await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

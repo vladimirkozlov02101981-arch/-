@@ -6,7 +6,7 @@ const FIRE_COLS = ['#fff6c2', '#ffd35a', '#ffa22a', '#ff6a1a', '#d8341a', '#7a1a
 
 class Particles {
   constructor() { this.a = []; this.max = 2800; this.onRest = null; }   // onRest(p) — частица легла на землю: остаётся на карте
-  add(p) { if (this.a.length >= this.max) this.a.splice(0, 300); this.a.push(p); return p; }
+  add(p) { if (this.a.length >= this.max) this.a.splice(0, 300); if (this.settleMask) p.settleMask = this.settleMask; this.a.push(p); return p; }
   smoke(x, y, vx, vy, size, life, col, grow = 2.2, al = 0.8) { return this.add({ t: 0, x, y, vx, vy, s: size, s2: size * grow, life, max: life, col, al, g: -14, drag: 1.3, wind: 0.08 }); }
   fire(x, y, vx, vy, size, life) { return this.add({ t: 1, x, y, vx, vy, s: size, s2: size * 0.3, life, max: life, g: -60, drag: 2.2, wind: 0.05 }); }
   spark(x, y, vx, vy, life, col = '#ffe9a0', g = 520) { return this.add({ t: 2, x, y, vx, vy, life, max: life, col, g, drag: 0.6 }); }

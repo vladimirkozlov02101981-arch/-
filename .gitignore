@@ -20,3 +20,6 @@ __pycache__/
 dev/cloudflared-*.txt
 profile.json
 profile.json.tmp
+
+# Personal Chromium app window state
+dev/browser-profile/

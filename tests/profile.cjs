@@ -15,13 +15,52 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
     const page = await ctx.newPage(); page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(base); await page.waitForSelector('#s-main.show', { timeout: 120000 });
 
-    // 1. первый запуск: значения по умолчанию — нынешние настройки игрока; правки в своём режиме сохраняются сами
+    // 1. первый запуск: значения по умолчанию — нынешние настройки игрока. Галочка «Использовать по умолчанию» всегда
+    // открывается снятой: без неё правки только для этого боя; с ней — сохраняются сами; снята — вернулись прежние основные,
+    // а настройки на экране (текущего боя) не меняются
     const first = await page.evaluate(() => ({ map: Profile.base.settings.mapId, time: Profile.base.settings.turnTime, hat: Profile.base.teams[0].hat, bot: Profile.base.bot.hat, keys: Keys.map.skip }));
     assert.deepEqual(first, { map: 'arctic', time: 0, hat: 'viking', bot: 'ushanka', keys: ['Backquote', 'KeyP'] }, 'factory = current user settings');
     await page.click('[data-act="cpu"]'); await page.waitForSelector('#s-setup.show');
+    assert.equal(await page.isChecked('#cfg-default'), false, 'default checkbox starts unchecked');
     await page.selectOption('#o-perTeam', '6');
     await page.reload(); await page.waitForSelector('#s-main.show');
-    assert.equal(await page.evaluate(() => Profile.base.settings.perTeam), 6, 'local change auto-saved and restored after restart');
+    assert.equal(await page.evaluate(() => Profile.base.settings.perTeam), 4, 'edits without the checkbox are not saved');
+    await page.click('[data-act="cpu"]'); await page.waitForSelector('#s-setup.show');
+    await page.check('#cfg-default'); await page.selectOption('#o-perTeam', '6'); await page.selectOption('#o-perTeam', '7');
+    const chk = await page.evaluate(() => ({ base: Profile.base.settings.perTeam, linked: UI.linked }));
+    await page.uncheck('#cfg-default');
+    const unchk = await page.evaluate(() => ({ base: Profile.base.settings.perTeam, shown: UI.settings.perTeam, sel: document.getElementById('o-perTeam').value }));
+    assert.deepEqual(chk, { base: 7, linked: true }, 'checked: every edit saved into the main set');
+    assert.deepEqual(unchk, { base: 4, shown: 7, sel: '7' }, 'unchecked: main set restored, current battle settings unchanged');
+    await page.check('#cfg-default'); await page.selectOption('#o-perTeam', '6');
+    await page.reload(); await page.waitForSelector('#s-main.show');
+    assert.equal(await page.evaluate(() => Profile.base.settings.perTeam), 6, 'checked edits survive a restart');
+    await page.click('[data-act="cpu"]'); await page.waitForSelector('#s-setup.show');
+    assert.equal(await page.isChecked('#cfg-default'), false, 'checkbox unchecked again on the next visit');
+    await page.evaluate(() => UI.show('s-main'));
+
+    // Снятие галочки после многократных правок разных видов оружия возвращает весь прежний
+    // постоянный набор. Текущий бой остаётся с теми же выбранными настройками.
+    const ammoUndo = await page.evaluate(() => {
+      UI.act('cpu');
+      const base = JSON.stringify(Profile.base);
+      UI.setDefaultChecked(true);
+      const setAmmo = (id, n) => {
+        const num = document.querySelector('[data-w="' + id + '"] input[type="number"]');
+        num.value = String(n); num.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      setAmmo('sniper', 2); setAmmo('sniper', 7); setAmmo('bazooka', 3); setAmmo('grenade', 11);
+      const current = JSON.stringify(UI.work);
+      const saved = Profile.base.settings.ammo.sniper === 7 && Profile.base.settings.ammo.bazooka === 3 && Profile.base.settings.ammo.grenade === 11;
+      UI.setDefaultChecked(false);
+      const restored = JSON.stringify(Profile.base) === base;
+      const unchanged = JSON.stringify(UI.work) === current;
+      UI.show('s-main'); UI.act('cpu');
+      const next = JSON.stringify(UI.work) === base, unchecked = !document.getElementById('cfg-default').checked;
+      UI.show('s-main');
+      return { saved, restored, unchanged, next, unchecked };
+    });
+    assert.deepEqual(ammoUndo, { saved: true, restored: true, unchanged: true, next: true, unchecked: true }, 'many edits on several weapons, uncheck, and start a new battle');
 
     // 2. конфигурации: создать из текущих, переключать, «по умолчанию» и возврат прежнего основного
     const cfg = await page.evaluate(async () => {
@@ -30,10 +69,10 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
       UI.act('cfg-new'); document.getElementById('cfg-name').value = 'Быстрый бой'; UI.act('cfg-name-ok');
       const id = UI.workSrc;
       const made = { id, name: Profile.config(id).name, per: Profile.config(id).data.settings.perTeam };
-      // временный набор: снять связь, поменять — основной не меняется
-      UI.setDefaultChecked(false); document.getElementById('o-perTeam').value = '9'; UI.onSettingsChanged();
+      // без галочки набор временный: поменять — основной не меняется
+      document.getElementById('o-perTeam').value = '9'; UI.onSettingsChanged();
       const baseAfterTemp = Profile.base.settings.perTeam;
-      // сделать по умолчанию → основной = 9; снять → вернулся прежний (3, «Быстрый бой» был основным после создания)
+      // сделать по умолчанию → основной = 9; снять → вернулся прежний (6 из шага 1)
       UI.setDefaultChecked(true); const baseDefault = Profile.base.settings.perTeam;
       UI.setDefaultChecked(false); const baseRestored = Profile.base.settings.perTeam;
       // переключение на основной набор и обратно
@@ -44,10 +83,10 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
       return { made, baseAfterTemp, baseDefault, baseRestored, perBase, perCfg, prevAfterMenu };
     });
     assert.equal(cfg.made.name, 'Быстрый бой'); assert.equal(cfg.made.per, 3);
-    assert.equal(cfg.baseAfterTemp, 3, 'unlinked edits are temporary');
+    assert.equal(cfg.baseAfterTemp, 6, 'unlinked edits are temporary');
     assert.equal(cfg.baseDefault, 9, 'checked default makes the set main');
-    assert.equal(cfg.baseRestored, 3, 'unchecking restores the previous main set');
-    assert(cfg.perBase === 3 && cfg.perCfg === 3, 'switching configs');
+    assert.equal(cfg.baseRestored, 6, 'unchecking restores the previous main set');
+    assert(cfg.perBase === 6 && cfg.perCfg === 3, 'switching configs ' + JSON.stringify(cfg));
     assert.equal(cfg.prevAfterMenu, null, 'previous main is forgotten after leaving to the main menu');
 
     // 3. сетевой бой: настройки хоста временные, у гостя свои не меняются
@@ -70,13 +109,15 @@ const base = process.env.TEST_URL || 'http://localhost:3000';
     await guest.evaluate(() => { UI.act('back'); UI.show('s-main'); });
     assert.equal(await guest.evaluate(() => Profile.base.settings.perTeam), guestBase, 'guest settings restored after the room');
 
-    // 4. клавиши: назначение по физической клавише, сохраняются в наборе
+    // 4. клавиши: назначение по физической клавише, сохраняются в наборе (в основной — с галочкой)
     const keys = await page.evaluate(() => {
       UI.act('back'); UI.show('s-main'); UI.act('cpu');
       UI.keyWait = { id: 'skip', i: -1 }; UI.assignKey('KeyK');
-      return { map: UI.work.keys.skip.slice(), active: Keys.map.skip.slice(), base: Profile.base.keys.skip.slice() };
+      const r = { map: UI.work.keys.skip.slice(), active: Keys.map.skip.slice(), base: Profile.base.keys.skip.slice() };
+      UI.setDefaultChecked(true); r.saved = Profile.base.keys.skip.slice();
+      return r;
     });
-    assert(keys.map.includes('KeyK') && keys.active.includes('KeyK') && keys.base.includes('KeyK'), 'key rebinding ' + JSON.stringify(keys));
+    assert(keys.map.includes('KeyK') && keys.active.includes('KeyK') && !keys.base.includes('KeyK') && keys.saved.includes('KeyK'), 'key rebinding ' + JSON.stringify(keys));
 
     // 5. одновременные ходы и ход на любую дистанцию: у каждой команды свой ход, следующий — тот же игрок
     const sim = await page.evaluate(() => {

@@ -186,6 +186,12 @@ class TerrainSurface {
   }
   draw(c, v, scale) {
     if (!this.commands.length) return false;
+    // На общем плане готовые растения 1x дают те же детали без тысяч повторных команд.
+    if (scale <= 1 && !this.damage.size) {
+      const x0 = Math.max(0, Math.floor(v.x0)), y0 = Math.max(0, Math.floor(v.y0)), x1 = Math.min(this.terrain.W, Math.ceil(v.x1)), y1 = Math.min(this.terrain.H, Math.ceil(v.y1));
+      if (x1 > x0 && y1 > y0) c.drawImage(this.canvas, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+      return true;
+    }
     if (!this.damage.size) { this.replay(c, v); return true; }
     const x0 = Math.max(0, Math.floor(v.x0)), y0 = Math.max(0, Math.floor(v.y0)), x1 = Math.min(this.terrain.W, Math.ceil(v.x1)), y1 = Math.min(this.terrain.H, Math.ceil(v.y1)), w = x1 - x0, h = y1 - y0;
     if (w <= 0 || h <= 0) return true;

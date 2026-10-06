@@ -42,8 +42,15 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
         const t=terrain();add(t,20);add(t,50);const ids=t.surface.visible({x0:0,y0:0,x1:25,y1:30});check(ids.length>=1,'visible command selection lost surface data');
         const c=makeCanvas(32*zoom,32*zoom).getContext('2d');c.setTransform(zoom,0,0,zoom,0,0);t.drawSurfaceNative(c,{x0:0,y0:0,x1:25,y1:30},zoom);check(pixel(c,20,18)[3]===255,'visible replay failed');results.push('visible commands replay with world transform');
       }
+      {
+        const t=terrain();add(t);let replay=0;const before=t.surface.replay;t.surface.replay=function(...args){replay++;return before.apply(this,args);};
+        const cv=makeCanvas(W,H),c=cv.getContext('2d');t.drawSurfaceNative(c,v,1);check(c.getImageData(20,18,1,1).data[3]===255,'distant view lost plants');check(replay===0,'distant view unnecessarily replays commands');results.push('undamaged distant view uses retained 1x plants');
+      }
+      {
+        const t=terrain();add(t);t.carveLine(18,18,24,18,1);const cv=makeCanvas(W,H),c=cv.getContext('2d');t.drawSurfaceNative(c,v,1);check(c.getImageData(20,18,1,1).data[3]===0,'distant damaged plants reappeared');results.push('damaged distant view keeps precise destruction replay');
+      }
       return results;
     });
-    assert.equal(results.length,6);console.log('Surface replay PASS',results.join('; '));
+    assert.equal(results.length,8);console.log('Surface replay PASS',results.join('; '));
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

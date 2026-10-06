@@ -3,7 +3,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
 (async()=>{
   const browser=await chromium.launch({channel:'chrome',headless:true});
   try {
-    const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto('http://localhost:3000');await page.waitForSelector('#s-main.show');
+    const page=await browser.newPage({viewport:{width:1440,height:900}});await page.goto('http://localhost:3001');await page.waitForSelector('#s-main.show');
     const maps=await page.evaluate(()=>MAPS.map(m=>{
       const cfg={mapId:m.id,settings:{...App.prefs.settings,perTeam:6,crates:false,sd:0},teams:App.prefs.teams};
       const g=new Game(cfg);
@@ -18,7 +18,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
       for(let i=0;i<600;i++)g.step(1/60);
       return !s.alive&&s.gone;
     }),'A dead climber falls and leaves the battlefield');
-    await page.evaluate(()=>App.startLocal({mapId:'valley',settings:{...App.prefs.settings,perTeam:2,turnTime:90,crates:false,sd:0},teams:App.prefs.teams},'cpu'));
+    await page.evaluate(()=>App.startLocal({mapId:'valley',settings:{...App.prefs.settings,first:'team1',perTeam:2,turnTime:90,crates:false,sd:0},teams:App.prefs.teams},'cpu'));
     await page.waitForFunction(()=>App.mode==='cpu'&&App.game?.turn.phase==='aim');
     await page.evaluate(async()=>{await MapArt.get('valley').decode();App.cam.overview=true;});await page.waitForTimeout(2000);await page.screenshot({path:'test-results/map-valley.png'});
     await page.evaluate(()=>{const g=App.game,cmd=g.cmd;window.aiFireCount=0;g.cmd=function(team,c){if(team===1&&c.c==='fire')window.aiFireCount++;return cmd.call(this,team,c);};g.cmd(0,{c:'skip'});});

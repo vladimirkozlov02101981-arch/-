@@ -133,23 +133,41 @@ class AI {
         const L = this.L;
         this.goalAim = this.plan.aim + gauss() * L.aim; this.goalPw = clamp(this.plan.pw + gauss() * L.pw, 0.08, 1);
         if (this.plan.tx !== undefined) { this.goalTx = this.plan.tx + gauss() * L.aim * 500; this.goalTy = this.plan.ty; }
-        if (this.plan.w === 'homing') send({ c: 'target', x: this.goalTx, y: this.goalTy });
+        // Захват самонаводки будет после видимого наведения, как у игрока.
         this.aim = s.aim; this.state = 'aim'; this.t = 0;
+        this.previewFrom = { x: s.x + Math.cos(this.aim) * 78, y: s.y - GUN_Y + Math.sin(this.aim) * 78 };
         break;
       }
       case 'aim': {
         const d = angNorm(this.goalAim - this.aim); const stepA = 2.4 * dt;
         this.aim = Math.abs(d) < stepA ? this.goalAim : this.aim + Math.sign(d) * stepA;
-        send({ c: 'ctrl', l: false, r: false, aim: this.aim, pw: -1 });
+        const preview = this.plan.w === 'sniper' ? (predictShot(g, s, this.aim, 'sniper') || muzzle(s, this.aim, FAST_SHOT.sniper)) : null;
+        send({ c: 'ctrl', l: false, r: false, aim: this.aim, pw: -1, ...(preview ? { tx: preview.x, ty: preview.y } : {}) });
         if (Math.abs(angNorm(this.goalAim - this.aim)) < 0.001 && this.t > 0.5) {
           const W = WEAPON[this.plan.w];
-          if (W.mode === 'charge' || W.mode === 'tcharge') { this.state = 'charge'; this.pw = 0; }
+          if (this.goalTx !== undefined && (W.mode === 'target' || W.mode === 'place' || W.mode === 'tcharge')) {
+            this.state = 'target'; this.t = 0;
+            this.targetTime = clamp(Math.hypot(this.goalTx - this.previewFrom.x, this.goalTy - this.previewFrom.y) / 1400, 0.65, 3.4);
+          }
+          else if (W.mode === 'charge') { this.state = 'charge'; this.pw = 0; }
           else {
             // быстрые пули: сперва обзор к месту попадания (как у игрока), потом очередь
             const p = FAST_SHOT[W.id] ? predictShot(g, s, this.aim, W.id) : null;
             if (p && Math.hypot(p.x - s.x, p.y - s.y) > 380) { send({ c: 'look', x: Math.round(p.x), y: Math.round(p.y) }); this.state = 'frame'; this.t = 0; }
             else { send({ c: 'fire', aim: this.aim, pw: 1, tx: this.goalTx, ty: this.goalTy }); this.state = 'done'; }
           }
+        }
+        break;
+      }
+      case 'target': {
+        const u = clamp(this.t / this.targetTime, 0, 1), k = u * u * (3 - 2 * u);
+        const tx = lerp(this.previewFrom.x, this.goalTx, k), ty = lerp(this.previewFrom.y, this.goalTy, k);
+        send({ c: 'ctrl', l: false, r: false, aim: this.aim, pw: -1, tx, ty });
+        // Небольшая фиксация готового прицела даёт увидеть выбранную точку до атаки.
+        if (this.t >= this.targetTime + 0.7) {
+          if (WEAPON[this.plan.w].mode === 'tcharge') { send({ c: 'target', x: this.goalTx, y: this.goalTy }); this.state = 'charge'; this.pw = 0; }
+          else { send({ c: 'fire', aim: this.aim, pw: 1, tx: this.goalTx, ty: this.goalTy }); this.state = 'done'; }
+          this.t = 0;
         }
         break;
       }

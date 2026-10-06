@@ -8,9 +8,13 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
  const report={artifact,bytes:buf.length,version:html.match(/id="game-version">([^<]+)/)?.[1],expectedVersion,embedded:[],errors:[],externalRequests:[],serverRequests:[]};
  const a=html.indexOf('window.__ASSETS=')+'window.__ASSETS='.length,b=html.indexOf(';function ASSET(p)',a),assets=JSON.parse(html.slice(a,b));
  assert(report.version.endsWith('-'+expectedVersion),'expected version '+expectedVersion+' but found '+report.version);
- for(const dir of ['fine','surface'])for(const name of fs.readdirSync(path.join(root,'assets/tex',dir))){
+ for(const dir of ['fine','surface','native'])for(const name of fs.readdirSync(path.join(root,'assets/tex',dir))){
   const relative='assets/tex/'+dir+'/'+name,bytes=fs.readFileSync(path.join(root,relative)),embedded=Buffer.from(assets[relative].split(',')[1],'base64');
   assert(bytes.equals(embedded),relative+' embedded bytes differ');report.embedded.push({path:relative,bytes:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex'),exact:true});
+ }
+ for(const name of fs.readdirSync(path.join(root,'assets/tex')).filter(n=>/^(wpn|ent)_.*\.png$/.test(n))){
+  const relative='assets/tex/'+name,bytes=fs.readFileSync(path.join(root,relative)),embedded=Buffer.from(assets[relative].split(',')[1],'base64');
+  assert(bytes.equals(embedded),relative+' weapon sprite differs');report.embedded.push({path:relative,bytes:bytes.length,exact:true});
  }
  let browser,server;
  try{
@@ -20,6 +24,13 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
   page.on('pageerror',e=>report.errors.push(e.message));
   await page.route('**/*',route=>{const u=route.request().url();if(u===url||u.startsWith('data:')||u.startsWith('blob:'))return route.continue();report.externalRequests.push(u);return route.abort();});
   await page.goto(url,{waitUntil:'load',timeout:60000});await page.waitForSelector('#s-main.show',{timeout:60000});
+  report.menuPreviews=await page.evaluate(async()=>{
+   const out=[],save=App.savePrefs,old=App.prefs.settings.mapId;App.savePrefs=()=>{};App.paused=true;
+   try{for(const m of MAPS){UI.featureMap(m.id);const im=document.getElementById('featured-preview');await im.decode();out.push({id:m.id,embedded:im.src.startsWith('data:'),width:im.naturalWidth});}}
+   finally{UI.featureMap(old);App.savePrefs=save;App.paused=false;}
+   return out;
+  });
+  assert.equal(report.menuPreviews.length,8);assert(report.menuPreviews.every(m=>m.embedded&&m.width>0));
   await page.evaluate(()=>App.startLocal({mapId:'valley',settings:{...App.prefs.settings,perTeam:2,turnTime:90,crates:false,sd:0},teams:App.prefs.teams},'hotseat'));
   await page.waitForFunction(()=>App.game?.turn.phase==='aim'&&App.mode==='hotseat',{timeout:60000});
   report.zoom=await page.evaluate(()=>{const s=App.game.active(),z=App.cam.zoomLimits(App.ren.sh,App.ren.sw)[1];Object.assign(App.cam,{userZ:z,z,tz:z,x:s.x,y:s.y-40,free:999,inited:true});return z;});
@@ -33,13 +44,13 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
    return {netVersion:NET_VERSION,coefficients,erased};
   });
   assert.deepEqual(report.materials.coefficients,[1,1.12,.8,.76,1.1,.56,.36,.8,.72,.72]);
-  assert(report.materials.erased.soil>report.materials.erased.rock&&report.materials.erased.rock>report.materials.erased.concrete&&report.materials.erased.concrete>report.materials.erased.metal);assert.equal(report.materials.netVersion,7);
+  assert(report.materials.erased.soil>report.materials.erased.rock&&report.materials.erased.rock>report.materials.erased.concrete&&report.materials.erased.concrete>report.materials.erased.metal);assert.equal(report.materials.netVersion,8);
   await page.evaluate(()=>App.ctl.select('sniper'));await page.waitForFunction(()=>App.game.turn.weapon==='sniper'&&App.ctl.scopeOn);
   report.sniper={aim:[]};
   async function aimAt(x,y,scope){await page.mouse.move(x,y);await page.waitForTimeout(120);const r=await page.evaluate(()=>{const s=App.game.active();return {base:App.ctl.base,expected:Math.atan2(App.ctl.mouseW.y-(s.y-GUN_Y),App.ctl.mouseW.x-s.x),scopeOn:App.ctl.scopeOn,mode:App.ctl.aimMode};});assert(Math.abs(r.base-r.expected)<1e-8);assert.equal(r.scopeOn,scope);assert.equal(r.mode,'mouse');report.sniper.aim.push({x,y,...r});}
   await aimAt(1040,250,true);await aimAt(390,330,true);
-  await page.keyboard.press('KeyE');await page.waitForFunction(()=>!App.ctl.scopeOn);await aimAt(1080,280,false);
-  await page.keyboard.press('KeyE');await page.waitForFunction(()=>App.ctl.scopeOn);
+  await page.keyboard.press('ControlLeft');await page.waitForFunction(()=>!App.ctl.scopeOn);await aimAt(1080,280,false);
+  await page.keyboard.press('ControlLeft');await page.waitForFunction(()=>App.ctl.scopeOn);
   report.sniper.before=await page.evaluate(()=>({ammo:App.game.teams[App.game.turn.team].ammo.sniper,shots:App.game.turn.shots}));
   await page.mouse.click(1080,280);await page.waitForFunction(()=>App.game.turn.shots===1);
   report.sniper.after=await page.evaluate(()=>({ammo:App.game.teams[App.game.turn.team].ammo.sniper,shots:App.game.turn.shots,phase:App.game.turn.phase}));
