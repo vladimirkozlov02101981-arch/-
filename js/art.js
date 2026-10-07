@@ -54,7 +54,7 @@ const TexLib = {
   ready: null,
   commonReady: null,
   pending: new Map(), images: new Map(), surfacePending: new Map(), surfaceImages: new Map(),
-  surfaceNames: ['grass_valley', 'bush1', 'bush2'],
+  surfaceNames: ['grass_valley', 'grass_alien', 'bush1', 'bush2'],
   hi: {},
   hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
@@ -201,7 +201,7 @@ const TexLib = {
     // The cap uses these sprites even when a scatter list contains no explicit bush.
     const cap = theme.ground.cap;
     if (cap.blades && !cap.snow && !cap.bushPal) { add('bush1'); add('bush2'); }
-    const surface = theme.id === 'valley' || theme.id === 'castle' ? this.surfaceNames.filter(n => names.has(n)) : [];
+    const surface = theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' ? this.surfaceNames.filter(n => names.has(n)) : [];   // как в drawSurfaceDetails
     return { mapId: map.id, names: [...names], surface, panorama: MapArt.themeMap[theme.id] || 'valley' };
   },
   /** Await this before buildVisual/Net.ready; no arbitrary three-second fallback race. */

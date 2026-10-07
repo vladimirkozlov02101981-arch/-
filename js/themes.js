@@ -182,7 +182,7 @@ const THEMES = {
       outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [2.9, 2.6, 1.6] },
     },
     scatter: ['trash', 'tuft'],
-    weather: 'rain', birds: false, ambient: '#aaa8cf', ambientSound: 'rain', glow: true,
+    weather: null, birds: false, ambient: '#aaa8cf', ambientSound: 'wind', glow: true,   // без дождя (просьба игрока)
   },
 };
 

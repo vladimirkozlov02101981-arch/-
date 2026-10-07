@@ -103,7 +103,7 @@ function hitscan(g, x0, y0, ang, range, ignore) {
 }
 
 /** быстрые пули (дальность, ед.): камера за ними не успевает — перед выстрелом обзор переходит к месту попадания */
-const FAST_SHOT = { assault: 1200, revolver: 1500, magnum: 1700, uzi: 900, shotgun: 650, sniper: 2600, minigun: 900, tesla: 500, railgun: 2800, autocannon: 1500 };
+const FAST_SHOT = { assault: 1200, revolver: 1500, magnum: 1700, uzi: 900, shotgun: 650, sniper: 2600, minigun: 900, tesla: 500, railgun: 7000, autocannon: 1500 };
 /** брошенное оружие, у которого после броска идёт фаза действия: в руках его уже нет */
 const THROWN_USE = new Set(['robot', 'tpgrenade']);
 /** зона попадания по бойцу — та же, что у Game.soldierAt (работает и на сцене друга по сети, где этого метода нет) */
@@ -125,11 +125,11 @@ function predictShot(sc, s, aim, id) {
   if (B) {
     // путь пули шаг за шагом, как в BallisticBullet.update: скорость, снижение, сопротивление воздуха, ветер, дальность —
     // камера показывает то место, куда пуля действительно попадёт, даже очень далеко
-    const range = B[0], m = muzzle(s, aim, 10), speed = B[1] === 1 ? 18000 : 12500;
+    const m = muzzle(s, aim, 10), speed = B[1] === 1 ? 18000 : 12500;
     let x = m.x, y = m.y, vx = Math.cos(aim) * speed, vy = Math.sin(aim) * speed, travel = 0;
-    for (let age = dt; age <= 1 + dt / 2 && travel < range - 0.01; age += dt) {
+    for (let age = dt; age <= 8 + dt / 2; age += dt) {
       vy += grav * dt; const drag = 1 / (1 + 0.000014 * Math.hypot(vx, vy) * dt); vx *= drag; vy *= drag; vx += wind * 0.008 * dt;
-      let dist = Math.min(Math.hypot(vx, vy) * dt, range - travel); const a = Math.atan2(vy, vx);
+      let dist = Math.hypot(vx, vy) * dt; const a = Math.atan2(vy, vx);
       const wall = T.segmentHit(x, y, x + Math.cos(a) * dist, y + Math.sin(a) * dist); if (wall) dist *= wall.t;
       const steps = Math.max(1, Math.ceil(dist / 2)), sx = Math.cos(a) * dist / steps, sy = Math.sin(a) * dist / steps;
       for (let i = 0; i < steps; i++) {
@@ -620,7 +620,7 @@ class BallisticBullet extends Ent {
     this.vy+=g.gravity*dt;
     const drag=1/(1+.000014*Math.hypot(this.vx,this.vy)*dt);this.vx*=drag;this.vy*=drag;
     this.vx+=g.turn.wind*.008*dt;
-    let distance=Math.min(Math.hypot(this.vx,this.vy)*dt,this.range-this.travel);
+    let distance=Math.hypot(this.vx,this.vy)*dt;   // пуля летит, пока не попадёт или не покинет карту (range — только спад урона)
     const a=Math.atan2(this.vy,this.vx);
     const wall=g.terrain.segmentHit(this.x,this.y,this.x+Math.cos(a)*distance,this.y+Math.sin(a)*distance);
     if(wall)distance*=wall.t;
@@ -651,7 +651,7 @@ class BallisticBullet extends Ent {
       g.emit({t:'impact',x:R1(this.x),y:R1(this.y),material:wall.material});this.dead=true;
     }
     g.emit({t:'trace',x1:R1(x0),y1:R1(y0),x2:R1(this.x),y2:R1(this.y),k:this.kind});
-    if(this.travel>=this.range-.01||this.age>1)this.dead=true;
+    if(this.age>8)this.dead=true;
     this.a=a;
   }
 }
@@ -725,7 +725,7 @@ const FIRE = {
     let t = 0; g.emit({ t: 'charge', x: R1(s.x), y: R1(s.y - GUN_Y) });
     return { usage: { update(gg, dt) {
       t += dt; if (t < 0.45) return false;
-      const a = s.aim; const m = muzzle(s, a, 18); const dx = Math.cos(a), dy = Math.sin(a); const L = 2800;
+      const a = s.aim; const m = muzzle(s, a, 18); const dx = Math.cos(a), dy = Math.sin(a); const L = 7000;   // луч — через всю карту
       const T = gg.terrain; let segStart = -1; let endD = L;
       for (let d = 0; d <= L; d += 3) {
         const x = m.x + dx * d, y = m.y + dy * d;

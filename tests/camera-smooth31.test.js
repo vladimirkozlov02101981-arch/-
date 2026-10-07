@@ -42,7 +42,7 @@ test('A resize during or after full-map zoom rebases to the new map limits witho
  }
  const {Camera,sc,fx}=fixture(),cam=new Camera();Object.assign(cam,{inited:true,x:3200,y:942,z:2,tz:2,userZ:2,turnKey:'0:1:1'});
  cam.zoomAt(100,700,400,1440,900);for(let i=0;i<150;i++)cam.update(1/60,sc,fx,1440,900,null);
- cam.update(1/60,sc,fx,1440,700,null);assert.equal(cam.userZ,5);assert.equal(cam.tz,5);assert.equal(cam.z,5);
+ cam.update(1/60,sc,fx,1440,700,null);const zmax=cam.zoomLimits(700,1440)[1];assert.equal(cam.userZ,zmax);assert.equal(cam.tz,zmax);assert.equal(cam.z,zmax);
 });
 
 test('Resizing at every stage of full-map zoom cannot overshoot the map center with retained scale momentum',()=>{

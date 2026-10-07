@@ -58,7 +58,7 @@ for (const [id, names] of Object.entries(expected)) test('Selected ' + id + ' wa
   const f = fixture(), map = f.MAPS.find(m => m.id === id), assets = f.TexLib.mapAssets(map);
   assert.deepEqual(Array.from(assets.names).sort(), names.slice().sort());
   assert.equal(assets.panorama, id);
-  assert.deepEqual(Array.from(assets.surface).sort(), ['valley', 'castles'].includes(id) ? ['bush1', 'bush2', 'grass_valley'] : []);
+  assert.deepEqual(Array.from(assets.surface).sort(), ['valley', 'castles'].includes(id) ? ['bush1', 'bush2', 'grass_valley'] : id === 'alien' ? ['grass_alien'] : []);   /* версия 35: трава Alien — тоже родной слой ×4 */
   const ready = f.TexLib.loadForMap(id), again = f.TexLib.loadForMap(map);
   assert.equal(new Set(f.requests).size, f.requests.length);
   const required = Array.from(f.TexLib.commonNames()).concat(names).map(n => 'assets/tex/' + n + '.png')

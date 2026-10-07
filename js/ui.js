@@ -295,7 +295,22 @@ const UI = {
   },
   /** «без лимита» выключает поле секунд (у гостя настройки и так недоступны) */
   syncTurnInf() { $('o-turnTime').disabled = this.mode === 'guest' || $('o-turnInf').checked; },
+  /** на одном ПК выбирают, кто слева: «Слева — игрок 1 «…»» или «Слева — игрок 2 «…»»; другая команда сама встаёт справа.
+      Значения прежние: left — первая команда слева, right — первая справа (значит, вторая слева) */
+  syncSides() {
+    const sel = $('o-side'); if (!sel || !sel.options || sel.options.length < 3) return;
+    const label = sel.closest('.setting') && sel.closest('.setting').querySelector('.setting-label');
+    if (this.mode === 'hotseat') {
+      const n = i => (((this.teamsCfg || [])[i] || {}).name || '').trim();
+      sel.options[1].textContent = `Слева — игрок 1${n(0) ? ' «' + n(0) + '»' : ''}`; sel.options[2].textContent = `Слева — игрок 2${n(1) ? ' «' + n(1) + '»' : ''}`;
+      if (label) label.textContent = 'Кто слева'; sel.title = 'Выбранная команда встаёт слева, другая — справа автоматически';
+    } else {
+      sel.options[1].textContent = 'Левая'; sel.options[2].textContent = 'Правая';
+      if (label) label.textContent = 'Моя сторона'; sel.title = 'Расположение вашей команды на карте; не влияет на первый ход';
+    }
+  },
   syncFirstTurn() {
+    this.syncSides();
     const simultaneous = this.mode !== 'hotseat' && $('o-simul').value === '1';
     $('o-first').disabled = this.mode === 'guest' || simultaneous;
     const options = $('o-first').options;
@@ -382,7 +397,7 @@ const UI = {
       card.innerHTML = `<div class="tc-head"><canvas class="tc-preview" width="140" height="168"></canvas><div style="flex:1"><div class="tc-role"></div><input class="tc-name" maxlength="16"></div></div><div class="tc-colors"></div><div class="tc-hats"></div>`;
       card.querySelector('.tc-role').textContent = role;
       const inp = card.querySelector('.tc-name'); inp.value = t.name;
-      inp.addEventListener('input', () => { t.name = inp.value.slice(0, 16); this.app.onTeamEdited(i); });
+      inp.addEventListener('input', () => { t.name = inp.value.slice(0, 16); this.app.onTeamEdited(i); this.syncSides(); });
       const cols = card.querySelector('.tc-colors');
       for (const c of TEAM_COLORS) {
         const sw = document.createElement('div'); sw.className = 'swatch' + (c === t.color ? ' on' : ''); sw.style.background = c;

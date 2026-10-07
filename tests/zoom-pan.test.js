@@ -28,8 +28,8 @@ function finiteCamera(cam, sw, sh) {
   assert(cam.z > 0);
 }
 
-test('Zoom-out stops at the complete map, while the historical maximum remains unchanged', () => {
-  const { cam, sc } = fixture(), sw = 800, sh = 600, max = cam.baseZoom(sh, sw) * 4;
+test('Zoom-out stops at the complete map, while zoom-in stops at a reasonable 2.5x of the base scale', () => {
+  const { cam, sc } = fixture(), sw = 800, sh = 600, max = cam.baseZoom(sh, sw) * 2.5;
   cam.binoc = true;
   for (let i = 0; i < 7000; i++) cam.zoomAt(0.9, sw / 2, sh / 2, sw, sh);
   assert.equal(cam.userZ, Math.min(sw / sc.W, sh / sc.H)); for(let i=0;i<180;i++)cam.update(1/60,sc,{shake:0,focus:null},sw,sh,null); cam.clampTo(sc, sw, sh); finiteCamera(cam, sw, sh);

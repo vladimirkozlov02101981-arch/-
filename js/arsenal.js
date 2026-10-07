@@ -92,8 +92,8 @@ Object.assign(FIRE, {
       return t > .78 || !s.alive;
     } } };
   },
-  // РПГ: без гравитации и ветра, но со спиралью и потерей управления (как в TW3)
-  rpg(g,s,p) { shootProj(g,s,{aim:p.aim,pw:1},'rocket',1150,{grav:0,wind:0,r:3,spiral:true}); },
+  // РПГ: без гравитации и ветра, строго по прямой
+  rpg(g,s,p) { shootProj(g,s,{aim:p.aim,pw:1},'rocket',1150,{grav:0,wind:0,r:3}); },   // предсказуемо: строго по прямой, без спирали и потери управления
   // ботинок: пинок почти горизонтально, в сторону взгляда
   boot(g,s,p) {
     const dir=Math.cos(p.aim)>=0?1:-1, cx=s.x+dir*11, cy=s.y-12; let hit=false;

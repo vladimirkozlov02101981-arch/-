@@ -1,6 +1,6 @@
 """Native fourfold vegetation renders without replacing the original low assets.
 
-blender -b --python dev/blender/render_surface.py -- [grass_valley bush1 bush2]
+blender -b --python dev/blender/render_surface.py -- [grass_valley grass_alien bush1 bush2]
 """
 import importlib.util
 from pathlib import Path
@@ -29,6 +29,6 @@ def render_native(scene, name):
 source.render = render_native
 names = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else ['grass_valley', 'bush1', 'bush2']
 for name in names:
-    if name not in {'grass_valley', 'bush1', 'bush2'}:
+    if name not in {'grass_valley', 'grass_alien', 'bush1', 'bush2'}:
         raise ValueError('Unsupported surface sprite: ' + name)
     source.LIB[name]()

@@ -760,12 +760,12 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const seed = map.seed || 1;
   const colOff = new Float32Array(W), capN = new Float32Array(W), capS = new Float32Array(W);
   // рваный нижний край травяной шапки: стебли свисают на землю зубцами разной длины
-  const fringe = new Float32Array(W); for (let x = 0; x < W; x++) { const ph = (x + hash3(x >> 2, 0, seed) * 3) % 4, tip = 1 - Math.abs(ph - 2) / 2; fringe[x] = tip * tip * (G.cap.blades ? (theme.id === 'valley' || theme.id === 'castle' ? 1 + hash3(x >> 2, 1, seed) * 4 : 4 + hash3(x >> 2, 1, seed) * 11) : hash3(x >> 2, 1, seed) * 2.5); }
+  const fringe = new Float32Array(W); for (let x = 0; x < W; x++) { const ph = (x + hash3(x >> 2, 0, seed) * 3) % 4, tip = 1 - Math.abs(ph - 2) / 2; fringe[x] = tip * tip * (G.cap.blades ? (theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' ? 1 + hash3(x >> 2, 1, seed) * 4 : 4 + hash3(x >> 2, 1, seed) * 11) : hash3(x >> 2, 1, seed) * 2.5); }   /* у травы-текстуры бахрома короткая: длинные столбики при приближении — полосы */
   for (let x = 0; x < W; x++) { colOff[x] = fbm1(x / 420, seed + 5, 3) * 28; capN[x] = (fbm1(x / 55, seed + 7, 2) + 1) * 0.5; capS[x] = Math.abs(Math.sin(x * 0.2 + capN[x] * 9)); }
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, sod: theme.id === 'valley' || theme.id === 'castle', rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -956,7 +956,9 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
 }
 
 function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
-  const surface = theme.id === 'valley' || theme.id === 'castle' ? (T.surface = new TerrainSurface(T)) : null;
+  // растения в собственном слое: при приближении они перерисовываются в родном разрешении (TerrainSurface.replay), а не
+  // растягиваются из кадра 1:1 — у Alien столбики травы иначе превращались в полосы
+  const surface = theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' ? (T.surface = new TerrainSurface(T)) : null;
   let c = surface ? surface.recorder() : T.ctx;
   const gc = T.gctx, G = theme.ground; const rng = makeRng(seed ^ 0x1234567);
   const anchor = (x, y) => { if (surface) surface.anchor(x, y); };
@@ -974,7 +976,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       img = makeCanvas(gw, gh); const sx = img.getContext('2d');
       sx.filter = 'brightness(1.2) saturate(0.8)'; sx.drawImage(grassTex.canvas, 0, 0);
     }
-    if (surface) surface.sprite(img, G.tex.grass, meadow ? 'brightness(1.2) saturate(0.8)' : 'none');
+    if (surface) surface.sprite(img, G.tex.grass, meadow ? 'brightness(1.2) saturate(0.8)' : 'none');   // ×4 версия — assets/tex/surface/<имя>.png
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
       if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y)) continue;
@@ -1050,16 +1052,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
             if (gc) { gc.save(); gc.fillStyle = cols[1]; gc.globalAlpha = 0.35; gc.beginPath(); gc.arc((x + ex) / 2, (y + ey) / 2, clen * 0.45, 0, TAU); gc.fill(); gc.restore(); }   // свой контур слоя свечения: иначе кружки всех друз сливались в огромные залитые треугольники
           }
         } else {
-          const mw = R * 1.6, mh = R * 0.65;
-          const mossGrad = c.createRadialGradient(x, y - mh * 0.4, mh * 0.2, x, y - mh * 0.3, mw);
-          mossGrad.addColorStop(0, '#3ad0c0'); mossGrad.addColorStop(0.45, '#16706e'); mossGrad.addColorStop(1, '#0c3538');
-          c.fillStyle = mossGrad; c.beginPath(); c.ellipse(x, y + 1, mw, mh, 0, Math.PI, TAU); c.fill();
-          c.fillStyle = '#5ffff0';
-          for (let vi = 0; vi < 14; vi++) {
-            const vx = x + (rng() - 0.5) * mw * 1.7, vy = y - mh * Math.sqrt(Math.max(0, 1 - Math.pow((vx - x) / mw, 2))) + (rng() - 0.5) * 2;
-            c.beginPath(); c.arc(vx, vy, 1.1 + rng() * 0.8, 0, TAU); c.fill();
+          // как в эталоне: пышный пурпурный кустик-соцветие (объёмная крона с общим светом), по верху — мелкие светлые
+          // цветки; без плоского купола и без пятна свечения (светятся только кристаллы)
+          const low = blobs.map(b => ({ x: b.x, y: y - (y - b.y) * 0.62, r: b.r * 0.78 }));
+          foliage(c, low, G.cap.bushPal || ['#2a1450', '#5a2a9a', '#b058e0', '#ffb0ff']);
+          const tops = rng() < 0.5 ? ['#ffd0ff', '#f6a0ff'] : ['#d8f8ff', '#9ff4ff'];
+          for (let vi = 0; vi < 9 + ((rng() * 7) | 0); vi++) {
+            const b = low[(rng() * low.length) | 0], a = -Math.PI * (0.15 + rng() * 0.7), d = b.r * (0.55 + rng() * 0.35);
+            const fx = b.x + Math.cos(a) * d, fy = b.y + Math.sin(a) * d, rr = 0.9 + rng() * 0.9;
+            c.fillStyle = 'rgba(30,6,40,0.45)'; c.beginPath(); c.arc(fx + 0.4, fy + 0.5, rr, 0, TAU); c.fill();
+            c.fillStyle = tops[vi & 1]; c.beginPath(); c.arc(fx, fy, rr, 0, TAU); c.fill();
           }
-          if (gc) { gc.save(); gc.fillStyle = '#3ad0c0'; gc.globalAlpha = 0.28; gc.beginPath(); gc.ellipse(x, y - mh * 0.3, mw * 1.1, mh * 1.1, 0, 0, TAU); gc.fill(); gc.restore(); }
         }
       } else {
         const bs = !G.cap.bushPal && ['bush1', 'bush2'].map((n) => TexLib.data[n]).filter(Boolean);

@@ -75,8 +75,8 @@ class AISearch {
       // кислота проходит сквозь землю: достаточно, чтобы цель была на прямой недалеко
       if (dist < 650 && avail('acid')) { let sc = 0; const cx = Math.cos(a), cy = Math.sin(a); for (const o of g.soldiers) { if (!o.alive || o === s) continue; const rx = o.x - s.x, ry = o.y - 14 - (s.y - GUN_Y), along = rx * cx + ry * cy; if (along < 0 || along > 650 || Math.abs(rx * cy - ry * cx) > 14) continue; sc += o.team === this.team ? -25 : 15 + (o.hp <= 15 ? 40 : 0); } if (sc > 0) this.consider({ w: 'acid', aim: a, pw: 1, score: sc - 4 + vary() }); }
       if (clear && dist < 380 && avail('uzi')) this.consider({ w: 'uzi', aim: a, pw: 1, score: 30 + kb(30) - 6 + vary() });
-      // РПГ: прямой полёт — нужна чистая линия до цели; дальше ~900 px ракета теряет управление
-      if (avail('rpg') && dist < 900) { const hh = hitscan(g, m.x, m.y, a, 2600, s); if (hh.type === 'soldier' && hh.s.team !== this.team || Math.hypot((hh.x ?? 1e9) - ex, (hh.y ?? 1e9) - ey) < 30) this.consider({ w: 'rpg', aim: a, pw: 1, score: this.blastScore(ex, ey, BLAST.rocket.R, BLAST.rocket.D) - 6 + vary(), ix: ex }); }
+      // РПГ: строго прямой полёт — нужна чистая линия до цели
+      if (avail('rpg') && dist < 2400) { const hh = hitscan(g, m.x, m.y, a, 2600, s); if (hh.type === 'soldier' && hh.s.team !== this.team || Math.hypot((hh.x ?? 1e9) - ex, (hh.y ?? 1e9) - ey) < 30) this.consider({ w: 'rpg', aim: a, pw: 1, score: this.blastScore(ex, ey, BLAST.rocket.R, BLAST.rocket.D) - 6 + vary(), ix: ex }); }
       if (clear && dist < 600 && avail('revolver')) this.consider({ w: 'revolver', aim: a, pw: 1, score: 40 + kb(45) - 6 + vary() });
       if (clear && dist < 550 && avail('minigun')) this.consider({ w: 'minigun', aim: a, pw: 1, score: 34 + kb(34) - 6 + vary() });
       if (clear && dist < 520 && avail('tesla')) { const chain = this.enemies.filter(o => o !== e && Math.hypot(o.x - e.x, o.y - e.y) < 160).length; this.consider({ w: 'tesla', aim: a, pw: 1, score: 32 + 14 * chain + kb(32) - 6 + vary() }); }
