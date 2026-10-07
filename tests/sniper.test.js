@@ -44,7 +44,7 @@ test('Ctrl hides only the optic: mouse control remains active and Ctrl never cyc
   assert.equal(f.ctl.scopeOn, false); assert.equal(f.Input.pressed.ControlLeft, false);
   f.Input.mouse.x = 20; f.Input.mouse.y = 40; f.Input.mouse.dx = -230; f.Input.mouse.dy = -10; f.Input.mouse.moved = true; f.tick();
   angle(f.ctl.base, Math.atan2(-60, -80)); assert.equal(f.sent.some(c => c.c === 'weapon'), false);
-  assert.match(f.ctl.hint(f.sc, f.T), /по всей карте.*стабилизируется.*ЛКМ.*показать/);
+  assert.match(f.ctl.hint(f.sc, f.T), /по всей карте.*ЛКМ.*показать/);
 });
 
 test('Left click after keyboard aiming fires at its current mouse position, including hidden scope', () => {

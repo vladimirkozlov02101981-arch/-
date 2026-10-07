@@ -3,16 +3,18 @@
    Компьютерный противник: перебирает траектории (с учётом
    ветра и рельефа), оценивает урон и выбирает лучший ход
    ========================================================= */
+// pick — какая доля оценки лучшего хода ещё считается «хорошим ходом» для случайного выбора: чем сложнее компьютер,
+// тем ближе его выбор к самому выгодному ходу, но одинаковых ходов подряд нет ни на одном уровне
 const AI_LEVELS = {
-  easy: { aim: 0.1, pw: 0.1 },
-  normal: { aim: 0.035, pw: 0.035 },
-  hard: { aim: 0.01, pw: 0.01 },
+  easy: { aim: 0.1, pw: 0.1, pick: 0.45 },
+  normal: { aim: 0.035, pw: 0.035, pick: 0.62 },
+  hard: { aim: 0.01, pw: 0.01, pick: 0.78 },
 };
 function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
 
 class AISearch {
   constructor(g, s, team) {
-    this.g = g; this.s = s; this.team = team; this.tasks = []; this.i = 0; this.best = null; this.fallback = null; this.fbDist = Infinity;
+    this.g = g; this.s = s; this.team = team; this.tasks = []; this.i = 0; this.best = null; this.fallback = null; this.fbDist = Infinity; this.byW = new Map();
     this.enemies = g.soldiers.filter(o => o.alive && o.team !== team);
     let nd = Infinity; this.nearestDir = 1;
     for (const e of this.enemies) { const d = Math.abs(e.x - s.x); if (d < nd) { nd = d; this.nearestDir = e.x < s.x ? -1 : 1; } }
@@ -25,7 +27,10 @@ class AISearch {
     this.direct(avail); this.heal(avail);
   }
   heal(avail) { if (this.s.hp < 40 && avail('medkit')) this.consider({ w: 'medkit', aim: this.s.aim, pw: 1, score: 26 }); }
-  consider(c) { if (!this.best || c.score > this.best.score) this.best = c; }
+  consider(c) {
+    if (!this.best || c.score > this.best.score) this.best = c;
+    const o = this.byW.get(c.w); if (!o || c.score > o.score) this.byW.set(c.w, c);   // лучший ход каждым оружием — для выбора
+  }
   blastScore(x, y, R, D) {
     let sc = 0;
     for (const o of this.g.soldiers) {
@@ -96,7 +101,26 @@ class AISearch {
 }
 
 class AI {
-  constructor(g, team, level) { this.g = g; this.team = team; this.L = AI_LEVELS[level] || AI_LEVELS.normal; this.key = null; }
+  constructor(g, team, level) { this.g = g; this.team = team; this.L = AI_LEVELS[level] || AI_LEVELS.normal; this.key = null; this.recent = []; }
+  /** выбор хода. Раньше всегда брался ход с наибольшей оценкой, и в похожих положениях компьютер повторял одно и то же
+      (например, каждый бой начинал с рельсотрона, который бьёт сквозь землю). Теперь из хороших ходов (оценка не ниже доли
+      pick от лучшей) выбирается случайный, с весом по оценке; оружие прошлых ходов и редкое оружие в первых раундах (если
+      ход не решающий) получают поправку. Явно сильный ход (добивание, несколько врагов) остаётся самым вероятным */
+  choose(search) {
+    const g = this.g, team = g.teams[this.team], round = g.round || 1, opts = [];
+    for (const c of search.byW.values()) {
+      if (!(c.score > 0)) continue;
+      let v = c.score; const ammo = team && team.ammo ? team.ammo[c.w] : -1;
+      if (this.recent[0] === c.w) v *= 0.55; else if (this.recent.includes(c.w)) v *= 0.8;
+      if (ammo > 0 && ammo <= 1 && round <= 2 && c.score < 75) v *= 0.7;
+      opts.push({ c, v });
+    }
+    if (!opts.length) return search.best;
+    const top = Math.max(...opts.map(o => o.v)), floor = Math.max(6, top * this.L.pick), good = opts.filter(o => o.v >= floor);
+    let sum = 0; for (const o of good) { o.w = Math.pow(o.v - floor + 4, 1.6); sum += o.w; }
+    let r = Math.random() * sum; for (const o of good) { r -= o.w; if (r <= 0) return o.c; }
+    return good[good.length - 1].c;
+  }
   /** в одновременном режиме ИИ действует в ходе своей команды, не мешая ходу игрока */
   update(dt) { return this.g.simul ? this.g.inLane(this.team, () => this.update0(dt)) : this.update0(dt); }
   update0(dt) {
@@ -117,8 +141,9 @@ class AI {
         if (!this.search.run(160)) return;
         const best = this.search.best;
         if ((!best || best.score < 10) && !this.walked && T.walk > 60) { this.state = 'walk'; this.walkT = 0; this.walkDir = this.search.nearestDir; return; }
-        this.plan = best && best.score > 0 ? best : (this.search.fallback || best);
+        this.plan = best && best.score > 0 ? this.choose(this.search) : (this.search.fallback || best);
         if (!this.plan) { send({ c: 'skip' }); this.state = 'done'; return; }
+        this.recent.unshift(this.plan.w); this.recent.length = Math.min(this.recent.length, 3);
         this.state = 'select'; this.t = 0;
         break;
       }

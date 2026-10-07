@@ -106,16 +106,66 @@ function hitscan(g, x0, y0, ang, range, ignore) {
 const FAST_SHOT = { assault: 1200, revolver: 1500, magnum: 1700, uzi: 900, shotgun: 650, sniper: 2600, minigun: 900, tesla: 500, railgun: 2800, autocannon: 1500 };
 /** брошенное оружие, у которого после броска идёт фаза действия: в руках его уже нет */
 const THROWN_USE = new Set(['robot', 'tpgrenade']);
-/** куда попадут быстрые пули: первая земля, вода или боец на линии ствола (для камеры; работает и на сцене друга по сети).
-    null — пули уйдут в пустоту */
+/** зона попадания по бойцу — та же, что у Game.soldierAt (работает и на сцене друга по сети, где этого метода нет) */
+function soldierHitAt(sc, x, y, r, ignore) {
+  for (const o of sc.soldiers) {
+    if (!o || o.alive === false || o.gone || o === ignore) continue;
+    if (x < o.x - 7 - r || x > o.x + 7 + r || y < o.y - 40 - r || y > o.y + 1 + r) continue;
+    if (pointSegDist2(x, y, o.x, o.y - 4, o.x, o.y - 33) <= (5.5 + r) * (5.5 + r)) return o;
+  }
+  return null;
+}
+/** пули быстрого оружия: дальность и тип пули — те же, что в вызовах bullet(...) у FIRE */
+const BULLET_SPEC = { assault: [1200, 0], revolver: [1500, 0], magnum: [1700, 1], uzi: [900, 0], shotgun: [650, 0], sniper: [2600, 1], minigun: [900, 0] };
+/** куда попадёт выстрел быстрого оружия: первая земля, вода или боец на пути пули, луча или снаряда (для камеры; работает
+    и на сцене друга по сети). null — выстрел уйдёт в пустоту */
 function predictShot(sc, s, aim, id) {
   const R = FAST_SHOT[id]; if (!R || !s || !sc.terrain) return null;
-  const m = muzzle(s, aim, 10), dx = Math.cos(aim), dy = Math.sin(aim), pierce = id === 'railgun', T = sc.terrain;
+  const T = sc.terrain, B = BULLET_SPEC[id], dt = 1 / 60, grav = sc.gravity || 640, wind = (sc.turn && sc.turn.wind) || 0;
+  if (B) {
+    // путь пули шаг за шагом, как в BallisticBullet.update: скорость, снижение, сопротивление воздуха, ветер, дальность —
+    // камера показывает то место, куда пуля действительно попадёт, даже очень далеко
+    const range = B[0], m = muzzle(s, aim, 10), speed = B[1] === 1 ? 18000 : 12500;
+    let x = m.x, y = m.y, vx = Math.cos(aim) * speed, vy = Math.sin(aim) * speed, travel = 0;
+    for (let age = dt; age <= 1 + dt / 2 && travel < range - 0.01; age += dt) {
+      vy += grav * dt; const drag = 1 / (1 + 0.000014 * Math.hypot(vx, vy) * dt); vx *= drag; vy *= drag; vx += wind * 0.008 * dt;
+      let dist = Math.min(Math.hypot(vx, vy) * dt, range - travel); const a = Math.atan2(vy, vx);
+      const wall = T.segmentHit(x, y, x + Math.cos(a) * dist, y + Math.sin(a) * dist); if (wall) dist *= wall.t;
+      const steps = Math.max(1, Math.ceil(dist / 2)), sx = Math.cos(a) * dist / steps, sy = Math.sin(a) * dist / steps;
+      for (let i = 0; i < steps; i++) {
+        x += sx; y += sy; travel += dist / steps;
+        if (T.isSolid(x, y)) return { x, y };
+        const o = soldierHitAt(sc, x, y, 0, s); if (o) return { x: o.x, y: o.y - 18 };
+        if (y > sc.waterY) return { x, y: sc.waterY };
+        if (x < -300 || x > sc.W + 300 || y < -1500) return null;
+      }
+      if (wall) return { x: wall.x, y: wall.y };
+    }
+    return null;
+  }
+  if (id === 'autocannon') {
+    // снаряд автопушки летит по небольшой дуге (как Proj с grav 0.32, без ветра)
+    const m = muzzle(s, aim, 15), e = { x: m.x, y: m.y, vx: Math.cos(aim) * 1250, vy: Math.sin(aim) * 1250 };
+    for (let t = 0; t < 4; t += dt) {
+      e.vy += grav * 0.32 * dt; const drag = 1 / (1 + Math.hypot(e.vx, e.vy) * 0.000012 * dt); e.vx *= drag; e.vy *= drag;
+      const n = Math.max(1, Math.ceil(Math.hypot(e.vx, e.vy) * dt / 2.5)), sx = e.vx * dt / n, sy = e.vy * dt / n;
+      for (let i = 0; i < n; i++) {
+        e.x += sx; e.y += sy;
+        if (T.isSolid(e.x, e.y)) return { x: e.x, y: e.y };
+        const o = soldierHitAt(sc, e.x, e.y, 3, t < 0.3 ? s : null); if (o && o !== s) return { x: o.x, y: o.y - 18 };
+        if (e.y > sc.waterY) return { x: e.x, y: sc.waterY };
+      }
+      if (e.x < -900 || e.x > sc.W + 900 || e.y > sc.H + 300) return null;
+    }
+    return null;
+  }
+  // тесла и рельсотрон: прямой луч, первое, чего он касается
+  const m = muzzle(s, aim, id === 'tesla' ? 22 : 18), dx = Math.cos(aim), dy = Math.sin(aim);
   for (let d = 0; d <= R; d += 3) {
     const x = m.x + dx * d, y = m.y + dy * d;
-    if (y > sc.waterY) return { x, y };
-    if (!pierce && T.isSolid(x, y)) return { x, y };
-    for (const o of sc.soldiers) if (o !== s && o.alive !== false && !o.gone && Math.abs(o.x - x) < 8 && y > o.y - 30 && y < o.y + 2) return { x: o.x, y: o.y - 15 };
+    if (y > sc.waterY) return { x, y: sc.waterY };
+    if (T.isSolid(x, y)) return { x, y };
+    const o = soldierHitAt(sc, x, y, 2, s); if (o) return { x: o.x, y: o.y - 18 };
     if (x < -300 || x > sc.W + 300 || y < -1500) break;
   }
   return null;
@@ -632,7 +682,7 @@ const FIRE = {
   drill(g, s, p) { shootProj(g, s, p, 'drill', 900, { wind: 0, r: 3 }); },
   salvo(g, s, p) {
     let n = 0, t = 0;
-    return { usage: { update(gg, dt) { t += dt; while (n < 5 && t >= n * 0.13) { const pp = { aim: p.aim + rand(-0.05, 0.05), pw: p.pw * rand(0.95, 1.03) }; shootProj(gg, s, pp, 'mini', 900, { wind: 0.7, r: 2 }); n++; } return n >= 5 && t > 0.7; } } };
+    return { usage: { update(gg, dt) { t += dt; while (n < 5 && t >= n * 0.13) { const pp = { aim: s.aim + rand(-0.05, 0.05), pw: p.pw * rand(0.95, 1.03) }; shootProj(gg, s, pp, 'mini', 900, { wind: 0.7, r: 2 }); n++; } return n >= 5 && t > 0.7; } } };   // пусковую ведут во время залпа
   },
   grenade(g, s, p) { throwObj(g, s, p, 'grenade', 3, 780); },
   cluster(g, s, p) { throwObj(g, s, p, 'cluster', 3, 780); },

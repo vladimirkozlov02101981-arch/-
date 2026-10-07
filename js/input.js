@@ -325,7 +325,7 @@ const Input = {
         if (typeof Sfx !== 'undefined') Sfx.toggle();
         if (typeof UI !== 'undefined') UI.updateSoundIcon();
         if (typeof App !== 'undefined') App.soundChanged();
-        soundBtn.textContent = (typeof Sfx !== 'undefined' && Sfx.enabled) ? '🔊' : '🔇';
+        if (typeof UI === 'undefined') soundBtn.textContent = (typeof Sfx !== 'undefined' && Sfx.enabled) ? 'ЗВУК' : 'ТИХО';   // значок ставит UI.updateSoundIcon
       }, { passive: false });
     }
 
@@ -479,9 +479,10 @@ class LocalController {
       if (T.weapon === 'jetpack') return `${key('up')} / ${key('jump')} — тяга, ${walk} — в стороны, ЛКМ — выключить`;
       if (T.weapon === 'airstrike') return `ЛКМ / ${fire} — сброс с упреждением: бомбы летят вперёд. Не успели — сброс у края экрана`;
       if (T.weapon === 'orbital') return `${walk} — ведите луч к цели`;
+      if (typeof STEER_FIRE !== 'undefined' && STEER_FIRE.has(T.weapon)) return `Огонь! Мышь или ${key('aimUp')} / ${key('aimDown')} — ведите ствол вверх-вниз`;
       return 'Огонь!';
     }
-    if (W.id === 'sniper') return `Мышь — прицел по всей карте; остановите мышь — прицел стабилизируется. ЛКМ или ${fire} — выстрел. ${key('precise')} — задержать дыхание. ${key('optic')} — ${this.scopeOn ? 'убрать' : 'показать'} оптику`;
+    if (W.id === 'sniper') return `Мышь — прицел по всей карте. ЛКМ или ${fire} — выстрел. ${key('precise')} — точнее клавишами. ${key('optic')} — ${this.scopeOn ? 'убрать' : 'показать'} оптику`;
     if (W.id === 'airstrike') return `Кликните по цели: самолёт пройдёт над ней, сброс — ЛКМ или ${fire}`;
     if (W.id === 'lightning') return 'Кликните: туча уйдёт по ветру и ударит в самую высокую точку';
     if (W.id === 'orbital') return `Кликните: спутник наведётся с ошибкой, луч доводите клавишами ${walk}`;
@@ -527,22 +528,40 @@ class LocalController {
       попадут, а потом выстрел. Если и свой боец, и место попадания уже в кадре — камера стоит, выстрел сразу */
   fireFast(sc, cam, sw, sh, s, cmd, id) {
     const p = predictShot(sc, s, cmd.aim, id);
-    const hasPan = this.needsCenter(sc, cam, s, sw, sh);
-    if (!hasPan && (!p || (cam.sees(p.x, p.y, sw, sh) && cam.sees(s.x, s.y - 20, sw, sh)))) { this.send(cmd); return; }
-    if (hasPan) { cam.manualActive = false; cam.offsetX = 0; cam.offsetY = 0; }
-    if (!p) { this.centerThenFire(cam, s, sh, cmd); return; }
+    // место попадания уже видно (в кадре или через оптику снайперки) — камера не двигается и не центруется, выстрел сразу
+    if (p && (cam.hitVisible ? cam.hitVisible(p.x, p.y, sw, sh) : cam.sees(p.x, p.y, sw, sh, 0.05))) { this.fireHere(sc, cam, s, sw, sh, cmd); return; }
+    // пули уйдут в пустоту: боец в кадре — выстрел сразу, иначе сначала обзор к бойцу
+    if (!p) { if (this.needsCenter(sc, cam, s, sw, sh)) this.centerThenFire(cam, s, sh, cmd); else this.fireHere(sc, cam, s, sw, sh, cmd); return; }
+    // попадание за кадром: обзор плавно встаёт точно по центру первого попадания, выстрел — когда камера остановилась
+    cam.manualActive = false; cam.offsetX = 0; cam.offsetY = 0;
     this.send({ c: 'look', x: Math.round(p.x), y: Math.round(p.y) });
-    cam.shot = Object.assign(cam.shotFrame(s.x, s.y - 20, p.x, p.y, sw, sh), { t: 2.2, k: 'shot' });   // свой экран не ждёт ответа хоста
-    this.pendingShot = { cmd, t: 0, f: cam.shot, p, fromPan: hasPan };
+    cam.shot = { x: p.x, y: p.y, t: 2.2, k: 'shot' };   // свой экран не ждёт ответа хоста
+    this.pendingShot = { cmd, t: 0, f: cam.shot, p, fromPan: true };
   }
   /** обзор уведён стрелками от бойца */
   camPanned(cam) { return !!(cam.manualActive || Math.abs(cam.offsetX || 0) > 3 || Math.abs(cam.offsetY || 0) > 3); }
   /** перед выстрелом обзор надо сначала вернуть: его увели стрелками или он стоит там, куда его увели оптикой/краем экрана
       (дальше 24 px от обычного кадра у бойца) */
   needsCenter(sc, cam, s, sw, sh) {
+    if (this.bodyInView(cam, s, sw, sh)) return false;   // боец и так целиком в кадре: обзор не трогаем
     if (this.camPanned(cam)) return true;
     if (!cam.hold || !cam.homeOf) return false;
     const h = cam.homeOf(s, sc, sw, sh); return Math.hypot(cam.x - h.x, cam.y - h.y) * cam.z > 24;
+  }
+  /** весь боец в кадре (с запасом в несколько пикселей от краёв экрана) */
+  bodyInView(cam, s, sw, sh, m = 6) {
+    if (!cam || !cam.toScreen || !s) return false;
+    const [x0, y0] = cam.toScreen(s.x - 12, s.y - 40, sw, sh), [x1, y1] = cam.toScreen(s.x + 12, s.y + 2, sw, sh);
+    return x0 >= m && y0 >= m && x1 <= sw - m && y1 <= sh - m;
+  }
+  /** выстрел без перелёта камеры. Если обзор был сдвинут (стрелками, оптикой, краем экрана), кадр остаётся на месте и после
+      выстрела: камера не возвращается к бойцу, пока он сам не пошёл, его не отбросило или камере не нужно вести снаряд */
+  fireHere(sc, cam, s, sw, sh, cmd) {
+    if (cam && cam.homeOf && sc) {
+      const h = cam.homeOf(s, sc, sw, sh);
+      cam.postHold = Math.hypot(cam.x - h.x, cam.y - h.y) * cam.z > 24 ? { x: cam.x, y: cam.y, k: 'ph', key: this.key } : null;
+    }
+    this.send(cmd);
   }
   /** после стрелок: сначала обзор возвращается к бойцу (тем же плавным перелётом, что и к месту попадания), выстрел — когда
       камера остановилась */
@@ -576,6 +595,9 @@ class LocalController {
     if (T.target) this.pendingTarget = false;
     const W = WEAPON[T.weapon] || WEAPON.bazooka; const phase = T.phase;
     const canAct = phase === 'aim' && !!WEAPON[T.weapon]; const jet = phase === 'use' && T.weapon === 'jetpack';
+    // очередь, струя, залп: пока оружие стреляет, ствол ведётся вверх-вниз мышью или клавишами прицела (развернуться назад
+    // нельзя). Разброс и отдачу каждой пули по-прежнему добавляет сама игра — к тому направлению, куда сейчас смотрит ствол
+    const steerFire = phase === 'use' && typeof STEER_FIRE !== 'undefined' && STEER_FIRE.has(T.weapon);
     const canMove = phase === 'aim' || phase === 'retreat' || jet;
     // клавиши — по таблице Keys (настраиваются; по физической клавише, раскладка не важна)
     const left = Keys.down('left'), right = Keys.down('right');
@@ -598,6 +620,18 @@ class LocalController {
     }
     if (!sniperScope) { this.scopeOn = false; this.scopePoint = null; this.swayAmp = this.scopeSway = 0; }
     this.scopeWeapon = sniperScope ? 'sniper' : null;
+    // боец идёт со снайперкой: линза идёт вместе с ним (направление ствола не меняется), а обзор следует за бойцом
+    // (render.js). Если вместе с бойцом линза в кадр не помещается, она возвращается на исходную позицию у бойца по стволу
+    const scopeWalk = sniperScope && !!this.scopePoint && SCOPE_WALK.has(s.st);
+    if (scopeWalk && !newTurn && this.scopeSx !== undefined) {
+      this.scopePoint.x += s.x - this.scopeSx; this.scopePoint.y += s.y - this.scopeSy;
+      const z = cam.z || 1, pad = (Math.round(Math.min(sw, sh) * 0.16) + 16) / z, m = 70 / z;
+      if (!this.scopeWalking && (Math.abs(this.scopePoint.x - s.x) > sw / z - pad - m || Math.abs(this.scopePoint.y - (s.y - 20)) > sh / z - pad - m)) {
+        const d = Math.min(sw, sh) * 0.24 / z; this.scopePoint.x = s.x + Math.cos(this.base) * d; this.scopePoint.y = s.y - GUN_Y + Math.sin(this.base) * d;
+      }
+      this.clampScope(sc);
+    }
+    this.scopeWalking = scopeWalk; this.scopeSx = s.x; this.scopeSy = s.y;
     if (sniperScope && Keys.hit('optic') && T.shots === 0 && !this.charging) { this.scopeOn = !this.scopeOn; Sfx.play('select'); Keys.eat('optic'); }
     if (sniperScope && this.scopeOn && this.scopePoint) this.scopeLast = { x: this.scopePoint.x, y: this.scopePoint.y, aim: this.aim };
     else if (!(T.weapon === 'sniper' && this.scopeAfter > 0)) this.scopeLast = null;
@@ -605,7 +639,7 @@ class LocalController {
     const previousAimMode = this.aimMode;
     if (Input.mouse.moved || (sniperScope && Input.mouse.clicked[0])) this.aimMode = 'mouse';
     if (aimUp || aimDown) this.aimMode = 'keys';
-    const mouseAim = canAct && this.aimMode === 'mouse';
+    const mouseAim = (canAct || steerFire) && this.aimMode === 'mouse';
     if (sniperScope && !this.binoc) {
       if (mouseAim) {
         if ((scopeStart && !newTurn) || (Input.mouse.clicked[0] && previousAimMode === 'keys')) {
@@ -623,11 +657,11 @@ class LocalController {
       if (!this.aimPoint || this.aimWeapon !== T.weapon || Input.mouse.moved) this.aimPoint = { x: w[0], y: w[1] };
       this.mouseW.x = this.aimPoint.x; this.mouseW.y = this.aimPoint.y;
     }
-    this.aimWeapon = canAct ? T.weapon : null;
+    this.aimWeapon = canAct || steerFire ? T.weapon : null;
     if (mouseAim && (!this.binoc || pickPoint)) this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
     else {
       let face = Math.cos(this.base) >= 0 ? 1 : -1;
-      if (left !== right && !jet) face = left ? -1 : 1;
+      if (left !== right && !jet && !steerFire) face = left ? -1 : 1;
       let elev = angNorm(face > 0 ? -this.base : this.base - Math.PI);
       const sp = precise ? 0.35 : 1.3;
       if (aimUp) elev += dt * sp; if (aimDown) elev -= dt * sp;
@@ -640,33 +674,22 @@ class LocalController {
       this.clampScope(sc); this.mouseW.x = this.scopePoint.x; this.mouseW.y = this.scopePoint.y;
       this.base = Math.atan2(this.mouseW.y - (s.y - GUN_Y), this.mouseW.x - s.x);
     }
-    // лёгкое колебание только при наведении; остановка мыши быстро и полностью фиксирует оптику
-    let sway = 0;
+    // ни одно оружие не колеблется при прицеливании (ни оптика, ни раненая рука): ствол смотрит ровно туда, куда наведён
+    if (steerFire) {
+      // во время очереди — только вверх-вниз в ту сторону, куда боец стрелял
+      const sk = key + ':' + T.shots; if (this.steerKey !== sk) { this.steerKey = sk; this.steerFace = Math.cos(s.aim) >= 0 ? 1 : -1; }
+      const f = this.steerFace, elev = clamp(angNorm(f > 0 ? -this.base : this.base - Math.PI), -1.55, 1.55);
+      this.base = f > 0 ? -elev : Math.PI + elev;
+    }
     const edgeMove = sniperScope && !Input.locked && Input.mouse.inside && !this.binoc && cam.edgeDir && cam.edgeDir(Input.mouse, sw, sh);
     const aiming = !this.binoc && (Input.mouse.moved || aimUp || aimDown || edgeMove);
     if (sniperScope) {
-      this.swayT = (this.swayT || 0) + dt;
       if (precise && this.breath > 0) this.breath = Math.max(0, this.breath - dt);
       else if (!precise) this.breath = Math.min(2.5, this.breath + dt * 0.7);
       this.scopeIdle = aiming ? 0 : this.scopeIdle + dt;
-      const amp = aiming ? (precise && this.breath > 0 ? 0.0005 : this.breath <= 0.05 ? 0.004 : 0.003) : 0;
-      this.swayAmp = approach(this.swayAmp || 0, amp, 26, dt);
-      if (this.scopeIdle >= 0.22) this.swayAmp = 0;
-      sway = this.swayAmp * (Math.sin(this.swayT * 1.4) * 0.8 + Math.sin(this.swayT * 3.1 + 1.3) * 0.45);
     }
-    // раненая рука сохраняет влияние на другое оружие; оптика также успокаивается после остановки наведения
-    const aw = s.wl ? Math.max(s.wl[2], s.wl[3]) : 0;
-    if (aw && canAct) {
-      this.woundT = (this.woundT || 0) + dt;
-      const k = sniperScope ? (aiming ? 0.12 : Math.exp(-this.scopeIdle * 26) * 0.12) : 1;
-      sway += [0, 0.012, 0.03, 0.055][aw] * k * (Math.sin(this.woundT * 2.3) * 0.7 + Math.sin(this.woundT * 5.1 + 0.7) * 0.4);
-    }
-    if (sniperScope) {
-      const pixels = Math.max(1, Math.hypot(this.mouseW.x - s.x, this.mouseW.y - (s.y - GUN_Y)) * (cam.z || 1));
-      const limit = (precise && this.breath > 0 ? 0.45 : 1.5) / pixels;
-      sway = this.scopeIdle >= 0.22 ? 0 : clamp(sway, -limit, limit); this.scopeSway = sway;
-    }
-    this.aim = this.base + sway;
+    this.swayAmp = this.scopeSway = 0;
+    this.aim = this.base;
     // выстрел ждёт, пока обзор дойдёт до кадра выстрела (к месту попадания за кадром или обратно к бойцу после стрелок):
     // один и тот же плавный перелёт, выстрел — когда камера закончила его и стоит; ствол всё это время смотрит туда же
     if (this.pendingShot) {
@@ -719,7 +742,7 @@ class LocalController {
             if (!held) {
               const cmd = { c: 'fire', aim: this.aim, pw: Math.max(0.06, this.power) };
               if (this.needsCenter(sc, cam, s, sw, sh)) this.centerThenFire(cam, s, sh, cmd);
-              else this.send(cmd);
+              else this.fireHere(sc, cam, s, sw, sh, cmd);
               this.cancelCharge();
             }
           }
@@ -730,7 +753,7 @@ class LocalController {
             const cmd = { c: 'fire', aim: this.aim, pw: 1 };
             if (typeof FAST_SHOT !== 'undefined' && FAST_SHOT[W.id] && cam.sees) this.fireFast(sc, cam, sw, sh, s, cmd, W.id);
             else if (this.needsCenter(sc, cam, s, sw, sh)) this.centerThenFire(cam, s, sh, cmd);
-            else this.send(cmd);
+            else this.fireHere(sc, cam, s, sw, sh, cmd);
           }
           break;
         case 'target': case 'place':

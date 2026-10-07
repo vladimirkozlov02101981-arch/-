@@ -18,6 +18,7 @@ class FX {
     this.lights = []; this.texts = []; this.banners = []; this.traces = []; this.bolts = [];
     this.shake = 0; this.flash = 0; this.flashCol = '#ffffff'; this.focus = null; this.trailAcc = new Map(); this.frameLights = [];
     this.weather = sc ? new Weather(sc.theme.weather) : null; this.propAcc = 0; this.t = 0; this.lightCv = null;
+    this.hitWatch = null; this.firstHit = null;   // первое попадание выстрела — только в этом бою (часы эффектов начинаются заново)
   }
   /** предмет на карте до конца боя: 0 осколок, 1 пуля в преграде, 2 пятно крови, 3 гильза, 4 обломок */
   litterAdd(k, x, y, rot = 0, col, s = 2) { if (this.litter.length > 9000) this.litter.splice(0, 500); this.litter.push({ k, x, y, rot, col, s, vy: 0, settleMask: this.P.settleMask || 0 }); }
@@ -80,6 +81,14 @@ class FX {
   }
   handleEvent(ev, sc, isHost) {
     const P = this.P; this.evL = ev.L;   // чей ход (одновременные ходы): обзор не бросается к чужим взрывам, если игрок так выбрал
+    // первое попадание выстрела быстрыми пулями (лучом, снарядом автопушки): если оно за кадром, обзор встанет точно по его
+    // центру (Camera.update). Очередь — одно попадание: до следующего выстрела через 1,6 с новых не ждём
+    if (ev.t === 'shot') { if (!this.hitWatch && !(this.firstHit && this.t >= this.firstHit.time && this.t - this.firstHit.time < 1.6)) this.hitWatch = { time: this.t, L: ev.L }; }
+    else if (this.hitWatch && (ev.t === 'impact' || ev.t === 'dmg' || ev.t === 'boom' || ev.t === 'splash') && Number.isFinite(ev.x)) {
+      this.firstHit = { x: ev.x, y: ev.t === 'dmg' ? ev.y - 18 : ev.t === 'splash' ? sc.waterY : ev.y, time: this.t, L: ev.L, n: (this.firstHit ? this.firstHit.n : 0) + 1 };
+      this.hitWatch = null;
+    }
+    if (this.hitWatch && this.t - this.hitWatch.time > 1.5) this.hitWatch = null;
     switch (ev.t) {
       case 'footstep': Sfx.play('footstep',ev); break;
       case 'impact':

@@ -136,4 +136,6 @@ function textOutlined(ctx, text, x, y, color = '#fff', outline = 'rgba(0,0,0,0.8
   ctx.fillStyle = color; ctx.fillText(text, x, y);
 }
 const FONT_TITLE = "'Russo One', 'Arial Black', sans-serif";
+/** состояния бойца в движении: со снайперкой обзор следует за ним, а линза идёт вместе с ним */
+const SCOPE_WALK = new Set(['walk', 'climb', 'air', 'jet', 'fly']);
 const FONT_UI = "'Rubik', 'Segoe UI', sans-serif";

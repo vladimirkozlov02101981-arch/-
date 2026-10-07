@@ -13,7 +13,7 @@ const WEAPONS = [
   { id: 'uzi', name: 'Узи', cat: 2, ammo: 2, mode: 'instant', desc: 'Очередь из десяти пуль с заметным разбросом. Ствол можно вести во время стрельбы; лучше всего вблизи.' },
   { id: 'acid', name: 'Кислотомёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Ближний бой: струя бьёт лишь на расстояние около 28 м. Кислота летит почти прямо, прожигает землю и стены и задевает всех на пути — по 25 единиц урона. Струю можно направлять, как струю из шланга; в конце она опадает.' },
   { id: 'plasma', name: 'Плазменная пушка', cat: 0, ammo: 3, mode: 'charge', desc: 'Энергетический шар отскакивает от стен и взрывается при касании бойца или через 3 секунды.' },
-  { id: 'autocannon', name: 'Автопушка', cat: 0, ammo: 2, mode: 'instant', desc: 'Три скоростных разрывных снаряда: летят по небольшой дуге, каждый взрывается отдельно.' },
+  { id: 'autocannon', name: 'Автопушка', cat: 0, ammo: 2, mode: 'instant', desc: 'Три скоростных разрывных снаряда: летят по небольшой дуге, каждый взрывается отдельно. Ствол можно вести во время стрельбы.' },
   { id: 'tesla', name: 'Тесла-карабин', cat: 2, ammo: 2, mode: 'instant', desc: 'Направленный разряд наносит цели 32 единицы урона, затем перескакивает ещё на двух соседей. Сквозь стены не бьёт.' },
   { id: 'repulsor', name: 'Импульсная пушка', cat: 2, ammo: 2, mode: 'instant', desc: 'Конус ударной волны: отбрасывает противников вблизи и не разрушает землю.' },
   { id: 'rpg', name: 'РПГ', cat: 0, ammo: 3, mode: 'instant', desc: 'Ракета летит прямо, ветер её не сносит, но она закручивается по спирали и примерно через секунду теряет управление. Взрыв: до 70 единиц урона плюс осколки; урон плавно спадает к краю зоны осколков.' },
@@ -21,17 +21,17 @@ const WEAPONS = [
   { id: 'homing', name: 'Самонаводка', cat: 0, ammo: 2, mode: 'tcharge', desc: 'Кликните по цели и стреляйте. Головка захватывает цель с ошибкой и поворачивает плавно — за угол не залетит.' },
   { id: 'mortar', name: 'Миномёт', cat: 0, ammo: 3, mode: 'charge', desc: 'Стреляет очень далеко. Мина отскакивает от стен и потолков и взрывается, коснувшись пола. Радиус как у гранаты, урон чуть выше.' },
   { id: 'drill', name: 'Бур-ракета', cat: 0, ammo: 2, mode: 'charge', desc: 'Вгрызается в землю и взрывается глубоко внутри.' },
-  { id: 'salvo', name: 'Ракетный залп', cat: 0, ammo: 1, mode: 'charge', desc: 'Пять ракет подряд с небольшим разбросом.' },
+  { id: 'salvo', name: 'Ракетный залп', cat: 0, ammo: 1, mode: 'charge', desc: 'Пять ракет подряд с небольшим разбросом. Пока идёт залп, пусковую можно вести вверх-вниз.' },
   { id: 'grenade', name: 'Граната', cat: 1, ammo: -1, mode: 'charge', desc: 'Отскакивает от стен и взрывается через 3 секунды: до 60 единиц урона взрывом плюс много осколков; урон плавно спадает с расстоянием. Подкрутка вперёд или назад: после удара граната катится дальше или отскакивает назад.' },
   { id: 'cluster', name: 'Кассетная граната', cat: 1, ammo: 3, mode: 'charge', desc: 'Взрывается и разбрасывает пять мини-бомб.' },
   { id: 'sticky', name: 'Липучка', cat: 1, ammo: 2, mode: 'charge', desc: 'Прилипает к земле или к бойцу и взрывается через 2,5 секунды.' },
   { id: 'molotov', name: 'Коктейль Молотова', cat: 1, ammo: 2, mode: 'charge', desc: 'Разбивается и заливает всё вокруг огнём.' },
   { id: 'blackhole', name: 'Чёрная дыра', cat: 1, ammo: 1, mode: 'charge', desc: 'Открывает сингулярность, которая затягивает бойцов и пожирает землю.' },
   { id: 'shotgun', name: 'Дробовик', cat: 2, ammo: -1, mode: 'instant', shots: 2, desc: 'Два выстрела за ход. Дробь сильно бьёт вблизи.' },
-  { id: 'sniper', name: 'Снайперка', cat: 2, ammo: 3, mode: 'instant', desc: 'Дальний выстрел: урон — 45, при попадании в голову — 60. Оптику можно вести мышью по всей карте. Во время наведения есть небольшое колебание; остановите мышь — прицел быстро стабилизируется.' },
+  { id: 'sniper', name: 'Снайперка', cat: 2, ammo: 3, mode: 'instant', desc: 'Дальний выстрел: урон — 45, при попадании в голову — 60. Оптику можно вести мышью по всей карте; прицел не колеблется.' },
   { id: 'minigun', name: 'Миниган', cat: 2, ammo: 2, mode: 'instant', desc: 'Шквал пуль. Прицел можно вести во время стрельбы.' },
-  { id: 'flamer', name: 'Огнемёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Струя огня на ближней дистанции. Поджигает землю.' },
-  { id: 'railgun', name: 'Рельсотрон', cat: 2, ammo: 1, mode: 'instant', desc: 'Луч пробивает землю и всех бойцов на своём пути.' },
+  { id: 'flamer', name: 'Огнемёт', cat: 2, ammo: 2, mode: 'instant', desc: 'Струя огня на ближней дистанции. Поджигает землю. Струю можно вести вверх-вниз.' },
+  { id: 'railgun', name: 'Рельсотрон', cat: 2, ammo: 1, mode: 'instant', desc: 'Луч пробивает землю и всех бойцов на своём пути. Пока рельсотрон заряжается (0,45 с), ствол ещё можно довести.' },
   { id: 'dynamite', name: 'Динамит', cat: 3, ammo: 2, mode: 'drop', desc: 'Бросьте под ноги и бегите: мощный взрыв через 4 секунды.' },
   { id: 'mine', name: 'Мина', cat: 3, ammo: 3, mode: 'drop', desc: 'Взводится за 2 секунды и срабатывает, если кто-то подойдёт.' },
   { id: 'robot', name: 'Робо-бомба', cat: 3, ammo: 1, mode: 'drop', desc: 'Шагает вперёд и сама перепрыгивает стенки. Клавиша прыжка — прыжок через своих бойцов и препятствия. Взрывается по повторному нажатию выстрела, при встрече с бойцом или у преграды, которую не может перепрыгнуть; таймера нет.' },
@@ -181,17 +181,23 @@ function spriteBounds(spr) {
   for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (d[(y * W + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   return (spr.bounds = x1 < 0 ? [0, 0, W, H] : [x0, y0, x1 - x0 + 2, y1 - y0 + 2]);
 }
+/** оружие, которое стреляет какое-то время (очередь, струя, залп): пока оно стреляет, ствол ведётся вверх-вниз; разброс прежний */
+const STEER_FIRE = new Set(['assault', 'uzi', 'minigun', 'flamer', 'acid', 'railgun', 'autocannon', 'salvo']);
+/** удары по точке (самолёт, молния, луч, ракета, телепорт): в руках у них пульт, поэтому иконка показывает сам удар */
+const ICON_ABILITY = new Set(['airstrike', 'lightning', 'orbital', 'nuke', 'teleport']);
 function weaponIcon(id, size = 44) {
-  const key = id + size; if (_iconCache.has(key)) return _iconCache.get(key);
-  const cv = makeCanvas(size, size); const c = cv.getContext('2d');
   const spr = typeof TexLib !== 'undefined' && HELD_SPRITE[id] && TexLib.data[HELD_SPRITE[id]];
-  const physicalGun = ['assault', 'revolver', 'magnum', 'uzi', 'shotgun', 'sniper', 'minigun', 'rpg', 'bazooka', 'homing', 'mortar', 'drill', 'salvo', 'plasma', 'tesla', 'repulsor', 'railgun'];
-  if (spr && spr.d && physicalGun.includes(id)) {   // узнаваемый силуэт оружия, без обрезанных краёв
-    const [bx, by, bw, bh] = spriteBounds(spr), angle = bw > bh * 1.6 ? -0.22 : 0;
+  const real = !!(spr && spr.d && !ICON_ABILITY.has(id));
+  const key = id + size + (real ? 'r' : 'v'); if (_iconCache.has(key)) return _iconCache.get(key);
+  const cv = makeCanvas(size, size); const c = cv.getContext('2d');
+  if (real) {   // единый вид: сам предмет (рендер Blender), вписан в плитку, длинное оружие чуть наклонено, мягкая тень
+    const [bx, by, bw, bh] = spriteBounds(spr), angle = bw > bh * 1.6 ? -0.24 : 0;
     const rw = bw * Math.cos(angle) + bh * Math.abs(Math.sin(angle)), rh = bh * Math.cos(angle) + bw * Math.abs(Math.sin(angle));
-    const k = Math.min(size * 0.85 / rw, size * 0.85 / rh);
-    c.translate(size / 2, size / 2); c.rotate(angle); c.imageSmoothingQuality = 'high';
-    c.shadowColor = '#dbe8e5'; c.shadowBlur = size / 44;
+    const k = Math.min(size * 0.94 / rw, size * 0.86 / rh);
+    c.translate(size / 2, size / 2 + size * 0.02); c.rotate(angle); c.imageSmoothingQuality = 'high';
+    // тёмный металл на тёмной плитке: мягкая светлая обводка и чуть больше света — силуэт читается, цвета прежние
+    c.shadowColor = 'rgba(205,220,240,0.42)'; c.shadowBlur = size / 14;
+    if ('filter' in c) c.filter = 'brightness(1.16) contrast(1.05)';
     c.drawImage(spr.canvas, bx, by, bw, bh, -bw * k / 2, -bh * k / 2, bw * k, bh * k);
     _iconCache.set(key, cv); return cv;
   }
@@ -236,21 +242,69 @@ function weaponIcon(id, size = 44) {
       c.rotate(.55);box(-4,-19,8,27,'#dcb884',4);box(-2,6,4,13,'#8f623b',1);box(-4,17,8,3,'#dcb884',1);break;
     case 'pickaxe':
       c.rotate(-.4);box(-2,-8,4,29,'#c99764',1);shape([[-19,-9],[-9,-15],[6,-15],[17,-8],[20,2],[12,-5],[-8,-8]],'#b8d1d8');break;
-    case 'airstrike':
-      c.fillStyle = '#b8c2d0'; c.beginPath(); c.moveTo(-16, -6); c.lineTo(10, -6); c.lineTo(16, -3); c.lineTo(10, 0); c.lineTo(-16, 0); c.closePath(); c.fill();
-      c.fillStyle = '#8a95a6'; c.beginPath(); c.moveTo(-4, -4); c.lineTo(-10, -14); c.lineTo(-4, -14); c.lineTo(4, -4); c.closePath(); c.fill(); c.beginPath(); c.moveTo(-16, -6); c.lineTo(-18, -12); c.lineTo(-13, -12); c.lineTo(-10, -6); c.fill();
-      c.fillStyle = '#333'; for (let i = 0; i < 3; i++) { c.beginPath(); c.ellipse(-8 + i * 7, 7 + i * 3, 2.2, 3.2, 0, 0, TAU); c.fill(); }
+    case 'airstrike': {
+      // бомбардировщик в развороте и серия падающих бомб
+      const steel = c.createLinearGradient(0, -14, 0, 2); steel.addColorStop(0, '#e9eef5'); steel.addColorStop(0.55, '#a9b4c3'); steel.addColorStop(1, '#5d6878');
+      c.save(); c.rotate(-0.12); c.shadowColor = 'rgba(0,0,0,0.5)'; c.shadowBlur = 3; c.shadowOffsetY = 1.5;
+      c.fillStyle = steel; c.beginPath(); c.moveTo(-19, -5); c.lineTo(10, -7.5); c.quadraticCurveTo(19, -6, 20, -4); c.quadraticCurveTo(18, -2, 10, -1.5); c.lineTo(-19, -2.5); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(-3, -6); c.lineTo(-12, -16); c.lineTo(-6, -16.5); c.lineTo(5, -6.5); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(-3, -2.5); c.lineTo(-10, 6); c.lineTo(-5, 6.4); c.lineTo(4, -2); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(-19, -4.5); c.lineTo(-21, -12); c.lineTo(-16.5, -12); c.lineTo(-13, -4.8); c.closePath(); c.fill();
+      c.shadowColor = 'transparent'; c.fillStyle = '#26303d'; c.beginPath(); c.ellipse(12, -5.6, 3.4, 1.4, -0.05, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.65)'; c.fillRect(-14, -6.1, 22, 0.8); c.restore();
+      for (let i = 0; i < 3; i++) {
+        const bx = -6 + i * 7, by = 9 + i * 3.2; c.fillStyle = 'rgba(255,180,60,0.35)'; c.fillRect(bx - 0.6, by - 7, 1.2, 5);
+        const bg = c.createLinearGradient(bx - 2.4, 0, bx + 2.4, 0); bg.addColorStop(0, '#4a5462'); bg.addColorStop(0.5, '#9aa6b5'); bg.addColorStop(1, '#3a434f');
+        c.fillStyle = bg; c.beginPath(); c.ellipse(bx, by, 2.3, 3.6, 0, 0, TAU); c.fill(); c.fillStyle = '#ffb43c'; c.fillRect(bx - 2.3, by - 4.6, 4.6, 1.3);
+      }
       break;
-    case 'lightning': glow('#7fd8ff'); c.fillStyle = '#fff36b'; c.beginPath(); c.moveTo(3, -18); c.lineTo(-9, 2); c.lineTo(-1, 2); c.lineTo(-5, 18); c.lineTo(9, -4); c.lineTo(1, -4); c.lineTo(7, -18); c.closePath(); c.fill(); break;
-    case 'orbital':
-      c.fillStyle = '#9aa3b5'; c.fillRect(-5, -16, 10, 7); c.fillStyle = '#3a6ad8'; c.fillRect(-15, -15, 9, 5); c.fillRect(6, -15, 9, 5);
-      glow('#ff4fd8'); c.fillStyle = 'rgba(255,90,220,0.9)'; c.fillRect(-2, -9, 4, 24); c.fillStyle = '#fff'; c.fillRect(-0.8, -9, 1.6, 24); break;
-    case 'nuke':
-      c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(0, 0, 17, 0, TAU); c.fill(); c.fillStyle = '#1a1a1a';
-      for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, 14, a - 0.5, a + 0.5); c.closePath(); c.fill(); }
-      c.fillStyle = '#ffd23a'; c.beginPath(); c.arc(0, 0, 4.5, 0, TAU); c.fill(); c.fillStyle = '#1a1a1a'; c.beginPath(); c.arc(0, 0, 3, 0, TAU); c.fill(); break;
-    case 'teleport':
-      glow('#c07cff'); for (let i = 0; i < 3; i++) { c.strokeStyle = ['#e0b0ff', '#b06cff', '#7a3fd0'][i]; c.lineWidth = 2.5; c.beginPath(); c.arc(0, 0, 15 - i * 5, i, i + 4.5); c.stroke(); } break;
+    }
+    case 'lightning': {
+      // туча и разряд: молния бьёт вниз
+      const cl = c.createLinearGradient(0, -20, 0, -8); cl.addColorStop(0, '#c8d3e6'); cl.addColorStop(1, '#6d7a92');
+      c.fillStyle = cl; for (const [x, y, r] of [[-9, -12, 6.5], [-1, -15.5, 8], [8, -12, 6.5], [0, -10, 7]]) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); }
+      c.save(); c.shadowColor = '#7fd8ff'; c.shadowBlur = 10;
+      const bg = c.createLinearGradient(0, -8, 0, 19); bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.45, '#fff07a'); bg.addColorStop(1, '#ffb43c');
+      c.fillStyle = bg; c.beginPath(); c.moveTo(2, -9); c.lineTo(-8, 5); c.lineTo(-1.5, 5); c.lineTo(-5, 19); c.lineTo(8.5, 0.5); c.lineTo(2, 0.5); c.lineTo(6, -9); c.closePath(); c.fill(); c.restore();
+      break;
+    }
+    case 'orbital': {
+      // спутник с панелями и луч до земли
+      c.save(); c.shadowColor = '#ff4fd8'; c.shadowBlur = 9;
+      const beam = c.createLinearGradient(0, -8, 0, 20); beam.addColorStop(0, 'rgba(255,120,230,0.95)'); beam.addColorStop(1, 'rgba(255,60,200,0.55)');
+      c.fillStyle = beam; c.beginPath(); c.moveTo(-1.6, -8); c.lineTo(1.6, -8); c.lineTo(4.5, 18); c.lineTo(-4.5, 18); c.closePath(); c.fill();
+      c.fillStyle = '#fff'; c.fillRect(-0.6, -8, 1.2, 26); c.restore();
+      c.fillStyle = 'rgba(255,120,230,0.4)'; c.beginPath(); c.ellipse(0, 18.5, 9, 2.2, 0, 0, TAU); c.fill();
+      const body = c.createLinearGradient(-5, -18, 5, -9); body.addColorStop(0, '#e6ebf2'); body.addColorStop(1, '#7c8696');
+      c.fillStyle = body; rrect(c, -4.5, -18, 9, 9, 2); c.fill();
+      for (const sx of [-1, 1]) {
+        const pg = c.createLinearGradient(0, -17, 0, -10); pg.addColorStop(0, '#5f8cf0'); pg.addColorStop(1, '#2a4fae');
+        c.fillStyle = pg; c.fillRect(sx < 0 ? -18 : 6.5, -16.5, 11.5, 6); c.strokeStyle = 'rgba(200,220,255,0.6)'; c.lineWidth = 0.6;
+        for (let gx = 0; gx <= 3; gx++) { const xx = (sx < 0 ? -18 : 6.5) + gx * 11.5 / 3; c.beginPath(); c.moveTo(xx, -16.5); c.lineTo(xx, -10.5); c.stroke(); }
+        c.fillStyle = '#8a95a6'; c.fillRect(sx < 0 ? -6.5 : 4.5, -14, 2, 1.2);
+      }
+      break;
+    }
+    case 'nuke': {
+      // знак радиации на жёлтом диске с объёмом
+      const disk = c.createRadialGradient(-5, -6, 2, 0, 0, 19); disk.addColorStop(0, '#fff3a6'); disk.addColorStop(0.6, '#ffd23a'); disk.addColorStop(1, '#d99a12');
+      c.save(); c.shadowColor = 'rgba(255,190,40,0.6)'; c.shadowBlur = 8; c.fillStyle = disk; c.beginPath(); c.arc(0, 0, 17.5, 0, TAU); c.fill(); c.restore();
+      c.strokeStyle = 'rgba(40,30,0,0.55)'; c.lineWidth = 1.4; c.beginPath(); c.arc(0, 0, 17, 0, TAU); c.stroke();
+      c.fillStyle = '#1c1a14';
+      for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; c.beginPath(); c.moveTo(Math.cos(a - 0.52) * 5.2, Math.sin(a - 0.52) * 5.2); c.arc(0, 0, 14.2, a - 0.52, a + 0.52); c.arc(0, 0, 5.2, a + 0.52, a - 0.52, true); c.closePath(); c.fill(); }
+      c.beginPath(); c.arc(0, 0, 3.2, 0, TAU); c.fill();
+      break;
+    }
+    case 'teleport': {
+      // портал: светящиеся кольца и искры
+      c.save(); c.shadowColor = '#c07cff'; c.shadowBlur = 10;
+      for (let i = 0; i < 3; i++) { c.strokeStyle = ['#f0d8ff', '#b77cff', '#7a3fd0'][i]; c.lineWidth = 3 - i * 0.5; c.beginPath(); c.ellipse(0, 0, 16 - i * 4.5, 16 - i * 4.5, 0, i * 1.1, i * 1.1 + 4.9); c.stroke(); }
+      c.restore();
+      const core = c.createRadialGradient(0, 0, 0, 0, 0, 6); core.addColorStop(0, '#ffffff'); core.addColorStop(1, 'rgba(180,110,255,0)');
+      c.fillStyle = core; c.beginPath(); c.arc(0, 0, 6, 0, TAU); c.fill();
+      c.fillStyle = '#fff'; for (const [x, y, r] of [[11, -10, 1.2], [-12, 8, 1], [13, 7, 0.9]]) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); }
+      break;
+    }
     case 'jetpack':
       c.fillStyle = '#5a6270'; rrect(c, -10, -12, 9, 20, 4); c.fill(); rrect(c, 1, -12, 9, 20, 4); c.fill(); c.fillStyle = '#c0392b'; c.fillRect(-9, -8, 7, 3); c.fillRect(2, -8, 7, 3);
       glow('#ffa23a'); c.fillStyle = '#ffb347'; c.beginPath(); c.moveTo(-9, 8); c.lineTo(-5.5, 18); c.lineTo(-2, 8); c.fill(); c.beginPath(); c.moveTo(2, 8); c.lineTo(5.5, 18); c.lineTo(9, 8); c.fill(); break;

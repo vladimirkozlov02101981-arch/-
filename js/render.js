@@ -27,11 +27,11 @@ class Camera {
   baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 560, 0.9, 2.4), sw / 1500); }   // меньше увеличение — текстуры ближе к 1:1, резче
   zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.min((sw || sh * 16 / 9) / this.mapW, sh / this.mapH), b * 4]; }   // до полного вида карты, прежнее максимальное приближение
   reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = this.ly = 0; this.leadE = null; this.vx = this.vy = 0; this.track = false;
-    this.turnKey = ''; this.lastT = null; this.aKey = ''; this.ay = 0; this.tKey = ''; this.glide = null; this.ptx = undefined; this.scopeFocus = null; this.ownHold = 0; this.foeFocus = null; this.foeHold = 0; this.panFactor = 1; this.mapW = 6400; this.mapH = 1800; this.mapZoom = null; this.manual = null; this.manualKey = ''; this.offsetX = this.offsetY = 0; this.manualActive = false; this.observeAim = false; this.zoomV = 0; this.zoomAnchor = null; this.wasBinoc = false; }
+    this.turnKey = ''; this.lastT = null; this.aKey = ''; this.ay = 0; this.tKey = ''; this.glide = null; this.ptx = undefined; this.scopeFocus = null; this.ownHold = 0; this.foeFocus = null; this.foeHold = 0; this.panFactor = 1; this.mapW = 6400; this.mapH = 1800; this.mapZoom = null; this.manual = null; this.manualKey = ''; this.offsetX = this.offsetY = 0; this.manualActive = false; this.observeAim = false; this.zoomV = 0; this.zoomAnchor = null; this.wasBinoc = false; this.postHold = null; }
   /** мгновенная смена кадра (новый ход): обзор сразу у бойца — без перелёта через карту и без накопленной скорости */
   cut(sc, fx, a, sw, sh) {
-    this.mapZoom = null; this.zoomV = 0; this.zoomAnchor = null; this.shot = null; this.hold = false; this.free = 0; this.lx = this.ly = 0; this.leadE = null; this.glide = null; this.lastT = null; this.aKey = '';
-    this.vx = this.vy = this.tvx = this.tvy = 0; if (fx) fx.focus = null;
+    this.mapZoom = null; this.zoomV = 0; this.zoomAnchor = null; this.shot = null; this.hold = false; this.postHold = null; this.free = 0; this.lx = this.ly = 0; this.leadE = null; this.glide = null; this.lastT = null; this.aKey = '';
+    this.vx = this.vy = this.tvx = this.tvy = 0; if (fx) { fx.focus = null; if (fx.firstHit) this.hitN = fx.firstHit.n; }   // попадания прошлого хода не в счёт
     const t = this.soldierTarget(a, sh); this.x = t.x; this.y = t.y; this.tKey = t.k; this.ptx = t.x; this.pty = t.y; this.z = this.tz;
     this.clampTo(sc, sw, sh);
   }
@@ -86,6 +86,16 @@ class Camera {
     const d = Math.hypot(px - sx, py - sy) || 1, k = Math.min(d, vw * 0.3) / d;
     return { x: px - (px - sx) * k, y: py - (py - sy) * k };
   }
+  /** кадр, оставленный на месте при выстреле (Controller.fireHere): держится до конца хода, пока боец стоит, а камере не
+      нужно вести снаряд или показывать взрыв */
+  postHoldTarget(sc, T) {
+    const P = this.postHold; if (!P) return null;
+    const a = T && sc.soldiers.find(s => s.id === T.sid);
+    if (!T || P.key !== T.round + ':' + T.sid || !a || a.gone || (a.st !== 'stand' && a.st !== 'dead') || this.binoc) { this.postHold = null; return null; }
+    return T.phase === 'aim' && T.shots === 0 ? null : P;   // выстрел ещё в пути к хосту — пока обычный обзор
+  }
+  /** место попадания видно на экране: не у самого края и не под панелью хода сверху */
+  hitVisible(x, y, sw, sh) { const [px, py] = this.toScreen(x, y, sw, sh); return px > sw * 0.05 && px < sw * 0.95 && py > Math.max(sh * 0.06, 104) && py < sh * 0.94; }
   /** точка в кадре с запасом m (доля экрана) */
   sees(x, y, sw, sh, m = 0.08) { const [px, py] = this.toScreen(x, y, sw, sh); return px > sw * m && px < sw * (1 - m) && py > sh * m && py < sh * (1 - m); }
   /** За пределами обычного кадра у бойца можно плавно вернуться, но нельзя увести обзор ещё дальше. */
@@ -185,8 +195,21 @@ class Camera {
     const look = T && T.look, lookKey = look ? T.team + ':' + T.sid + ':' + T.round + ':' + look[2] : null;
     if (look && lookKey !== this.lookId) {
       this.lookId = lookKey; const a = sc.soldiers.find(s => s.id === T.sid);
-      if (a && !a.gone && !(this.sees(look[0], look[1], sw, sh) && this.sees(a.x, a.y - 20, sw, sh))) this.shot = Object.assign(this.shotFrame(a.x, a.y - 20, look[0], look[1], sw, sh), { t: 2.2, k: 'shot' });
+      // попадание за кадром: обзор встаёт точно по центру первого попадания (по всем четырём сторонам экрана)
+      if (a && !a.gone && !this.hitVisible(look[0], look[1], sw, sh)) this.shot = { x: look[0], y: look[1], t: 2.2, k: 'shot' };
     }
+    // настоящее первое попадание выстрела (FX.firstHit) за кадром — тоже точно по его центру: так видно и то попадание,
+    // которое не удалось предсказать заранее
+    { const H = fx.firstHit;
+      if (H && H.n !== this.hitN) {
+        this.hitN = H.n;
+        const fresh = !(Number.isFinite(fx.t) && Number.isFinite(H.time)) || fx.t - H.time < 1.5;   // не прошлого боя или хода
+        const mineHit = fresh && (mine < 0 || H.L === undefined || H.L === mine || (this.foe && !ownLock));
+        // запас: перед выстрелом нужен отступ от края (hitVisible), а здесь — лишь бы попадание было на экране; иначе разброс
+        // пули на пару пикселей за отступ дёргал бы камеру, которая по предсказанию правильно осталась на месте
+        const [hx, hy] = this.toScreen(H.x, H.y, sw, sh), onScreen = hx > 4 && hx < sw - 4 && hy > 4 && hy < sh - 4;
+        if (mineHit && !this.binoc && sc.turn && !onScreen) this.shot = { x: H.x, y: H.y, t: 2.2, k: 'shot' };
+      } }
     if (this.shot) {
       // пока летят быстрые пули, кадр держится; после них — ещё немного, чтобы был виден результат
       if (!sc.entities.some(e => e.k === 'bullet' || e.k === 'mini' || e.k === 'acid')) this.shot.t -= dt;
@@ -210,6 +233,14 @@ class Camera {
         this.offsetX = this.panOffset(this.offsetX, manual.x * speed * dt, -Math.max(0, hw - 20 - margin), Math.max(0, hw - 20 - margin));
         this.offsetY = this.panOffset(this.offsetY, manual.y * speed * dt, Math.min(0, 64 - hh + margin), Math.max(0, hh - 14 - margin));
         this.x = home.x + this.offsetX; this.y = home.y + this.offsetY; this.hold = true;
+      } else if (this.scopeFocus && !this.binoc && !this.shot && !foeAttention && (() => { const o = T && sc.soldiers.find(s => s.id === T.sid); return o && !o.gone && SCOPE_WALK.has(o.st); })()) {
+        // боец идёт (прыгает, лезет по лестнице) со снайперкой: обзор следует за ним, как с любым оружием; линза остаётся
+        // в кадре, если вместе с бойцом помещается
+        const focus = this.scopeFocus, p = focus.point, a = sc.soldiers.find(s => s.id === T.sid), home = this.soldierTarget(a, sh), z = this.z;
+        const pad = (focus.visible ? Math.round(Math.min(sw, sh) * 0.16) + 16 : 30) / z, m = 70 / z;
+        const fit = (h, lens, body, half) => { const lo = Math.max(lens - (half - pad), body - (half - m)), hi = Math.min(lens + (half - pad), body + (half - m)); return lo <= hi ? clamp(h, lo, hi) : h; };
+        target = { x: fit(home.x, p.x, a.x, sw / 2 / z), y: fit(home.y, p.y, a.y - 20, sh / 2 / z), k: home.k };
+        this.hold = false; this.free = 0;
       } else if (this.scopeFocus && !this.binoc && !this.shot && !foeAttention) {
         const focus = this.scopeFocus, p = focus.point;
         // Без захвата край окна ведёт мировую точку вплоть до границы карты, независимо от ограничений камеры.
@@ -291,6 +322,7 @@ class Camera {
           if (!fx.focus.k) fx.focus.k = 'f' + (++this.fN); target = fx.focus;
           if (mine >= 0 && fx.focus.L !== undefined && fx.focus.L !== mine) foeTeam = fx.focus.L;
         }
+        else if (this.postHoldTarget(sc, T)) target = this.postHold;   // выстрел из сдвинутого обзора: кадр стоит
         else if (ownLock && this.lastT && !this.foeFocus) target = this.lastT;
         else {
           const a = T && sc.soldiers.find(s => s.id === T.sid), moving = a && !a.gone && a.st !== 'stand' && a.st !== 'dead';
@@ -320,6 +352,8 @@ class Camera {
         }
       }
     }
+    // камера ведёт снаряд, удар или взрыв — оставленный при выстреле кадр больше не нужен
+    if (this.postHold && target && target !== this.postHold && (this.track || target === fx.focus || target === this.shot || target === pickF)) this.postHold = null;
     this.shotTook = target && target === this.shot ? this.shot : null;   // кадр выстрела действительно ведёт обзор (для выстрела после перелёта)
     if (target && target !== this.lastT) this.lastT = { x: target.x, y: target.y, k: target.k || '' };
     if (!target || this.shot === target) { this.lx *= Math.exp(-dt * 3); this.ly *= Math.exp(-dt * 3); this.leadE = null; }
@@ -467,10 +501,25 @@ const GRADE = {
   city: ['rgba(255,120,220,0.3)', 'rgba(10,20,80,0.55)'],
 };
 
-function hudPanel(c, x, y, w, h, r = 12) {
-  c.save(); rrect(c, x, y, w, h, r); c.fillStyle = 'rgba(12,16,26,0.72)'; c.fill();
-  c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = 1; c.stroke(); c.restore();
+/** стеклянная панель HUD в стиле меню: тёмный графит, тонкая рамка, верхний блик; accent — янтарный уголок слева сверху.
+    Тень без размытия (смещённая подложка) — дёшево в каждом кадре */
+function hudPanel(c, x, y, w, h, r = 12, accent = null) {
+  c.save();
+  rrect(c, x, y + 2, w, h, r); c.fillStyle = 'rgba(0,0,0,0.24)'; c.fill();
+  rrect(c, x, y, w, h, r); const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(25,31,43,0.88)'); g.addColorStop(1, 'rgba(10,13,19,0.9)'); c.fillStyle = g; c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.13)'; c.lineWidth = 1; rrect(c, x + 0.5, y + 0.5, w - 1, h - 1, Math.max(1, r - 0.5)); c.stroke();
+  const hl = c.createLinearGradient(x, 0, x + w, 0); hl.addColorStop(0, 'rgba(255,255,255,0)'); hl.addColorStop(0.5, 'rgba(255,255,255,0.18)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = hl; c.fillRect(x + r, y + 1, Math.max(0, w - 2 * r), 1);
+  if (accent) {
+    c.strokeStyle = accent; c.lineWidth = 2; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x + 1, y + r + 7); c.lineTo(x + 1, y + r); c.arcTo(x + 1, y + 1, x + r, y + 1, r - 1); c.lineTo(x + r + 7, y + 1); c.stroke();
+  }
+  c.restore();
 }
+/** разрядка букв (если браузер её поддерживает) */
+function hudSpacing(c, v) { if ('letterSpacing' in c) c.letterSpacing = v; }
+/** строка, урезанная до ширины max с многоточием */
+function hudFit(c, s, max) { s = String(s); if (c.measureText(s).width <= max) return s; while (s.length > 1 && c.measureText(s + '…').width > max) s = s.slice(0, -1); return s + '…'; }
 
 class Renderer {
   constructor(cv) { this.cv = cv; this.c = cv.getContext('2d', { alpha: false });   // кадр всегда закрашен целиком: непрозрачный холст браузер не смешивает со страницей
@@ -831,64 +880,88 @@ class Renderer {
     c.restore();
   }
   /** шкала силы броска: слева у края экрана, только пока зажата кнопка выстрела */
-  drawPowerBar(c, sc, ctl, sw, sh) {
+  drawPowerBar(c, sc, ctl, sw, sh, touch = false) {
     const T = sc.turn; if (T.phase !== 'aim') return;
     const pw = ctl && ctl.mine ? (ctl.charging ? ctl.power : -1) : T.charge;
     if (!(pw >= 0)) return;
-    const w = 26, h = Math.min(320, sh * 0.42), x = 22, y = sh / 2 - h / 2;
+    if (touch) {   // с пультом — горизонтальная шкала внизу по центру, между крестовиной и кнопкой огня
+      const w = clamp(sw - 470, 160, 320), h = 16, x = Math.round(sw / 2 - w / 2), y = sh - 46, k = clamp(pw, 0, 1);
+      c.save(); hudPanel(c, x - 12, y - 26, w + 24, h + 38, 11, '#ffb43c');
+      c.fillStyle = 'rgba(0,0,0,0.42)'; rrect(c, x, y, w, h, 8); c.fill();
+      const g = c.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#34c769'); g.addColorStop(0.55, '#ffc23a'); g.addColorStop(1, '#ff4d3a');
+      c.save(); rrect(c, x, y, w, h, 8); c.clip(); c.fillStyle = g; c.fillRect(x, y, w * k, h); c.restore();
+      c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineWidth = 1.5; rrect(c, x, y, w, h, 8); c.stroke();
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff'; c.font = `14px ${FONT_TITLE}`; c.fillText(Math.round(pw * 100) + '%', sw / 2, y - 12);
+      c.restore(); return;
+    }
+    const w = 20, h = Math.min(300, sh * 0.4), x = 30, y = Math.round(sh / 2 - h / 2);
     c.save();
-    hudPanel(c, x - 8, y - 34, w + 16, h + 68, 12);
-    c.fillStyle = 'rgba(0,0,0,0.45)'; rrect(c, x, y, w, h, 6); c.fill();
-    const g = c.createLinearGradient(0, y + h, 0, y); g.addColorStop(0, '#3ad06a'); g.addColorStop(0.55, '#f2d23a'); g.addColorStop(1, '#ff4a3a');
+    hudPanel(c, x - 16, y - 40, w + 32, h + 78, 12, '#ffb43c');
+    c.fillStyle = 'rgba(0,0,0,0.42)'; rrect(c, x, y, w, h, 10); c.fill();
+    const g = c.createLinearGradient(0, y + h, 0, y); g.addColorStop(0, '#34c769'); g.addColorStop(0.55, '#ffc23a'); g.addColorStop(1, '#ff4d3a');
     const fh = h * clamp(pw, 0, 1);
-    c.save(); rrect(c, x, y, w, h, 6); c.clip(); c.fillStyle = g; c.fillRect(x, y + h - fh, w, fh); c.restore();
-    c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 1;
-    for (let k = 1; k < 10; k++) { const yy = y + h - h * k / 10; c.beginPath(); c.moveTo(x, yy); c.lineTo(x + (k % 5 ? 7 : w), yy); c.stroke(); }
-    c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2; rrect(c, x, y, w, h, 6); c.stroke();
+    c.save(); rrect(c, x, y, w, h, 10); c.clip(); c.fillStyle = g; c.fillRect(x, y + h - fh, w, fh);
+    c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillRect(x + 3, y + h - fh, 3, fh); c.restore();
+    c.fillStyle = 'rgba(255,255,255,0.4)';
+    for (let k = 1; k < 10; k++) { const yy = Math.round(y + h - h * k / 10) + 0.5; c.fillRect(x + w + 4, yy - 0.5, k % 5 ? 4 : 8, 1); }
+    c.strokeStyle = 'rgba(255,255,255,0.6)'; c.lineWidth = 1.5; rrect(c, x, y, w, h, 10); c.stroke();
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff';
-    c.font = `15px ${FONT_TITLE}`; c.fillText(Math.round(pw * 100) + '%', x + w / 2, y - 17);
-    c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.75)'; c.fillText('до макс. ' + Math.max(0, 100 - Math.round(pw * 100)) + '%', x + w / 2, y + h + 17);
+    c.font = `16px ${FONT_TITLE}`; c.fillText(Math.round(pw * 100) + '%', x + w / 2, y - 19);
+    c.font = `500 10.5px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.7)'; c.fillText('до макс. ' + Math.max(0, 100 - Math.round(pw * 100)) + '%', x + w / 2, y + h + 20);
     c.restore();
   }
   /* ---------- HUD ---------- */
   drawHUD(sc, cam, ctl, t, extra) {
     const c = this.c, sw = this.sw, sh = this.sh; const T = sc.turn;
+    // сенсорный пульт на экране: внизу слева крестовина, внизу справа огонь, сверху кнопки — панели HUD их обходят
+    const touch = typeof Input !== 'undefined' && !!Input.isTouch && !!Input.touchRoot && !Input.touchRoot.classList.contains('hidden');
     this.drawScope(c, sc, cam, ctl, sw, sh);
-    this.drawPowerBar(c, sc, ctl, sw, sh);
+    this.drawPowerBar(c, sc, ctl, sw, sh, touch);
     c.save(); c.textBaseline = 'middle';
     const team = sc.teams[T.team]; const act = sc.soldiers.find(s => s.id === T.sid);
     // панель хода
     if (team && T.phase !== 'over') {
-      const w = 320, h = 56, x = sw / 2 - w / 2, y = 10;
-      hudPanel(c, x, y, w, h, 14);
-      c.fillStyle = team.color; rrect(c, x + 8, y + 8, 6, h - 16, 3); c.fill();
-      c.textAlign = 'left'; c.font = `18px ${FONT_TITLE}`; c.fillStyle = '#fff';
-      c.fillText(act ? `Боец ${act.name}` : '—', x + 24, y + 21);
-      c.font = `13px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.7)';
-      const phaseTxt = T.phase === 'crate' ? 'Сброс припасов' : (ctl && ctl.mine ? 'Ваш ход' : 'Ход соперника');
-      c.fillText(`${team.name} · ${phaseTxt}`, x + 24, y + 40);
+      const w = 344, h = 58, x = Math.round(sw / 2 - w / 2), y = touch && sw < 720 ? 64 : 10, rgb = hex2rgb(team.color), lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+      hudPanel(c, x, y, w, h, 12);
+      // знак бойца: номер на цвете команды (как на плашке хода)
+      const bs = h - 16, bx = x + 8, bY = y + 8, num = act ? String(act.name) : '—';
+      rrect(c, bx, bY, bs, bs, 9); const tg = c.createLinearGradient(bx, bY, bx + bs, bY + bs); tg.addColorStop(0, css(shadec(rgb, 1.15))); tg.addColorStop(1, css(shadec(rgb, 0.68))); c.fillStyle = tg; c.fill();
+      const tl = c.createLinearGradient(0, bY, 0, bY + bs); tl.addColorStop(0, 'rgba(255,255,255,0.32)'); tl.addColorStop(0.5, 'rgba(255,255,255,0)'); c.fillStyle = tl; c.fill();
+      c.textAlign = 'center'; c.fillStyle = lum > 150 ? '#0b1219' : '#ffffff'; c.font = `${num.length > 1 ? 19 : 23}px ${FONT_TITLE}`; c.fillText(num, bx + bs / 2, bY + bs / 2 + 1);
+      const tx = bx + bs + 12, room = x + w - 64 - tx;
+      c.textAlign = 'left'; c.font = `17px ${FONT_TITLE}`; c.fillStyle = '#fff';
+      c.fillText(act ? `Боец ${act.name}` : '—', tx, y + 21);
+      const mineTurn = !!(ctl && ctl.mine), phaseTxt = T.phase === 'crate' ? 'Сброс припасов' : (mineTurn ? 'Ваш ход' : 'Ход соперника');
+      // команда и чей ход — мелкими прописными с разрядкой; «ваш ход» янтарный
+      c.font = `600 10.5px ${FONT_UI}`; hudSpacing(c, '1.2px');
+      const ph = phaseTxt.toUpperCase(), sep = '  ·  ', phw = c.measureText(ph + sep).width, tn = hudFit(c, team.name.toUpperCase(), Math.max(40, room - phw));
+      c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillText(tn + sep, tx, y + 41); const tnw = c.measureText(tn + sep).width;
+      c.fillStyle = T.phase === 'crate' ? '#9fd6ff' : mineTurn ? '#ffc86a' : 'rgba(255,255,255,0.82)'; c.fillText(ph, tx + tnw, y + 41); hudSpacing(c, '0px');
       // время хода 0 — без ограничения: полное кольцо и знак ∞. После выстрела отсчёт отступления не показывается:
       // кольцо остаётся как в ходе (∞ или оставшееся время хода), отступление по-прежнему длится, как в оригинале
       const inf = !((sc.settings || sc.cfg.settings).turnTime > 0);
       const val = T.time; const max = (sc.settings || sc.cfg.settings).turnTime;
-      const cx = x + w - 32, cy = y + h / 2, low = !inf && val <= 5 && T.phase === 'aim';
-      c.beginPath(); c.arc(cx, cy, 20, 0, TAU); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill();
-      c.strokeStyle = low ? '#ff4d4d' : team.color; c.lineWidth = 4;
-      c.beginPath(); c.arc(cx, cy, 20, -Math.PI / 2, -Math.PI / 2 + TAU * (inf ? 1 : clamp(val / max, 0, 1))); c.stroke();
-      c.textAlign = 'center'; c.font = `${inf ? 24 : 18}px ${FONT_TITLE}`; c.fillStyle = low && Math.sin(t * 10) > 0 ? '#ff6b6b' : '#fff';
+      const cx = x + w - 31, cy = y + h / 2, low = !inf && val <= 5 && T.phase === 'aim';
+      c.fillStyle = 'rgba(255,255,255,0.07)'; c.fillRect(cx - 31, y + 12, 1, h - 24);
+      c.beginPath(); c.arc(cx, cy, 19, 0, TAU); c.fillStyle = 'rgba(0,0,0,0.3)'; c.fill();
+      c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,0.09)'; c.beginPath(); c.arc(cx, cy, 19, 0, TAU); c.stroke();
+      c.strokeStyle = low ? '#ff5a5f' : team.color; c.lineCap = 'round';
+      c.beginPath(); c.arc(cx, cy, 19, -Math.PI / 2, -Math.PI / 2 + TAU * (inf ? 1 : Math.max(0.001, clamp(val / max, 0, 1)))); c.stroke(); c.lineCap = 'butt';
+      c.textAlign = 'center'; c.font = `${inf ? 22 : 17}px ${FONT_TITLE}`; c.fillStyle = low && Math.sin(t * 10) > 0 ? '#ff7b7b' : '#fff';
       c.fillText(inf ? '∞' : String(Math.ceil(Math.max(0, val))), cx, cy + 1);
       // ветер (если он отключён в настройках, плашки нет); стрелки растут от своей оси, подпись слева от них
       if ((sc.settings || sc.cfg.settings).wind !== false) {
-      const wy = y + h + 16, ax = sw / 2 + 22;
-      hudPanel(c, ax - 136, wy - 12, 231, 24, 10);
+      const wy = y + h + 17, ww = 252, wx = Math.round(sw / 2 - ww / 2), ax = wx + 64 + (ww - 64 - 12) / 2;
+      hudPanel(c, wx, wy - 11, ww, 22, 11);
       const k = clamp(T.wind / MAX_WIND, -1, 1); const segs = 8;
       for (let i = 0; i < segs; i++) {
         const on = Math.abs(k) * segs > i; const dir = k >= 0 ? 1 : -1;
-        const bx = ax + dir * (8 + i * 10); c.fillStyle = on ? (Math.abs(k) > 0.66 ? '#ff7a4a' : '#6fd0ff') : 'rgba(255,255,255,0.12)';
-        c.beginPath(); c.moveTo(bx, wy - 6); c.lineTo(bx + dir * 7, wy); c.lineTo(bx, wy + 6); c.lineTo(bx + dir * 3, wy); c.closePath(); c.fill();
+        const bx = ax + dir * (7 + i * 10); c.fillStyle = on ? (Math.abs(k) > 0.66 ? '#ff6a3d' : '#ffb43c') : 'rgba(255,255,255,0.1)';
+        c.beginPath(); c.moveTo(bx, wy - 5.5); c.lineTo(bx + dir * 6.5, wy); c.lineTo(bx, wy + 5.5); c.lineTo(bx + dir * 2.6, wy); c.closePath(); c.fill();
       }
-      c.fillStyle = 'rgba(255,255,255,0.7)'; c.font = `10px ${FONT_UI}`; c.textAlign = 'right'; c.fillText('ВЕТЕР', ax - 94, wy); c.textAlign = 'center';
-      c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(ax - 0.5, wy - 7, 1, 14);
+      c.fillStyle = 'rgba(255,255,255,0.62)'; c.font = `600 9.5px ${FONT_UI}`; c.textAlign = 'left'; hudSpacing(c, '1.8px'); c.fillText('ВЕТЕР', wx + 13, wy + 0.5); hudSpacing(c, '0px'); c.textAlign = 'center';
+      c.fillStyle = 'rgba(255,255,255,0.08)'; c.fillRect(wx + 58, wy - 6, 1, 12);
+      c.fillStyle = 'rgba(255,255,255,0.3)'; c.fillRect(ax - 0.5, wy - 7, 1, 14);
       }
       // непрерывный бой: что делает соперник (он ходит одновременно с вами)
       const ot = sc.simul ? (sc.lanes ? sc.lanes[1 - T.team] && sc.lanes[1 - T.team].turn : sc.turns && sc.turns[1 - T.team]) : null;
@@ -903,32 +976,44 @@ class Renderer {
       }
     }
     // команды
-    let by = sh - 16 - sc.teams.length * 30;
-    for (const tm of sc.teams) {
+    // команды: одна панель внизу слева — цвет команды, название, общее здоровье, бойцов в строю
+    const RH = 24, tpw = 270, tph = sc.teams.length * RH + 12, tpx = 12, tpy = touch ? (sw < 720 ? 168 : 64) : sh - 14 - tph;
+    hudPanel(c, tpx, tpy, tpw, tph, 11);
+    sc.teams.forEach((tm, i) => {
       const members = sc.soldiers.filter(s => s.team === tm.idx);
       const hp = members.reduce((a, s) => a + (s.alive ? s.hp : 0), 0), mx = members.reduce((a, s) => a + s.maxHp, 0) || 1;
-      const alive = members.filter(s => s.alive).length;
-      hudPanel(c, 12, by - 12, 250, 26, 9);
-      c.textAlign = 'left'; c.font = `13px ${FONT_TITLE}`; c.fillStyle = tm.color; c.fillText(tm.name, 22, by + 1);
-      c.fillStyle = 'rgba(255,255,255,0.12)'; rrect(c, 120, by - 6, 108, 12, 6); c.fill();
-      c.fillStyle = hpFriend(sc, tm.idx ?? sc.teams.indexOf(tm)) ? '#3ddc6a' : '#ff4d4d'; rrect(c, 120, by - 6, Math.max(6, 108 * hp / mx), 12, 6); c.fill();
-      c.fillStyle = '#fff'; c.font = `11px ${FONT_UI}`; c.textAlign = 'right'; c.fillText(`${alive}`, 250, by + 1);
-      by += 30;
-    }
+      const alive = members.filter(s => s.alive).length, ry = tpy + 6 + i * RH + RH / 2;
+      if (i) { c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(tpx + 10, ry - RH / 2, tpw - 20, 1); }
+      c.fillStyle = tm.color; rrect(c, tpx + 10, ry - 7, 4, 14, 2); c.fill();
+      c.textAlign = 'left'; c.font = `600 12px ${FONT_UI}`; c.fillStyle = '#eef2f6'; c.fillText(hudFit(c, tm.name, 88), tpx + 22, ry + 0.5);
+      const bx = tpx + 118, bw = 106, bh = 8, k = clamp(hp / mx, 0, 1), friend = hpFriend(sc, tm.idx ?? sc.teams.indexOf(tm));
+      c.fillStyle = 'rgba(255,255,255,0.09)'; rrect(c, bx, ry - bh / 2, bw, bh, 4); c.fill();
+      if (k > 0) {
+        const g = c.createLinearGradient(bx, 0, bx + bw, 0); g.addColorStop(0, friend ? '#22a957' : '#c72f36'); g.addColorStop(1, friend ? '#5cf08f' : '#ff6b6b');
+        c.fillStyle = g; rrect(c, bx, ry - bh / 2, Math.max(bh, bw * k), bh, 4); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillRect(bx + 3, ry - bh / 2 + 1, Math.max(0, bw * k - 6), 1.5);
+      }
+      // бойцы в строю: значок фигуры и число
+      const ix = tpx + tpw - 34; c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.arc(ix, ry - 4, 2.6, 0, TAU); c.fill(); rrect(c, ix - 3.4, ry - 0.6, 6.8, 6.2, 2.4); c.fill();
+      c.fillStyle = '#fff'; c.font = `13px ${FONT_TITLE}`; c.textAlign = 'right'; c.fillText(`${alive}`, tpx + tpw - 11, ry + 1);
+    });
     // оружие, выбранное заранее на свой следующий ход (во время хода соперника)
     if (ctl && ctl.preTeam !== null && ctl.preTeam !== undefined && sc.teams[ctl.preTeam]) {
       const tmp = sc.teams[ctl.preTeam], id = (ctl.preChoice && performance.now() - ctl.preChoice.time < 1500 ? ctl.preChoice.id : null) || tmp.nextW, W = id && WEAPON[id];
       const label = W ? 'На ваш ход: ' + W.name : 'Оружие на ваш ход: Q / E, цифры или Tab';
-      c.font = `600 12px ${FONT_UI}`; const tw = c.measureText(label).width, pw = tw + (W ? 54 : 24), px = 12, py = sh - 22 - sc.teams.length * 30 - 40;
-      hudPanel(c, px, py, pw, 32, 9);
-      if (W) { const ic = weaponIcon(id, 28); c.drawImage(ic, px + 8, py + 2, 28, 28); }
-      c.fillStyle = W ? '#ffd27a' : 'rgba(255,255,255,0.7)'; c.textAlign = 'left'; c.fillText(label, px + (W ? 44 : 12), py + 16);
+      c.font = `600 12px ${FONT_UI}`; const tw = c.measureText(label).width, pw = tw + (W ? 54 : 24), px = 12, py = touch ? tpy + tph + 8 : tpy - 8 - 34;
+      hudPanel(c, px, py, pw, 34, 10, '#ffb43c');
+      if (W) { const ic = weaponIcon(id, 28); c.drawImage(ic, px + 9, py + 3, 28, 28); }
+      c.fillStyle = W ? '#ffc86a' : 'rgba(255,255,255,0.7)'; c.textAlign = 'left'; c.fillText(label, px + (W ? 44 : 12), py + 17);
     }
     // Подсказки выбора точки появляются только для соответствующего оружия.
     const hint = !cam.binoc && cam.edge ? (cam.hold ? `Обзор у цели · ${Keys.label('camera')} — вернуться к бойцу` : 'Цель за экраном? Ведите курсор к краю экрана') : '';
     c.textAlign = 'right'; c.font = `12px ${FONT_UI}`;
-    if (hint) { const hw = c.measureText(hint).width + 20; hudPanel(c, sw - 14 - hw, sh - 88, hw, 24, 8); c.fillStyle = 'rgba(255,255,255,0.85)'; c.fillText(hint, sw - 24, sh - 76); }
-    if (extra && extra.ping !== undefined) { c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.6)'; c.textAlign = 'right'; c.fillText(Number.isFinite(extra.ping) ? `пинг ${extra.ping} мс` : extra.pingStatus === 'timeout' ? 'пинг — нет ответа' : 'пинг —', sw - 20, sh - 34); c.textAlign = 'left'; }
+    if (hint) {
+      const hw = c.measureText(hint).width + 34, hx = touch ? Math.round(sw / 2 + hw / 2) : sw - 14, hy = touch ? (sw < 720 ? 64 : 10) + 104 : sh - 77;
+      hudPanel(c, hx - hw, hy - 13, hw, 26, 9); c.fillStyle = '#ffb43c'; c.beginPath(); c.arc(hx - hw + 13, hy, 3, 0, TAU); c.fill(); c.fillStyle = 'rgba(255,255,255,0.88)'; c.fillText(hint, hx - 11, hy);
+    }
+    if (extra && extra.ping !== undefined) { c.font = `11px ${FONT_UI}`; c.fillStyle = 'rgba(255,255,255,0.6)'; c.textAlign = 'right'; c.fillText(Number.isFinite(extra.ping) ? `пинг ${extra.ping} мс` : extra.pingStatus === 'timeout' ? 'пинг — нет ответа' : 'пинг —', sw - 20, touch ? 66 : sh - 34); c.textAlign = 'left'; }
     c.restore();
   }
   /** оптический прицел снайперки: линза ×3 на линии ствола в точке курсора, сетка с дальномерными метками */

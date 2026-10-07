@@ -128,7 +128,7 @@ Object.assign(FIRE, {
   autocannon(g,s,p) {
     let t=0,n=0;
     return {usage:{update(gg,dt){
-      t+=dt; while(n<3 && t>=n*.2){shootProj(gg,s,{aim:p.aim+(n-1)*.018,pw:1},'mini',1250,{grav:.32,wind:0,r:3,sound:'autocannon'});n++;}
+      t+=dt; while(n<3 && t>=n*.2){shootProj(gg,s,{aim:s.aim+(n-1)*.018,pw:1},'mini',1250,{grav:.32,wind:0,r:3,sound:'autocannon'});n++;}   // ствол можно вести
       return t>.65 || !s.alive;
     }}};
   },

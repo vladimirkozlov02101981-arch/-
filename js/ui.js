@@ -140,8 +140,11 @@ const UI = {
     document.querySelectorAll('#hud-btns [data-act="pause"]').forEach(b => { b.title = label('menu', 'Меню'); });
   },
   updateSoundIcon() {
-    this.syncKeyHints(); document.querySelectorAll('[data-act="sound"]').forEach(b => { b.textContent = Sfx.enabled ? '🔊' : '🔇'; });
-    const b = document.querySelector('[data-act="sound2"]'); if (b) b.textContent = Sfx.enabled ? 'Звук: включён' : 'Звук: выключен';
+    // значок звука — линейная иконка из общего набора (index.html, #i-sound / #i-mute)
+    const icon = '<svg class="ico" aria-hidden="true"><use href="#' + (Sfx.enabled ? 'i-sound' : 'i-mute') + '"/></svg>';
+    this.syncKeyHints(); document.querySelectorAll('[data-act="sound"], [data-touch="sound"]').forEach(b => { b.innerHTML = icon; });
+    const b = document.querySelector('[data-act="sound2"]');
+    if (b) b.innerHTML = icon + '<span class="sound2-label">' + (Sfx.enabled ? 'Звук: включён' : 'Звук: выключен') + '</span>';
   },
   showHud(on) { this.syncKeyHints(); const hb = $('hud-btns'); if (hb) hb.classList.add('hidden'); if (!on) { this.setTray(false); $('chat').classList.add('hidden'); } },
   /* ---------- настройка ---------- */
@@ -425,7 +428,7 @@ const UI = {
     row(['left', 'right'], 'Ходьба (запас шагов ограничен, если ход не «на любую дистанцию»)');
     row(['jump'], 'Прыжок бойца; пока движется робо-бомба — её прыжок');
     row(['up', 'down', '#у лестницы'], 'Подъём / спуск; клавиши движения влево и вправо — сойти с лестницы, клавиша прыжка — отпрыгнуть');
-    row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки. Мышью можно вести оптику по всей карте; после остановки мыши прицел быстро стабилизируется');
+    row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки. Мышью можно вести оптику по всей карте. Прицел не колеблется. Пока стреляет автомат, узи, миниган, огнемёт, кислотомёт, автопушка или залп, ствол ведётся вверх-вниз мышью или клавишами прицела (разброс пуль прежний)');
     row(['fire', '#/ ЛКМ'], 'Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела');
     row(['#Мышь в бою'], 'Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру');
     row(['tray', '#/ ПКМ'], 'Панель оружия. Во время хода соперника (и после своего выстрела) панель, Q/E и цифры выбирают оружие на ваш следующий ход — оно будет в руках в начале хода');
@@ -479,8 +482,8 @@ const UI = {
     if (sig === this.traySig) return; this.traySig = sig;
     const g = $('tray-grid'); g.innerHTML = '';
     WEAPON_CATS.forEach((cn, ci) => {
-      const lab = document.createElement('div'); lab.className = 'tray-cat'; lab.textContent = cn; g.appendChild(lab);
       const list = WEAPONS.filter(w => w.cat === ci);
+      const lab = document.createElement('div'); lab.className = 'tray-cat'; lab.textContent = cn; lab.style.setProperty('--rows', Math.max(1, Math.ceil(list.length / 8))); g.appendChild(lab);
       for (let k = 0; k < list.length; k++) {
         const w = list[k]; const it = document.createElement('div');
         if (!w) { g.appendChild(document.createElement('div')); continue; }
@@ -529,9 +532,13 @@ const UI = {
   /* ---------- итоги ---------- */
   showOver(ev, sc, myTeams, canRematch) {
     const win = sc.teams[ev.win];
-    const title = $('over-title');
-    if (!win) { title.textContent = 'Ничья!'; title.style.color = '#fff'; }
-    else { title.textContent = (myTeams.length === 1 ? (myTeams[0] === ev.win ? 'Победа! ' : 'Поражение… ') : '') + `Победила команда «${win.name}»`; title.style.color = win.color; }
+    const title = $('over-title'), sub = $('over-sub'), solo = myTeams.length === 1;
+    // крупно — итог для игрока, ниже — какая команда победила (её цветом)
+    if (!win) { title.textContent = 'Ничья!'; title.style.color = '#fff'; if (sub) { sub.textContent = 'Победителя нет'; sub.style.color = ''; } }
+    else {
+      title.textContent = solo ? (myTeams[0] === ev.win ? 'Победа!' : 'Поражение') : 'Победа!'; title.style.color = solo && myTeams[0] !== ev.win ? '#ff8f8f' : '#fff';
+      if (sub) { sub.textContent = `Победила команда «${win.name}»`; sub.style.color = win.color; }
+    }
     const st = $('over-stats'); st.innerHTML = '';
     const head = document.createElement('div'); head.className = 'over-row muted'; head.innerHTML = '<span>Команда</span><span>Урон</span><span>Убийства</span><span>В строю</span>'; st.appendChild(head);
     (ev.stats || []).forEach((s, i) => {

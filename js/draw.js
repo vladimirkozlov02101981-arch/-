@@ -199,7 +199,9 @@ function drawSoldier(c, s, team, t, an) {
   const climb = s.st === 'climb';
   // ходьба: корпус пружинит в такт шагам и наклонён вперёд; в покое — дыхание
   const walking = s.st === 'walk' && !dead;
-  const bob = walking ? -Math.abs(Math.sin(an.walk)) * 1.5 + 0.6 : s.st === 'stand' && !dead ? Math.sin(t * 2.4 + s.id) * 0.45 : 0;
+  // с оружием в руках боец стоит неподвижно: дыхание не качает плечо, а с ним ствол и прицел
+  const steady = !!s.wpn && s.wpn !== 'jetpack';
+  const bob = walking ? -Math.abs(Math.sin(an.walk)) * 1.5 + 0.6 : s.st === 'stand' && !dead && !steady ? Math.sin(t * 2.4 + s.id) * 0.45 : 0;
   const lean = walking ? face * (1.9 + Math.sin(an.walk * 2) * 0.35) : 0;
   // реалистичные пропорции: рост ~36 px, голова ~1/7 роста, плечо на высоте GUN_Y
   const hipX = lean * 0.3, hipY = -15.5 + (walking ? bob * 0.8 : 0);
