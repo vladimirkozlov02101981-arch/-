@@ -114,7 +114,7 @@
         </div>
       </div>
     </div>
-    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.07-36</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.07-37</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
   </section>
 
   <!-- Онлайн -->
@@ -243,7 +243,7 @@
             <tr><td><kbd>W</kbd> <kbd>S</kbd> у лестницы</td><td>Подъём / спуск. A/D — сойти с лестницы, пробел — отпрыгнуть</td></tr>
             <tr><td><kbd>I</kbd> <kbd>K</kbd></td><td>Наведение прицела (<kbd>Shift</kbd> — точнее). У снайперки <kbd>Ctrl</kbd> скрывает и показывает оптику. Мышью ведите оптику по всей карте. Прицел не колеблется. Пока стреляет автомат, узи, миниган, огнемёт, кислотомёт, автопушка или залп, ствол ведётся вверх-вниз мышью или <kbd>I</kbd>/<kbd>K</kbd> (разброс пуль прежний)</td></tr>
             <tr><td><kbd>F</kbd> / ЛКМ / <kbd>Enter</kbd></td><td>Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела. Кольцо прицела стоит на коротком расстоянии по направлению ствола.</td></tr>
-            <tr><td>Мышь в бою</td><td>Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру</td></tr>
+            <tr><td>Мышь в бою</td><td>Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню, чтобы освободить мышь. В панели оружия свой курсор: он появляется в её центре и не выходит за её края. Клик по полю боя возвращает управление в игру</td></tr>
             <tr><td>ПКМ / <kbd>Tab</kbd></td><td>Панель оружия. Во время хода соперника (и после своего выстрела) панель, <kbd>Q</kbd>/<kbd>E</kbd> и цифры выбирают оружие на ваш следующий ход</td></tr>
             <tr><td><kbd>Q</kbd> <kbd>E</kbd></td><td>Предыдущее / следующее оружие по номеру</td></tr>
             <tr><td>Num <kbd>1</kbd>–<kbd>9</kbd></td><td>Выбрать оружие. Для номеров 10–41: Num 0, затем две цифры номера. В обычном бою так же работают цифры над буквами</td></tr>
@@ -310,7 +310,8 @@
     <button class="icon-btn" data-act="tray" title="Оружие (Tab / ПКМ)"><svg class="ico" aria-hidden="true"><use href="#i-arsenal"/></svg></button>
     <button class="icon-btn" data-act="pause" title="Меню (Backspace)"><svg class="ico" aria-hidden="true"><use href="#i-pause"/></svg></button>
   </div>
-  <div id="tray" class="tray hidden"><div class="tray-head"><span class="tray-title"><svg class="ico" aria-hidden="true"><use href="#i-arsenal"/></svg>Арсенал</span><span class="tray-keys"><kbd>Q</kbd><kbd>E</kbd> листать · цифры — номер · <kbd>Tab</kbd> закрыть</span></div><div class="tray-pre" id="tray-pre"></div><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
+  <div id="tray-cursor" class="tray-cursor hidden" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 2.5l14.5 9.6-6.6 1.3 3.9 7.3-2.6 1.4-3.9-7.3-5.3 4.2z" fill="#fff" stroke="#0b0f15" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+  <div id="tray" class="tray hidden"><div class="tray-head"><span class="tray-title"><svg class="ico" aria-hidden="true"><use href="#i-arsenal"/></svg>Арсенал</span></div><div class="tray-pre" id="tray-pre"></div><div class="tray-grid" id="tray-grid"></div><div class="tray-info" id="tray-info">Выберите оружие</div></div>
   <div id="chat" class="chat hidden"><div id="chat-log" class="chat-log"></div><input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Сообщение… (Enter — отправить)"></div>
 
   <!-- Сенсорное управление для Android и сенсорных экранов -->

@@ -495,7 +495,7 @@ table.keys td:first-child { white-space: nowrap; color: var(--text); padding-rig
    В бою: панель оружия, чат
    ========================================================================================= */
 .hud-btns { display: none !important; }
-.tray { position: absolute; right: 16px; bottom: 16px; top: auto; width: min(900px, calc(100vw - 32px)); max-height: calc(100vh - 120px); max-height: calc(100dvh - 120px); overflow: auto; pointer-events: auto;
+.tray { position: absolute; right: 16px; bottom: 16px; top: auto; width: min(900px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; pointer-events: auto;
   padding: 14px 16px 16px; border-radius: var(--r-lg); border: 1px solid var(--line-2);
   background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M1 23V16A15 15 0 0 1 16 1h7' fill='none' stroke='%23ffb43c' stroke-width='2' stroke-linecap='round'/></svg>") left top / 24px 24px no-repeat border-box, linear-gradient(180deg, rgba(18, 23, 32, .96), rgba(9, 12, 18, .97));
   box-shadow: var(--shadow); backdrop-filter: blur(14px); animation: trayIn .2s var(--ease); -webkit-overflow-scrolling: touch; }
@@ -508,35 +508,59 @@ table.keys td:first-child { white-space: nowrap; color: var(--text); padding-rig
 .tray-pre { display: none; }
 .tray.pre .tray-pre { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--accent-tint); border: 1px solid var(--accent-line); color: var(--accent-hi); font: 600 12px var(--ui); letter-spacing: .3px; }
 .tray.pre { border-color: var(--accent-line); }
-.tray-grid { display: grid; grid-template-columns: 106px repeat(8, minmax(0, 1fr)); gap: 6px; }
-.tray-cat { grid-column: 1; grid-row: span var(--rows, 1); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 6px; padding: 8px 10px;
-  border-radius: 10px; border: 1px solid rgba(255, 180, 60, .2); background: linear-gradient(90deg, rgba(255, 180, 60, .13), rgba(255, 180, 60, .025));
-  font: 600 10px/1.25 var(--ui); letter-spacing: 1.1px; text-transform: uppercase; color: var(--accent-hi); }
-.tray-cat::before { content: ''; width: 16px; height: 2px; border-radius: 2px; background: var(--accent); }
-.tray-item { position: relative; height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 13px 4px 4px; border-radius: 10px; cursor: pointer;
+.tray-grid { display: flex; flex-direction: column; }
+/* класс оружия — блок со своей подписью; между классами отступ и разделитель */
+.tray-group { display: grid; grid-template-columns: 106px minmax(0, 1fr); gap: 6px; }
+.tray-group + .tray-group { margin-top: 9px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, .07); }
+.tray-items { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; align-content: start; }
+.tray-cat-count { font: 500 10px/1.2 var(--ui); letter-spacing: .2px; color: var(--text-3); }
+/* подпись класса: значок, название, число видов — спокойная карточка с акцентной кромкой слева */
+.tray-cat { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 3px; padding: 8px 10px 8px 12px; overflow: hidden;
+  border-radius: 10px; border: 1px solid rgba(255, 255, 255, .07); background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015)); }
+.tray-cat::after { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); opacity: .85; }
+.tray-cat .cat-ico { width: 18px; height: 18px; color: var(--accent); margin-bottom: 3px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tray-cat-name { font: 600 11.5px/1.2 var(--ui); letter-spacing: .3px; color: var(--text); }
+.tray-item { position: relative; height: 76px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 15px 4px 4px; border-radius: 10px; cursor: pointer;
   background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02) 70%); border: 1px solid var(--line); transition: border-color .14s, background .14s, transform .12s; }
-.tray-item:hover { border-color: var(--accent-line); background: radial-gradient(circle at 50% 36%, rgba(255, 180, 60, .18), rgba(255, 180, 60, .04) 70%); transform: translateY(-1px); }
+.tray-cursor { position: fixed; left: 0; top: 0; z-index: 30; pointer-events: none; margin: -2px 0 0 -3px; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); will-change: transform; }
+.tray-item:hover, .tray-item.hover { border-color: var(--accent-line); background: radial-gradient(circle at 50% 36%, rgba(255, 180, 60, .18), rgba(255, 180, 60, .04) 70%); transform: translateY(-1px); }
 .tray-item.on { border-color: var(--accent); background: radial-gradient(circle at 50% 36%, rgba(255, 180, 60, .28), rgba(255, 180, 60, .08) 70%); box-shadow: 0 0 0 1px var(--accent), 0 8px 20px rgba(255, 160, 40, .2); }
 .tray-item.off { opacity: .34; cursor: default; filter: grayscale(.7); }
-.tray-item.off:hover { transform: none; border-color: var(--line); background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02) 70%); }
-.tray-item canvas { width: 42px; height: 42px; flex: none; }
+.tray-item.off:hover, .tray-item.off.hover { transform: none; border-color: var(--line); background: radial-gradient(circle at 50% 36%, rgba(255, 255, 255, .07), rgba(255, 255, 255, .02) 70%); }
+.tray-item canvas { width: 40px; height: 40px; flex: none; }
 .weapon-number { position: absolute; left: 6px; top: 4px; font: 600 11px var(--ui); color: var(--text-2); }
 .tray-item.on .weapon-number { color: var(--accent-hi); }
-.weapon-name { order: 2; display: block; width: 100%; margin-top: 3px; font: 500 10px/1.2 var(--ui); text-align: center; color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.weapon-name { order: 2; display: block; width: 100%; margin-top: 4px; font: 500 10px/1.25 var(--ui); text-align: center; color: var(--text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 2px; }
 .tray-item .am { position: absolute; right: 6px; top: 4px; font: 600 11px var(--ui); color: var(--accent-hi); text-shadow: 0 1px 2px #000; }
 .tray-item .lock { position: absolute; left: 3px; top: 3px; padding: 1px 5px; border-radius: 4px; background: rgba(10, 13, 18, .9); font: 600 9px/14px var(--ui); color: #ffb0a8; }
 .tray-info { margin-top: 12px; padding: 10px 12px; border-radius: 9px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); font-size: 12px; color: var(--text-2); min-height: 40px; line-height: 1.45; }
 .tray-info b { font: 400 14px var(--title); color: var(--text); }
 @media (max-width: 760px) {
-  .tray-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .tray-keys { display: none; }
-  .tray-cat { grid-column: 1 / -1; grid-row: auto; flex-direction: row; align-items: center; padding: 4px 8px; margin-top: 4px; }
+  .tray-group { grid-template-columns: minmax(0, 1fr); }
+  .tray-items { grid-template-columns: repeat(5, minmax(0, 1fr)); } .tray-keys { display: none; }
+  .tray-cat { flex-direction: row; align-items: center; padding: 4px 8px; }
 }
-@media (max-width: 480px) { .tray-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-height: 820px) and (min-width: 761px) {
-  .tray-item { height: 62px; padding: 12px 3px 3px; }
-  .tray-item canvas { width: 34px; height: 34px; }
-  .weapon-name { font-size: 9.5px; -webkit-line-clamp: 1; }
-  .tray-info { margin-top: 8px; font-size: 11.5px; }
+@media (max-width: 480px) { .tray-items { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* без прокрутки при любой высоте окна: плитки ниже, отступы между классами плотнее */
+@media (max-height: 860px) and (min-width: 761px) {
+  .tray { padding: 12px 14px 12px; }
+  .tray-head { margin-bottom: 8px; }
+  .tray-item { height: 62px; padding: 13px 3px 3px; }
+  .tray-item canvas { width: 30px; height: 30px; }
+  .weapon-name { font-size: 9.5px; margin-top: 2px; }
+  .tray-group + .tray-group { margin-top: 7px; padding-top: 7px; }
+  .tray-info { margin-top: 8px; font-size: 11.5px; padding: 8px 10px; }
+  .tray-cat { padding: 5px 8px 5px 11px; gap: 2px; }
+  .tray-cat .cat-ico { width: 14px; height: 14px; margin-bottom: 1px; }
+  .tray-cat-name { font-size: 11px; }
+}
+@media (max-height: 700px) and (min-width: 761px) {
+  .tray-item { height: 52px; padding: 12px 3px 2px; }
+  .tray-item canvas { width: 22px; height: 22px; }
+  .weapon-name { font-size: 9px; }
+  .tray-group + .tray-group { margin-top: 5px; padding-top: 5px; }
+  .tray-cat { padding: 4px 8px 4px 10px; }
+  .tray-cat .cat-ico { display: none; }
 }
 @media (max-height: 560px) {
   .tray { top: 8px; bottom: 8px; right: 8px; max-height: none; padding: 10px; }

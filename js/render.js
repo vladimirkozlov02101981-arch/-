@@ -94,6 +94,15 @@ class Camera {
     if (!T || P.key !== T.round + ':' + T.sid || !a || a.gone || (a.st !== 'stand' && a.st !== 'dead') || this.binoc) { this.postHold = null; return null; }
     return T.phase === 'aim' && T.shots === 0 ? null : P;   // выстрел ещё в пути к хосту — пока обычный обзор
   }
+  /** весь боец с оружием — в кадре с отступом m px от краёв: обзор сдвигается ровно настолько, насколько нужно
+      (после стрелок при любом масштабе, в том числе во время плавного перехода масштаба) */
+  fitBody(a, sw, sh, m = 14) {
+    // обзор уведён далеко (оптика, у цели) — к бойцу не прыгаем: стрелки возвращают его плавно
+    const [cx, cy] = this.toScreen(a.x, a.y - 20, sw, sh); if (cx < -sw * 0.3 || cx > sw * 1.3 || cy < -sh * 0.3 || cy > sh * 1.3) return;
+    const hw = sw / 2 / this.z, hh = sh / 2 / this.z, p = m / this.z;
+    const loX = a.x + 18 - hw + p, hiX = a.x - 18 + hw - p; if (loX <= hiX) this.x = clamp(this.x, loX, hiX); else this.x = a.x;
+    const loY = a.y + 4 - hh + p, hiY = a.y - 46 + hh - p; if (loY <= hiY) this.y = clamp(this.y, loY, hiY); else this.y = a.y - 21;
+  }
   /** место попадания видно на экране: не у самого края и не под панелью хода сверху */
   hitVisible(x, y, sw, sh) { const [px, py] = this.toScreen(x, y, sw, sh); return px > sw * 0.05 && px < sw * 0.95 && py > Math.max(sh * 0.06, 104) && py < sh * 0.94; }
   /** точка в кадре с запасом m (доля экрана) */
@@ -163,6 +172,7 @@ class Camera {
         const k = (1 / this.z - M.q0) / (1 / M.z1 - M.q0 || 1);
         this.x = M.x0 + (M.x1 - M.x0) * k; this.y = M.y0 + (M.y1 - M.y0) * k;
         if (this.z <= zmin * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; }
+        if (this.manualActive && actor && !this.binoc && !(this.edge && !this.scopeFocus)) this.fitBody(actor, sw, sh);   // обзор сдвинут стрелками: боец целиком в кадре и во время перехода
         if (this.manualActive && actor) { const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y; }
         this.vx = this.vy = 0; this.sx = this.sy = 0; this.glide = null;
         // масштаб дошёл до нужного: приближение отпускает камеру к обычному слежению (без паузы до следующего действия)
@@ -417,6 +427,8 @@ class Camera {
         if (Math.abs(this.offsetX) <= oldX + 1e-8) this.offsetX = clamp(this.offsetX, -Math.max(0, hw - 20 - margin), Math.max(0, hw - 20 - margin));
         if (this.offsetY >= oldY0 - 1e-8 && this.offsetY <= oldY1 + 1e-8) this.offsetY = clamp(this.offsetY, Math.min(0, 64 - hh + margin), Math.max(0, hh - 14 - margin));
         const home = this.soldierTarget(actor, sh); this.x = home.x + this.offsetX; this.y = home.y + this.offsetY;
+        // и в любом случае весь боец остаётся в кадре (раньше при масштабе после стрелок он мог уйти за край)
+        this.fitBody(actor, sw, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y;
       }
     }
     { const x0 = this.x, y0 = this.y; this.clampTo(sc, sw, sh, startFrame); if (this.x !== x0) this.vx = 0; if (this.y !== y0) this.vy = 0;   // у края карты инерция не копится

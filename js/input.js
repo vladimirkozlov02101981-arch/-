@@ -74,6 +74,12 @@ const Input = {
     window.addEventListener('contextmenu', (e) => { if (this.drag || this.binocOn) e.preventDefault(); });
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('mousemove', (e) => {
+      // открыт «Арсенал»: мышь остаётся захваченной, свой курсор панели ведут сдвиги мыши, он не выходит за панель;
+      // игра (прицел, оптика, обзор) этих движений не получает
+      if (this.locked && this.box) { const r = this.box(); if (r) {
+        const c = this.boxCur || (this.boxCur = { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 });
+        c.x = clamp(c.x + (e.movementX || 0), r.left + 3, r.right - 4); c.y = clamp(c.y + (e.movementY || 0), r.top + 3, r.bottom - 4);
+        if (this.onBoxMove) this.onBoxMove(c.x, c.y); return; } }
       // при захвате указателя координаты не меняются — внутренний курсор ведут относительные сдвиги, он не выходит за поле
       const nx = this.locked ? clamp(this.mouse.x + (e.movementX || 0), 0, cv.clientWidth - 1) : e.clientX;
       const ny = this.locked ? clamp(this.mouse.y + (e.movementY || 0), 0, cv.clientHeight - 1) : e.clientY;
@@ -91,6 +97,8 @@ const Input = {
       if (this.wantLock && !this.locked && this.lockable()) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.lock(); e.preventDefault(); return; }
       if (this.wantLock && !document.fullscreenElement) this.enterFull();
       if (!this.locked) { this.mouse.x = e.clientX; this.mouse.y = e.clientY; }
+      // клик в открытом «Арсенале» выбирает оружие под курсором панели и не стреляет
+      if (this.locked && this.box && e.button === 0 && this.box()) { if (this.boxCur && this.onBoxClick) this.onBoxClick(this.boxCur.x, this.boxCur.y); e.preventDefault(); return; }
       this.mouse.inside = true;
       this.mouse.down[e.button] = true; if (e.button === 0) this.mouse.clicked[0] = true;
       // ПКМ: короткий клик — арсенал, удержание — бинокль

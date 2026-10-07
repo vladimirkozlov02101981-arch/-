@@ -71,6 +71,19 @@ const { chromium } = require('playwright'), fs = require('node:fs'), assert = re
     });
     assert(out.manualZoom.inDrift <= 8 && out.manualZoom.outDrift <= 8, 'soldier keeps its screen place while zooming after arrows ' + JSON.stringify(out.manualZoom));
 
+    // 4. боец у края экрана после стрелок, приближение до предела: весь боец с оружием остаётся в кадре
+    out.edgeFit = await page.evaluate(async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms)), cam = App.cam, sw = App.ren.sw, sh = App.ren.sh, s = App.sc.soldiers.find(o => o.id === App.sc.turn.sid);
+      App.ctl.select('bazooka'); cam.userZ = null; await wait(1500);
+      Input.keys.ArrowRight = true; await wait(2500); Input.keys.ArrowRight = false; await wait(300);
+      const box = () => { const a = cam.toScreen(s.x - 16, s.y - 44, sw, sh), b = cam.toScreen(s.x + 16, s.y + 4, sw, sh); return [Math.round(a[0]), Math.round(a[1]), Math.round(b[0]), Math.round(b[1])]; };
+      const before = box(); let worst = 1e9;
+      for (let i = 0; i < 8; i++) { cam.zoomAt(1.35, sw / 2, sh / 2, sw, sh); for (let k = 0; k < 6; k++) { await wait(50); const b = box(); worst = Math.min(worst, b[0], b[1], sw - b[2], sh - b[3]); } }
+      await wait(1200); const after = box(); worst = Math.min(worst, after[0], after[1], sw - after[2], sh - after[3]);
+      return { before, after, worst, z: +cam.z.toFixed(2), manual: cam.manualActive };
+    });
+    assert(out.edgeFit.worst >= 0, 'whole soldier stays in frame while zooming after arrows ' + JSON.stringify(out.edgeFit));
+
     assert.deepEqual(out.errors, []); out.pass = true;
   } finally {
     await browser.close(); fs.mkdirSync('test-results/camera37', { recursive: true }); fs.writeFileSync('test-results/camera37/report.json', JSON.stringify(out, null, 2)); console.log(JSON.stringify(out));

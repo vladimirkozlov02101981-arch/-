@@ -3,6 +3,17 @@
    Интерфейс: меню, лобби, настройки, панель оружия, чат
    ========================================================= */
 const $ = (id) => document.getElementById(id);
+/** линейные значки классов оружия для панели «Арсенал» (порядок как в WEAPON_CATS) */
+const TRAY_CAT_ICONS = [
+  '<path d="M5 19c1-3 2-4 4-5l5-5c2-2 4.5-3 6-3 0 1.5-1 4-3 6l-5 5c-1 2-2 3-5 4z"/><path d="M9 14l1 1M7 17l-2 2M14 7.5l2.5 2.5"/>',
+  '<circle cx="11" cy="14" r="6"/><path d="M9 8V6h4v2M13 6l3-2M17 4l2 1"/>',
+  '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+  '<path d="M12 3l1.8 5.2L19 7l-3 4.3L20 15l-5.3.2L12 21l-2.7-5.8L4 15l4-3.7L5 7l5.2 1.2z"/>',
+  '<path d="M2 13l20-6-6 7 1 6-3-4-4 1z"/><path d="M10 15l-1 4"/>',
+  '<path d="M8 7V5a4 4 0 0 1 8 0v2"/><rect x="5" y="7" width="14" height="14" rx="3"/><path d="M9 12h6M12 12v4"/>',
+];
+/** «8 видов», «1 вид», «2 вида» */
+function traySorts(n) { const m10 = n % 10, m100 = n % 100; return n + ' ' + (m10 === 1 && m100 !== 11 ? 'вид' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'вида' : 'видов'); }
 const UI = {
   app: null, cur: null, mode: 'hotseat', teamsCfg: null, settings: null, trayOpen: false, traySig: '', chatOpen: false,
   /* набор настроек на экране настройки боя: work — копия; workSrc — откуда он ('base' — основной, иначе id конфигурации);
@@ -445,7 +456,7 @@ const UI = {
     row(['up', 'down', '#у лестницы'], 'Подъём / спуск; клавиши движения влево и вправо — сойти с лестницы, клавиша прыжка — отпрыгнуть');
     row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки. Мышью можно вести оптику по всей карте. Прицел не колеблется. Пока стреляет автомат, узи, миниган, огнемёт, кислотомёт, автопушка или залп, ствол ведётся вверх-вниз мышью или клавишами прицела (разброс пуль прежний)');
     row(['fire', '#/ ЛКМ'], 'Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела');
-    row(['#Мышь в бою'], 'Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню или панель оружия, чтобы освободить мышь; клик по полю боя возвращает управление в игру');
+    row(['#Мышь в бою'], 'Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню, чтобы освободить мышь (в панели оружия свой курсор — он появляется в её центре и не выходит за её края); клик по полю боя возвращает управление в игру');
     row(['tray', '#/ ПКМ'], 'Панель оружия. Во время хода соперника (и после своего выстрела) панель, Q/E и цифры выбирают оружие на ваш следующий ход — оно будет в руках в начале хода');
     row(['prev', 'next'], 'Предыдущее / следующее доступное оружие в порядке панели: слева направо, сверху вниз');
     row(['#Num 1–41', '#/ 1–41'], 'Выбрать оружие по номеру: цифры правой панели или (в обычном бою) цифры над буквами. 1–9 — сразу; 10–41 — сначала 0, затем две цифры номера. Номера постоянные, даже если боеприпасы закончились');
@@ -484,7 +495,30 @@ const UI = {
     });
   },
   /* ---------- панель оружия ---------- */
-  setTray(on) { this.trayOpen = on; $('tray').classList.toggle('hidden', !on); this.traySig = ''; },
+  setTray(on) { this.trayOpen = on; $('tray').classList.toggle('hidden', !on); this.traySig = ''; this.trayCursor(on); },
+  /** курсор «Арсенала»: при открытии — в центре панели, дальше её краёв не уходит (мышь остаётся захваченной игрой) */
+  trayCursor(on) {
+    if (typeof Input === 'undefined') return;
+    if (!on) { Input.box = null; Input.boxCur = null; const cur = $('tray-cursor'); if (cur) cur.classList.add('hidden'); this.trayHoverEl(null); return; }
+    // границы по разметке (без анимации появления панели: она въезжает на 10 px)
+    Input.box = () => { const t = $('tray'); if (!t || t.classList.contains('hidden') || !Input.locked) return null; const l = t.offsetLeft, tp = t.offsetTop; return { left: l, top: tp, right: l + t.offsetWidth, bottom: tp + t.offsetHeight }; };
+    Input.onBoxMove = (x, y) => this.trayPointer(x, y);
+    Input.onBoxClick = (x, y) => { const el = document.elementFromPoint(x, y), it = el && el.closest ? el.closest('.tray-item') : null; if (it) it.click(); };
+    this.trayCenter = true; this.centerTrayCursor();   // ещё раз — когда панель заполнится (updateTray)
+  },
+  centerTrayCursor() {
+    const r = Input.box && Input.box(); Input.boxCur = r ? { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 } : null;
+    if (Input.boxCur) this.trayPointer(Input.boxCur.x, Input.boxCur.y);
+  },
+  trayPointer(x, y) {
+    const cur = $('tray-cursor'); if (cur) { cur.classList.toggle('hidden', !Input.locked); cur.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`; }
+    const el = document.elementFromPoint(x, y), it = el && el.closest ? el.closest('.tray-item') : null; this.trayHoverEl(it);
+  },
+  trayHoverEl(it) {
+    if (this.trayHover === it) return;
+    if (this.trayHover) this.trayHover.classList.remove('hover');
+    this.trayHover = it; if (it) { it.classList.add('hover'); it.dispatchEvent(new MouseEvent('mouseenter')); }
+  },
   updateTray(sc, T, ctl) {
     if (!this.trayOpen || !sc) return;
     // во время хода соперника (или после своего выстрела) панель выбирает оружие на свой следующий ход
@@ -498,10 +532,16 @@ const UI = {
     const g = $('tray-grid'); g.innerHTML = '';
     WEAPON_CATS.forEach((cn, ci) => {
       const list = WEAPONS.filter(w => w.cat === ci);
-      const lab = document.createElement('div'); lab.className = 'tray-cat'; lab.textContent = cn; lab.style.setProperty('--rows', Math.max(1, Math.ceil(list.length / 8))); g.appendChild(lab);
+      // класс оружия — отдельный блок: подпись слева, свои плитки справа, между классами — отступ и тонкий разделитель
+      const group = document.createElement('section'); group.className = 'tray-group'; group.dataset.cat = ci;
+      const lab = document.createElement('div'); lab.className = 'tray-cat'; group.appendChild(lab);
+      { lab.insertAdjacentHTML('beforeend', '<svg class="cat-ico" viewBox="0 0 24 24" aria-hidden="true">' + (TRAY_CAT_ICONS[ci] || '') + '</svg>');
+        const t = document.createElement('span'); t.className = 'tray-cat-name'; t.textContent = cn; lab.appendChild(t);
+        const n = document.createElement('span'); n.className = 'tray-cat-count'; n.textContent = traySorts(list.length); lab.appendChild(n); }
+      const items = document.createElement('div'); items.className = 'tray-items'; group.appendChild(items); g.appendChild(group);
       for (let k = 0; k < list.length; k++) {
         const w = list[k]; const it = document.createElement('div');
-        if (!w) { g.appendChild(document.createElement('div')); continue; }
+        if (!w) { items.appendChild(document.createElement('div')); continue; }
         const am = tm ? tm.ammo[w.id] : undefined; const locked = w.minRound && round < w.minRound;
         const off = am === undefined || am === 0 || locked;
         it.className = 'tray-item' + (off ? ' off' : '') + (selected === w.id ? ' on' : '');
@@ -519,10 +559,11 @@ const UI = {
           if (!mine) { Sfx.play('denied'); return; }
           ctl.select(w.id); this.setTray(false);
         });
-        g.appendChild(it);
+        items.appendChild(it);
       }
     });
     this.fitTrayInfo();
+    if (this.trayCenter) { this.trayCenter = false; if (typeof Input !== 'undefined' && Input.box) this.centerTrayCursor(); }   // курсор — в центр уже заполненной панели
   },
   /** поле описания высотой по самому длинному описанию: при наведении на другое оружие список не прыгает вверх-вниз */
   fitTrayInfo() {

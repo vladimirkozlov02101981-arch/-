@@ -424,7 +424,8 @@ const App = {
     if (this.ctl) this.ctl.binoc = this.cam.binoc;
     Input.binocOn = this.cam.binoc;
     // мышь в бою захвачена игрой: не видна и не уходит за край; меню, пауза, панель оружия и чат её отпускают
-    Input.wantLock = !Input.isTouch && !!(this.sc && !this.demo && !UI.cur && !UI.trayOpen && !UI.chatOpen && !document.hidden);
+    // «Арсенал» мышь не отпускает: в нём свой курсор, который не выходит за панель (UI.trayCursor)
+    Input.wantLock = !Input.isTouch && !!(this.sc && !this.demo && !UI.cur && !UI.chatOpen && !document.hidden);
     if (!Input.wantLock) Input.unlock(); else if (!Input.locked) Input.lock();
     if (this.ctl && !document.hidden && !this.paused && !UI.chatOpen && !UI.cur) this.ctl.update(dt, sc, this.cam, sw, sh, turn); else if (this.ctl) this.ctl.suspend();
     if (!this.game || this.demo || this.paused) this.fx.update(this.paused ? 0 : dt, sc, this.cam, sw, sh);

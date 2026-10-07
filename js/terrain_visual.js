@@ -580,8 +580,9 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         const u = fy / phh;
         // шлифовка: тонкие горизонтальные штрихи; вмятины — пологие пятна тени
         const brush = tl.t1[((y & 255) << 8) | ((x >> 3) & 255)], dent = tileAt(tl.t2, x, y, 3, 31);
-        let f = (0.86 + 0.34 * Math.exp(-(u - 0.3) * (u - 0.3) * 30)) * (0.95 + (brush - 0.5) * 0.1) * (dent < 0.2 ? 0.9 + dent * 0.5 : 1);
-        r = P.base[0] * f; g = P.base[1] * f; bl = P.base[2] * f; o.spec = 0.7;
+        let f = P.matte ? (0.9 + (tileAt(tl.t3, x, y, 4, 13) - 0.5) * 0.16 + (u < 0.15 ? 0.05 : 0)) * (0.96 + (brush - 0.5) * 0.06) * (dent < 0.2 ? 0.92 + dent * 0.4 : 1)
+          : (0.86 + 0.34 * Math.exp(-(u - 0.3) * (u - 0.3) * 30)) * (0.95 + (brush - 0.5) * 0.1) * (dent < 0.2 ? 0.9 + dent * 0.5 : 1);
+        r = P.base[0] * f; g = P.base[1] * f; bl = P.base[2] * f; o.spec = P.matte ? 0.12 : 0.7;
         if (fx < 1.2 || fy < 1.2) { r *= 0.5; g *= 0.5; bl *= 0.5; o.spec = 0; }
         else if (fx < 2.6 || fy < 2.6) { r *= 1.16; g *= 1.16; bl *= 1.16; }
         else if (fx > pw - 2.2 || fy > phh - 2.2) { r *= 0.78; g *= 0.78; bl *= 0.78; }
@@ -590,20 +591,41 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         else if (Math.abs(rx) < 1.6 && ry > 1 && ry < 14 && hash3(Math.floor(x / pw), Math.floor(y / phh), 7) > 0.55) {   // ржавый потёк под заклёпкой
           const k = (1 - ry / 14) * 0.55; r += (P.rust[0] - r) * k; g += (P.rust[1] - g) * k; bl += (P.rust[2] - bl) * k; o.spec *= 0.5; }
         if (n3 > 0.66) { const k = Math.min(1, (n3 - 0.66) * 6) * 0.75; r += (P.rust[0] - r) * k; g += (P.rust[1] - g) * k; bl += (P.rust[2] - bl) * k; o.spec *= 1 - k; }
+        if (P.frost) {
+          // иней: в швах и у верхних кромок панелей светлее, мягкие пятна изморози, у самого верха — снег
+          const F = P.frost, seam = fx < 1.2 || fy < 1.2, top = fy < 3.5 ? (1 - fy / 3.5) : 0;
+          const patch = Math.max(0, tileAt(tl.t2, x, y, 4, 57) * 0.7 + tileAt(tl.t3, x, y, 3, 71) * 0.3 - 0.58) / 0.42;
+          const k = Math.min(0.75, (seam ? 0.45 : 0) + top * 0.35 + patch * 0.55 + (d < 4 && t < 3 ? 0.4 : 0));
+          r += (F[0] - r) * k; g += (F[1] - g) * k; bl += (F[2] - bl) * k; o.spec *= 1 - k * 0.5;
+        }
         break;
       }
-      case 7: { // лёд: светлый у поверхности, густо-синий в толще, трещинки и искры
-        const A = S.iceA, B = S.iceB, k = Math.min(1, d / 64) * 0.75 + n3 * 0.25;
-        r = A[0] + (B[0] - A[0]) * k; g = A[1] + (B[1] - A[1]) * k; bl = A[2] + (B[2] - A[2]) * k;
-        const dv = Math.abs(tl.tv[ty2 | ((x >> 1) & 255)] - 0.5); if (dv < 0.01) { r = 236; g = 250; bl = 255; }
-        if (hash3(x, y, 5) > 0.997) { r = g = bl = 255; }
-        // пузырьки воздуха, слои намерзания, иней у поверхности
-        { const bx = Math.floor(x / 9), by = Math.floor(y / 9), hb = hash3(bx, by, 21);
-          if (hb > 0.86) { const cx = bx * 9 + 4.5, cy = by * 9 + 4.5, rr = (x - cx) * (x - cx) + (y - cy) * (y - cy), rad = 1 + hb * 2.2;
-            if (rr < rad * rad) { const k = rr < (rad - 0.8) * (rad - 0.8) ? 0.1 : 0.45; r += (255 - r) * k; g += (255 - g) * k; bl += (255 - bl) * k; } } }
-        { const layer = Math.sin(y * 0.18 + tileAt(tl.t3, x, y, 3) * 6); r += layer * 5; g += layer * 6; bl += layer * 4; }
-        if (d < 6 && n1 > 0.55) { r += (250 - r) * 0.45; g += (253 - g) * 0.45; bl += (255 - bl) * 0.45; }
-        o.spec = 0.9;
+      case 7: { // лёд как в эталоне: гладкий объём — светлый у поверхности, глубокий синий в толще, мягкое преломление,
+        // редкие тонкие трещины и иней у кромки (без колец-пузырей и пиксельных искр: при приближении они давали «пиксель-арт»)
+        const k = Math.min(1, d / 80);
+        if (k < 0.5) { const q = k / 0.5; r = 214 + (124 - 214) * q; g = 240 + (190 - 240) * q; bl = 250 + (222 - 250) * q; }
+        else { const q = (k - 0.5) / 0.5; r = 124 + (66 - 124) * q; g = 190 + (130 - 190) * q; bl = 222 + (176 - 222) * q; }
+        // вертикальная исчерченность, как у ледниковых стен (фон, эталон): светлые и голубые полосы разной ширины
+        { const vs = tileAt(tl.t1, x * 1.4, y * 0.12, 1, 63) - 0.5, vs2 = tileAt(tl.t2, x * 0.7, y * 0.08, 2, 19) - 0.5;
+          const sk = vs * 0.6 + vs2 * 0.4; r += sk * 26; g += sk * 22; bl += sk * 14; }
+        // преломление: крупные мягкие пятна 30–60 px, ±7 по яркости, чуть холоднее в тёмных
+        const fb = (tileAt(tl.t3, x, y, 5, 11) - 0.5) * 0.65 + (tileAt(tl.t2, x * 0.9 + y * 0.3, y, 4, 29) - 0.5) * 0.35;
+        r += fb * 16; g += fb * 19; bl += fb * 15;
+        // слои намерзания — пологие полосы разной плотности и тонкие вытянутые штрихи внутри
+        { const layer = Math.sin(y * 0.09 + tileAt(tl.t3, x, y, 4, 3) * 5); r += layer * 3.5; g += layer * 4; bl += layer * 3; }
+        { const sv = tileAt(tl.t1, x * 0.25, y * 1.6, 1, 47) - 0.5; r += sv * 9 * k; g += sv * 10 * k; bl += sv * 8 * k; }
+        // тёмные глубинные пятна (воздушные карманы в толще), мягкие
+        { const dp = Math.max(0, tileAt(tl.t3, x, y, 5, 83) - 0.62) / 0.38; if (dp > 0 && k > 0.35) { const q = dp * 0.22 * k; r *= 1 - q; g *= 1 - q * 0.8; bl *= 1 - q * 0.5; } }
+        // тонкие трещины двух масштабов: редкие, сглаженные (непрозрачность до 30 %)
+        { const cv = Math.abs(veinAt(tl.tv, x * 0.42 + 91, y * 0.42 + 17) - 0.5), wd = 0.0075;
+          if (cv < wd) { const q = (1 - cv / wd) * 0.3; r += (238 - r) * q; g += (248 - g) * q; bl += (255 - bl) * q; }
+          const cv2 = Math.abs(veinAt(tl.tv, x * 0.9 + 333, y * 0.9 + 211) - 0.5), wd2 = 0.006;
+          if (cv2 < wd2 && k > 0.2) { const q = (1 - cv2 / wd2) * 0.22; r += (230 - r) * q; g += (244 - g) * q; bl += (255 - bl) * q; } }
+        // широкие блики под 45° в толще
+        { const st = Math.sin((x + y) * 0.03 + fb * 3); if (st > 0.9 && d > 8) { const q = (st - 0.9) / 0.1 * 0.1; r += (255 - r) * q; g += (255 - g) * q; bl += (255 - bl) * q; } }
+        // иней и свет под снегом у самой поверхности
+        if (d < 6) { const q = (1 - d / 6) * (0.35 + n1 * 0.15); r += (244 - r) * q; g += (250 - g) * q; bl += (255 - bl) * q; }
+        o.spec = 0.6;
         break;
       }
       case 8: { // кристалл: неправильные грани (ячейки Вороного), плавный перелив цвета, светлые рёбра, свечение изнутри
