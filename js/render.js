@@ -561,6 +561,17 @@ class Renderer {
     if (a.blink > 0) a.blink -= dt;
     return a;
   }
+  /** деревья и другие спрайты декора при приближении — из версий ×3: рисуются в отдельный кадр, земля вырезает их
+      (декор стоит позади ландшафта), кадр ложится поверх размытой 1× копии в слое декора */
+  drawSpriteLayer(c, sc, v, scale) {
+    const L = sc.terrain.spriteLayer, cv = c.canvas; if (!cv || typeof cv.width !== 'number') return;
+    if (!this.spriteCv || this.spriteCv.width !== cv.width || this.spriteCv.height !== cv.height) this.spriteCv = makeCanvas(cv.width, cv.height);
+    const d = this.spriteCv.getContext('2d'); d.setTransform(1, 0, 0, 1, 0, 0); d.globalCompositeOperation = 'source-over'; d.clearRect(0, 0, cv.width, cv.height);
+    d.setTransform(c.getTransform()); d.imageSmoothingEnabled = true;
+    if (!L.draw(d, v, Math.max(1.0001, scale))) return;
+    d.globalCompositeOperation = 'destination-out'; this.blit(d, sc.terrain.canvas, v, sc); d.globalCompositeOperation = 'source-over';
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.spriteCv, 0, 0); c.restore();
+  }
   blit(c, img, v, sc) {
     const x0 = Math.max(0, Math.floor(v.x0)), y0 = Math.max(0, Math.floor(v.y0)), x1 = Math.min(sc.W, Math.ceil(v.x1)), y1 = Math.min(sc.H, Math.ceil(v.y1));
     if (x1 > x0 && y1 > y0) c.drawImage(img, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
@@ -570,20 +581,51 @@ class Renderer {
   drawReflection(c, wy, t) {
     const m = c.getTransform(), cv = c.canvas, sy = Math.round(wy * m.d + m.f);
     if (sy <= 0 || sy >= cv.height - 2) return;
-    const depth = Math.min(sy, cv.height - sy, Math.round(260 * m.d)), band = Math.max(1, Math.round(2 * this.dpr));
+    const depth = Math.min(sy, cv.height - sy, Math.round(200 * m.d)), band = Math.max(1, Math.round(2 * this.dpr));
     if (depth <= 0) return;   // отражение меньше физического пикселя не создаёт нулевой источник drawImage
-    // снимок полосы над водой в половинном разрешении: при растяжении обратно он мягко размыт (вода не зеркало) — так же, как
-    // прежний blur-фильтр, но без дорогого фильтра каждый кадр
-    const HW = Math.ceil(cv.width / 2), HD = Math.max(1, Math.ceil(depth / 2));
+    // снимок полосы над водой вчетверо мельче: при растяжении обратно он мягко размыт (вода не зеркало, мелкие детали вроде
+    // иллюминаторов не отражаются чёткими кольцами) — без дорогого фильтра каждый кадр
+    const HW = Math.ceil(cv.width / 4), HD = Math.max(1, Math.ceil(depth / 4));
     if (!this.reflCv || this.reflCv.width !== HW || this.reflCv.height < HD) this.reflCv = makeCanvas(HW, Math.max(HD, 8));
     const r = this.reflCv.getContext('2d'); r.setTransform(1, 0, 0, 1, 0, 0); r.imageSmoothingEnabled = true; r.clearRect(0, 0, HW, HD);
-    r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, HW, HD);   // снимок полосы над водой, чуть размыт — вода не зеркало
+    r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, HW, HD);   // снимок полосы над водой, размыт — вода не зеркало
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     for (let k = 0; k < depth; k += band) {
-      const q = 1 - k / depth, a = (0.08 + 0.38 * Math.pow(q, 1.4)) * (0.88 + 0.12 * Math.sin(t * 2.4 + k * 0.08));
-      const dx = (Math.sin(t * 1.8 + k * 0.065) * 1.1 + Math.sin(t * 3.1 + k * 0.16) * 0.6 + Math.cos(k * 0.28 - t * 0.9) * 0.35) * (1 + (k / depth) * 1.1) * this.dpr;
+      const q = 1 - k / depth, a = (0.06 + 0.3 * Math.pow(q, 1.6)) * (0.86 + 0.14 * Math.sin(t * 2.4 + k * 0.08));
+      const dx = (Math.sin(t * 1.8 + k * 0.065) * 2.2 + Math.sin(t * 3.1 + k * 0.16) * 1.3 + Math.cos(k * 0.28 - t * 0.9) * 0.8) * (1 + (k / depth) * 2) * m.d;
       c.globalAlpha = Math.max(0, Math.min(1, a));
-      c.drawImage(this.reflCv, 0, (depth - k - band) / 2, HW, band / 2, dx, sy + k, cv.width, band);
+      c.drawImage(this.reflCv, 0, (depth - k - band) / 4, HW, band / 4, dx, sy + k, cv.width, band);
+    }
+    c.restore();
+  }
+  /** плитка каустики: сеть светлых линий по границам ячеек Ворлея (бесшовная), рисуется один раз */
+  causticTile() {
+    if (this.caustic !== undefined) return this.caustic;
+    this.caustic = null;
+    try {
+      const N = 128, cv = makeCanvas(N, N), x = cv.getContext('2d'), img = x.createImageData(N, N), d = img.data, P = [];
+      for (let i = 0; i < 14; i++) P.push([hash3(i, 1, 91) * N, hash3(i, 2, 91) * N]);
+      for (let y = 0; y < N; y++) for (let xx = 0; xx < N; xx++) {
+        let f1 = 1e9, f2 = 1e9;
+        // искривлённые координаты (периодические): границы ячеек — волнистые линии, а не многоугольная «сетка»
+        const K = TAU / N, wx = xx + Math.sin(y * K * 2 + 1.3) * 5 + Math.sin(xx * K * 3) * 2.5, wy = y + Math.sin(xx * K * 2 + 0.7) * 5 + Math.sin(y * K * 3 + 2) * 2.5;
+        for (const [px, py] of P) for (let oy = -N; oy <= N; oy += N) for (let ox = -N; ox <= N; ox += N) { const dd = Math.hypot(wx - px - ox, wy - py - oy); if (dd < f1) { f2 = f1; f1 = dd; } else if (dd < f2) f2 = dd; }
+        const v = Math.max(0, 1 - (f2 - f1) / 5), j = (y * N + xx) * 4; d[j] = d[j + 1] = d[j + 2] = 255; d[j + 3] = v * v * v * 210;
+      }
+      x.putImageData(img, 0, 0); this.caustic = cv;
+    } catch (e) { this.caustic = null; }
+    return this.caustic;
+  }
+  /** каустика под водой: два слоя сети разного масштаба плывут навстречу, гаснут с глубиной; ночью почти не видна */
+  drawCaustics(c, L, x0, x1, wy, t) {
+    const tile = this.causticTile(); if (!tile || typeof c.createPattern !== 'function' || typeof DOMMatrix === 'undefined') return;
+    const pat = c.createPattern(tile, 'repeat'); if (!pat || typeof pat.setTransform !== 'function') return;
+    const col = hex2rgb(L.top), lum = (col[0] * 0.3 + col[1] * 0.59 + col[2] * 0.11) / 255;
+    c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = pat;
+    for (let b = 0; b < 2; b++) {
+      const s = b ? 1.7 : 1.15, sp = b ? -7 : 10;
+      pat.setTransform(new DOMMatrix([s, 0, 0, s * 0.5, t * sp, wy + t * (b ? 3 : -2)]));
+      for (let k = 0; k < 8; k++) { c.globalAlpha = lum * (b ? 0.055 : 0.085) * Math.pow(1 - k / 8, 1.5); c.fillRect(x0, wy + 5 + k * 26, x1 - x0, 26); }
     }
     c.restore();
   }
@@ -599,10 +641,33 @@ class Renderer {
     c.save(); c.globalAlpha = L.alpha; c.fillStyle = g; c.fill(); c.restore();
     if (!lava) this.drawReflection(c, wy, t);
     c.save();
-    c.lineWidth = lava ? 3 : 2; c.strokeStyle = lava ? 'rgba(255,240,170,0.9)' : rgba(L.foam, 0.85); c.beginPath();
-    for (let x = x0; x <= x1 + step; x += step) { const y = wy + this.wave(x, tt, 0) * amp; if (x === x0) c.moveTo(x, y); else c.lineTo(x, y); }
-    c.stroke();
-    const span = Math.max(1, x1 - x0);
+    const span = Math.max(1, x1 - x0), far = span > 9000, fc = hex2rgb(L.foam);
+    const edge = (dy) => { c.beginPath(); for (let x = x0; x <= x1 + step; x += step) { const y = wy + dy + this.wave(x, tt, 0) * amp; if (x === x0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke(); };
+    if (lava) { c.lineWidth = 3; c.strokeStyle = 'rgba(255,240,170,0.9)'; edge(0); }
+    else if (far) { c.lineWidth = 1.5; c.strokeStyle = rgba(L.foam, 0.45); edge(0); }
+    else {
+      c.lineWidth = 3; c.strokeStyle = 'rgba(0,22,38,0.2)'; edge(2.4);                                  // мениск: у самой кромки вода темнее
+      // тонкий блик по кромке, прерывистый: участки по 36 ед. мира с разной яркостью, медленно переливаются
+      const seg = 36; c.lineWidth = 1.2;
+      for (let sx = Math.floor(x0 / seg) * seg; sx < x1 + step; sx += seg) {
+        const a = 0.1 + 0.55 * Math.max(0, Math.sin(sx * 0.031 + t * 0.6) * 0.55 + Math.sin(sx * 0.0117 - t * 0.33) * 0.45);
+        if (a < 0.17) continue;
+        c.strokeStyle = `rgba(${fc[0]},${fc[1]},${fc[2]},${a.toFixed(3)})`; c.beginPath();
+        for (let x = sx, n = 0; n < 5; x += seg / 4, n++) { const y = wy - 0.4 + this.wave(x, tt, 0) * amp; if (!n) c.moveTo(x, y); else c.lineTo(x, y); }
+        c.stroke();
+      }
+      this.drawCaustics(c, L, x0, x1, wy, t);
+      // рябь у поверхности: короткие тёмные и светлые дуги, привязаны к миру (не ездят вместе с камерой), к глубине реже и бледнее
+      c.lineCap = 'round';
+      const P = 520;
+      for (let tx = Math.floor(x0 / P), nR = span > 4000 ? 18 : 40; tx * P < x1; tx++) for (let i = 0; i < nR; i++) {
+        const h1 = hash3(tx, i, 31), h2 = hash3(tx, i, 32), dep = h2 * h2, dark = i % 3 !== 0;
+        const gx = tx * P + h1 * P + Math.sin(t * (0.5 + h2) + i) * 6, gy = wy + this.wave(gx, tt, 0) * amp + 3 + dep * 60, len = (5 + hash3(tx, i, 33) * 16) * (1 - dep * 0.5);
+        c.lineWidth = dark ? 1.3 : 0.9;
+        c.strokeStyle = dark ? `rgba(0,20,36,${(0.2 * (1 - dep * 0.7)).toFixed(3)})` : `rgba(${fc[0]},${fc[1]},${fc[2]},${(0.2 * (1 - dep)).toFixed(3)})`;
+        c.beginPath(); c.moveTo(gx - len, gy); c.quadraticCurveTo(gx, gy + (dark ? 1.3 : -1.1), gx + len, gy); c.stroke();
+      }
+    }
     if (lava) {
       c.fillStyle = 'rgba(90,20,5,0.45)';
       for (let i = 0; i < 24; i++) { const gx = x0 + (((i * 173.3 + t * 9 * (i % 3 + 1)) % span) + span) % span; c.beginPath(); c.ellipse(gx, wy + 8 + (i * 7 % 40), 12 + (i % 5) * 5, 3, 0, 0, TAU); c.fill(); }
@@ -636,14 +701,14 @@ class Renderer {
         const bright = Math.max(0, (shimmer - 0.15) / 0.85);
         const alpha = (0.10 + 0.65 * nearSun) * bright * (1 - depthFrac * 0.75);
         if (alpha <= 0.02) continue;
-        const rw = (2.5 + (i % 6) * 1.8 + nearSun * 8) * (0.8 + 0.4 * bright);
-        const rh = Math.max(0.6, (0.8 + nearSun * 0.8) * (0.6 + 0.5 * (1 - depthFrac)));
+        const rw = (1.6 + (i % 6) * 1.0 + nearSun * 5) * (0.8 + 0.4 * bright);
+        const rh = Math.max(0.3, (0.35 + nearSun * 0.4) * (0.6 + 0.5 * (1 - depthFrac)));
         c.fillStyle = `rgba(${glintCol[0]},${glintCol[1]},${glintCol[2]},${Math.min(1, alpha).toFixed(3)})`;
         c.beginPath();
         c.ellipse(gx, gy, rw, rh, Math.sin(gx * 0.02 + t) * 0.08, 0, TAU);
         c.fill();
         if (nearSun > 0.65 && bright > 0.82 && depthFrac < 0.25) {
-          const sparkSize = 1.2 + (bright - 0.82) * 5;
+          const sparkSize = 0.7 + (bright - 0.82) * 3;
           c.fillStyle = `rgba(255,255,255,${Math.min(0.95, alpha * 1.4).toFixed(2)})`;
           c.beginPath();
           c.arc(gx, gy, sparkSize, 0, TAU);
@@ -664,6 +729,7 @@ class Renderer {
     this.drawLiquid(c, sc, v, t, true);
     if (!this.hires) this.hires = new HiResTerrain();
     if (!this.hires.draw(c, sc, v, z * dpr)) { this.blit(c, sc.terrain.decor, v, sc); this.blit(c, sc.terrain.canvas, v, sc); }
+    if (sc.terrain.spriteLayer && z * dpr > 1) this.drawSpriteLayer(c, sc, v, z * dpr);
     if (sc.terrain.drawSurfaceNative) sc.terrain.drawSurfaceNative(c, v, z * dpr);
     drawTacticalRoutes(c, sc.map, sc.terrain);
     if (window.NAV_DEBUG && typeof NavCheck !== 'undefined' && NAV_DEBUG.map === sc.map.id) NavCheck.draw(c, NAV_DEBUG.res);
@@ -747,7 +813,7 @@ class Renderer {
       c.save(); c.setLineDash([6, 6]); c.lineWidth = 2;
       for (const bx of [T.ox - WALK_BUDGET, T.ox + WALK_BUDGET]) {
         const near = Math.abs(s.x - bx) < 160;
-        c.strokeStyle = near ? 'rgba(255,190,90,0.85)' : 'rgba(255,255,255,0.28)';
+        c.strokeStyle = near ? 'rgba(255,190,90,0.85)' : 'rgba(255,255,255,0.15)';   // вдали — едва заметно, вблизи бойца — ярко
         c.beginPath(); c.moveTo(bx, s.y - 90); c.lineTo(bx, s.y + 30); c.stroke();
       }
       c.restore();

@@ -67,7 +67,7 @@ const THEMES = {
       strata: ['#b0c1d6', '#a3b5cc', '#bccbdd', '#98abc3', '#c3d0e0'], band: 30, bandSharp: 0.2,
       rock: ['#7c8cac', '#6e7e9e', '#8898b6', '#647494', '#9aa8c2'], rockDirt: true, rockBand: 62, rim: '#b0c8ff',
       pebbles: ['#c2cfdd', '#a9b8ca', '#d5dee8'],
-      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [3.15, 2.9, 2.16] },   // r21: скала по эталону (ref/game = 1.35, 1.29, 1.14)
+      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.45, 1.38, 1.27] },   // v38: пласты гранита со снегом из Blender (make_masonry.py strata), яркость — по эталону
     },
     scatter: ['rockSnow', 'iceCrystal', 'bushSnow', 'rockSnow'],
     weather: 'snow', birds: false, ambient: '#c3cde6', ambientSound: 'snow',

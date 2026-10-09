@@ -79,8 +79,8 @@ function buildLevel(def, fn) {
   return Object.assign(def, { shapes: L.shapes.concat(L.late), ladders: L.ladders, decor: L.decor, props: L.props, fixtures: L.fixtures });
 }
 
-const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1, tex: 'brick_light' };
-const P_TRIM = { base: '#8a8c90', alt: '#7e8084', mortar: '#2a2b2e', w: 32, h: 16, var: 0.06, tex: 'brick_light' };
+const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1, tex: 'stone_valley', texK: 0.92, world: true };   /* тёсаный гранит из Blender: dev/blender/make_masonry.py */
+const P_TRIM = { base: '#8a8c90', alt: '#7e8084', mortar: '#2a2b2e', w: 32, h: 16, var: 0.06, tex: 'stone_valley', texK: 0.84, world: true };
 const P_KEEP = { base: '#5c5f64', alt: '#666a6f', mortar: '#1e1f22', w: 32, h: 16, var: 0.05, tex: 'brick_keep' };
 const P_BARN = { base: '#8f4a2e', gap: '#3a1a0e', plank: 9, var: 0.16, tex: 'wood_ship' };
 
@@ -179,7 +179,7 @@ const MAP_VALLEY = buildLevel({
 /* =========================================================
    2. Каньон Сухой Кости
    ========================================================= */
-const P_SAND = { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 24, h: 12, var: 0.08 };
+const P_SAND = { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 24, h: 12, var: 0.08, tex: 'stone_sand', texK: 1.2, world: true };   /* песчаник из Blender: make_masonry.py sand */
 const MAP_CANYON = buildLevel({
   id: 'canyon', name: 'Каньон Сухой Кости', theme: 'desert', W: 6400, H: 1800, water: 1700, seed: 202,
   desc: 'Храм в скале, Великая арка над каньоном, расщелина с верёвочным мостом и старая шахта',
@@ -220,7 +220,7 @@ const MAP_CANYON = buildLevel({
    3. Ледяной перевал
    ========================================================= */
 // полярная станция: выцветшая матовая красная краска с инеем (раньше — глянцевый ярко-красный «пластик»)
-const P_STATION = { base: '#94473a', rust: '#5a2a1c', plate: [40, 20], matte: true, frost: [226, 233, 242] };
+const P_STATION = { base: '#8e4234', rust: '#4e2418', plate: [128, 96], ribs: 8, matte: true, frost: [226, 233, 242] };   /* профнастил: гофр 8 px, лист 128×96 */
 const MAP_ARCTIC = buildLevel({
   id: 'arctic', name: 'Ледяной перевал', theme: 'arctic', W: 6400, H: 1800, water: 1700, seed: 303,
   desc: 'Деревня иглу, ледяная пещера сквозь гору, метеостанция на пике, ледник с трещиной и полярная станция',
@@ -245,7 +245,7 @@ const MAP_ARCTIC = buildLevel({
   B.decor(['igloo', 360], ['igloo', 600, null, 0.85], ['snowman', 820], ['pineSnow', 200, null, 1], ['pineSnow', 1000, null, 1.1], ['sled', 480], ['pineSnow', 1350, null, 0.9], ['pineSnow', 1540, null, 1.05], ['iceCrystal', 1900, 1424], ['iceCrystal', 2500, 1402],
     ['pineSnow', 2700, null, 1.1], ['pineSnow', 2860, null, 0.95], ['pineSnow', 3700, null, 1.1], ['antenna', 4480, 1058], ['snowman', 4640, null, 0.9]);
   B.prop(['smoke', 360, null, { dy: -34 }], ['beacon', 4480, 990]);
-  district(B, { from: [4660, 1210], gy: 1210, water: 1700, mat: 'metal', pal: P_STATION, cover: 'ice', bridge: { mat: 'metal', pal: PAL.steel, railCol: 'rgba(200,210,220,0.8)' }, decor: [['pine', 4970, null, 1], ['pine', 6220, null, 1.1]], props: [['beacon', 5380, 720]] });
+  district(B, { from: [4660, 1210], gy: 1210, water: 1700, mat: 'metal', pal: P_STATION, cover: 'ice', bridge: { mat: 'metal', pal: PAL.steel, railCol: 'rgba(200,210,220,0.8)' }, decor: [['pineSnow', 4970, null, 1], ['pineSnow', 6220, null, 1.1]], props: [['beacon', 5380, 720]] });
 });
 
 /* =========================================================
@@ -308,8 +308,8 @@ const MAP_ALIEN = buildLevel({
 /* =========================================================
    6. Пиратская бухта
    ========================================================= */
-const P_LIGHT = { base: '#e9e4d8', alt: '#d6cfbf', mortar: '#9a9282', w: 22, h: 11, var: 0.06 };
-const P_RED = { base: '#c0392b', alt: '#a93226', mortar: '#6e1d16', w: 22, h: 11, var: 0.06 };
+const P_LIGHT = { base: '#e9e4d8', alt: '#d6cfbf', mortar: '#9a9282', w: 22, h: 11, var: 0.06, tex: 'stone_light', texK: 1.2, world: true };   /* побелённый камень: make_masonry.py light */
+const P_RED = { base: '#c0392b', alt: '#a93226', mortar: '#6e1d16', w: 22, h: 11, var: 0.06, tex: 'stone_light', texK: [1.0, 0.42, 0.36], world: true };   /* красные полосы маяка — тот же камень, окрашенный */
 const MAP_PIRATE = buildLevel({
   id: 'pirate', name: 'Пиратская бухта', theme: 'tropical', W: 6400, H: 1800, water: 1690, seed: 606,
   desc: 'Форт на утёсе, пристань, галеон с трюмом и вороньим гнездом, скала-череп с пещерой сокровищ и маяк',

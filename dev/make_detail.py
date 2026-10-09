@@ -26,13 +26,18 @@ def main(src, name, out='assets/tex'):
     Image.fromarray(np.clip(ratio * 128, 0, 255).astype(np.uint8), 'L').save(os.path.join(out, 'hi', name + '.webp'), quality=92, method=6)
     print('DETAIL', name, W, H, 'ratio sd %.3f' % ratio.std())
 
-def update_list(out='assets/tex', js='js/art.js'):
-    """список готовых карт деталей в js/art.js (чтобы игра не запрашивала несуществующие файлы)"""
+def update_list(name=None, out='assets/tex', js='js/art.js'):
+    """список готовых карт деталей в js/art.js (чтобы игра не запрашивала несуществующие файлы). С именем — только
+    добавляет его: материалы с родным цветом (TexLib.nativeAvail) нарочно исключены из списка, хотя файлы лежат в hi"""
     import re
-    names = sorted(f[:-5] for f in os.listdir(os.path.join(out, 'hi')) if f.endswith('.webp'))
     s = open(js, encoding='utf-8', newline='').read()
+    if name:
+        have = re.search(r"hiAvail: new Set\(\[([^\]]*)\]\)", s).group(1)
+        names = sorted(set(re.findall(r"'([^']+)'", have)) | {name})
+    else:
+        names = sorted(f[:-5] for f in os.listdir(os.path.join(out, 'hi')) if f.endswith('.webp'))
     s = re.sub(r"hiAvail: new Set\(\[[^\]]*\]\)", "hiAvail: new Set([" + ", ".join("'%s'" % n for n in names) + "])", s)
     open(js, 'w', encoding='utf-8', newline='').write(s)
 
 if __name__ == '__main__':
-    main(*sys.argv[1:]); update_list()
+    main(*sys.argv[1:]); update_list(sys.argv[2])

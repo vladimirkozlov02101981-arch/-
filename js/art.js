@@ -47,16 +47,16 @@ const MapArt = {
 const TexLib = {
   names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall', 'grass_valley', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'bush1', 'bush2',
     'rock_canyon', 'dirt_canyon', 'cave_canyon', 'rock_arctic', 'cave_arctic', 'rock_volcano', 'cave_volcano', 'rock_alien', 'dirt_alien', 'cave_alien', 'grass_alien',
-    'wood_ship', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash', 'soldier_free', 'soldier_aim', 'haystack1', 'alien_tree1', 'alien_tree2', 'facade_city', 'tree_pine_snow1', 'tree_pine_snow2',
+    'wood_ship', 'wood_hull', 'stone_valley', 'stone_castle', 'stone_sand', 'stone_dark', 'stone_light', 'ivy', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash', 'soldier_free', 'soldier_aim', 'haystack1', 'alien_tree1', 'alien_tree2', 'facade_city', 'tree_pine_snow1', 'tree_pine_snow2',
     // оружие в руках (wpn_*, кадр 48×24 ед.) и метательное в полёте (ent_*, кадр 16×16 ед.) — рендер Blender, dev/blender/make_weapons2.py
     'wpn_assault', 'wpn_revolver', 'wpn_magnum', 'wpn_uzi', 'wpn_acid', 'wpn_plasma', 'wpn_autocannon', 'wpn_tesla', 'wpn_repulsor', 'wpn_rpg', 'wpn_bazooka', 'wpn_homing', 'wpn_mortar', 'wpn_drill', 'wpn_salvo', 'wpn_grenade', 'wpn_cluster', 'wpn_sticky', 'wpn_molotov', 'wpn_blackhole', 'wpn_shotgun', 'wpn_sniper', 'wpn_minigun', 'wpn_flamer', 'wpn_railgun', 'wpn_dynamite', 'wpn_mine', 'wpn_robot', 'wpn_boot', 'wpn_bat', 'wpn_airstrike', 'wpn_lightning', 'wpn_orbital', 'wpn_nuke', 'wpn_tpgrenade', 'wpn_teleport', 'wpn_girder', 'wpn_pickaxe', 'wpn_medkit', 'wpn_skip', 'wpn_jetpack', 'ent_grenade', 'ent_cluster', 'ent_sticky', 'ent_molotov', 'ent_blackhole', 'ent_dynamite', 'ent_mine', 'ent_robot', 'ent_tpgrenade'],
   data: {},
   ready: null,
   commonReady: null,
   pending: new Map(), images: new Map(), surfacePending: new Map(), surfaceImages: new Map(),
-  surfaceNames: ['grass_valley', 'grass_alien', 'bush1', 'bush2'],
+  surfaceNames: ['grass_valley', 'grass_alien', 'bush1', 'bush2', 'ivy', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'tree_pine_snow1', 'tree_pine_snow2', 'haystack1', 'alien_tree1', 'alien_tree2'],   // версии ×3–4 в assets/tex/surface
   hi: {},
-  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_volcano', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
+  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_volcano', 'stone_castle', 'stone_dark', 'stone_light', 'stone_sand', 'stone_valley', 'wood_hull', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
   loadHi(n) {
     if (this.hi[n] !== undefined) return this.hi[n];
@@ -201,7 +201,8 @@ const TexLib = {
     // The cap uses these sprites even when a scatter list contains no explicit bush.
     const cap = theme.ground.cap;
     if (cap.blades && !cap.snow && !cap.bushPal) { add('bush1'); add('bush2'); }
-    const surface = theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' ? this.surfaceNames.filter(n => names.has(n)) : [];   // как в drawSurfaceDetails
+    if (cap.blades && !cap.snow && !cap.glowBlades && (map.shapes || []).some(s => s.mat === 'brick')) add('ivy');   // плющ на кладке (как в drawSurfaceDetails)
+    const surface = this.surfaceNames.filter(n => names.has(n));   // трава (валлей/замки/Alien), плющ, деревья и кусты — чёткие при приближении
     return { mapId: map.id, names: [...names], surface, panorama: MapArt.themeMap[theme.id] || 'valley' };
   },
   /** Await this before buildVisual/Net.ready; no arbitrary three-second fallback race. */

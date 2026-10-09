@@ -58,8 +58,9 @@ const SIN8 = [0, 0.3826834324, 0.7071067812, 0.9238795325, 1, 0.9238795325, 0.70
 /* Поверхностные спрайты и векторы сохраняют исходное разрешение при любом зуме.
    Холст 1x нужен только для старого renderer/отражений; native replay его не масштабирует. */
 class TerrainSurface {
-  constructor(terrain) {
-    this.terrain = terrain; this.canvas = makeCanvas(terrain.W, terrain.H); this.ctx = this.canvas.getContext('2d');
+  /** ctx — рисовать в готовый холст (слой спрайтов декора пишет команды поверх временного слоя декора, свой холст не нужен) */
+  constructor(terrain, ctx = null) {
+    this.terrain = terrain; this.canvas = ctx ? ctx.canvas : makeCanvas(terrain.W, terrain.H); this.ctx = ctx || this.canvas.getContext('2d');
     this.commands = []; this.bins = new Map(); this.damage = new Map(); this.sources = new Map(); this.gradients = new WeakMap();
     this.anchorPoint = null; this.size = 128; this.scratch = null; this.nativeSources = new Map();
   }
@@ -340,6 +341,7 @@ class Terrain {
     this.applyBlast(this.dctx, B, false);   // задняя стена и декор — только там, куда дошла волна (за целым перекрытием всё остаётся)
     this.applyBlast(this.gctx, B, false);
     if (this.surface) { this.applyBlast(this.surface.ctx, B, false); this.surface.damageBlast(B); }
+    if (this.spriteLayer) this.spriteLayer.damageBlast(B);
     this.touches.push([cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8]); (this.blasts || (this.blasts = [])).push([cx, cy, r]); this.version++;
   }
   carveLine(x1, y1, x2, y2, r) {
@@ -359,6 +361,7 @@ class Terrain {
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke(); cx.restore();
     }
     if (this.surface) this.surface.damageLine(x1, y1, x2, y2, r);
+    if (this.spriteLayer) this.spriteLayer.damageLine(x1, y1, x2, y2, r);
     this.touches.push([Math.min(x1, x2) - r - 10, Math.min(y1, y2) - r - 10, Math.max(x1, x2) + r + 10, Math.max(y1, y2) + r + 10]); (this.blasts || (this.blasts = [])).push([x1, y1, r, x2, y2]); this.version++;
   }
   /** уборка после хода: срезает одиночные пиксели-занозы и мелкие бугорки на поверхностях и убирает висящую крошку

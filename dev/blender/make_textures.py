@@ -15,7 +15,7 @@
 """
 import bpy, bmesh, math, os, random, sys
 import numpy as np
-from mathutils import Vector, noise
+from mathutils import Vector, Quaternion, noise
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, '..', '..', 'assets', 'tex'))
@@ -917,7 +917,85 @@ def _branches(bm, p, d, L, r, depth, rng, tips, spread=0.7, taper=0.62):
     if depth >= 2 and rng.random() < 0.6: tips.append(end)
 
 
+def snow_spruce(name, seed, px=320):
+    """заснеженная ель как в эталоне арктики: узкий конус из ~28 мутовок, лапы провисают и загибают кончики вверх,
+    хвоя — плоские веера побегов вдоль лап, на верхней стороне каждой лапы — слитный снег (метасферы) с голубой тенью снизу.
+    Кадр тот же, что у прежних спрайтов (4 м, основание ствола у низа), поэтому в игре дерево стоит на том же месте"""
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 1.1
+    ld = bpy.data.lights['sun']; ld.energy = 5.5; ld.color = (0.92, 0.96, 1.0)            # холодный свет: ночь, северное сияние
+    bpy.data.objects['sun'].rotation_euler = Vector((0.5, 0.55, -0.67)).normalized().to_track_quat('-Z', 'Y').to_euler()   # сверху слева, чуть спереди
+    H = 4.0; cam = sc.camera; cam.data.ortho_scale = H
+    cam.location = (0, -10, H / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
+    Ht = 3.8 + rng.uniform(-0.1, 0.05); z0 = 0.32; Lmax = 0.9 + rng.uniform(-0.06, 0.06)
+    bm = bmesh.new()
+    _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, Ht)), 0.1, 0.01, 12)
+    fol = bmesh.new(); cl = fol.loops.layers.float_color.new('Col')
+    shades = [lin(c) for c in ((0.08, 0.17, 0.12), (0.11, 0.22, 0.15), (0.15, 0.28, 0.19), (0.20, 0.34, 0.23), (0.09, 0.19, 0.16))]
+    snow = []
+    h = z0
+    while h < Ht - 0.1:
+        u = (h - z0) / (Ht - z0); nb = rng.randint(5, 7) if u < 0.62 else rng.randint(3, 5); a0 = rng.uniform(0, math.tau)
+        for i in range(nb + 4):                                   # мутовка и 4 мелкие межмутовочные ветки (без снега)
+            main = i < nb; hh = h + (rng.uniform(-0.04, 0.04) if main else rng.uniform(0.06, 0.13))
+            a = a0 + i / nb * math.tau + rng.uniform(-0.35, 0.35) if main else rng.uniform(0, math.tau)
+            L = (Lmax * (1 - u) ** 0.92 + 0.08) * (rng.uniform(0.7, 1.2) if main else rng.uniform(0.35, 0.6))
+            dv = Vector((math.cos(a), math.sin(a), 0)); pv = Vector((-math.sin(a), math.cos(a), 0))
+            rise = 0.05 + 0.42 * u + rng.uniform(-0.05, 0.05); droop = 0.62 * (1 - u) + 0.12; tip = 0.12
+
+            def P(t, h=hh, dv=dv, L=L, rise=rise, droop=droop):
+                return Vector((0, 0, h)) + dv * (L * t) + Vector((0, 0, L * (rise * t - droop * t * t + tip * t ** 4)))
+            pts = [P(k / 5) for k in range(6)]
+            for k in range(5):
+                _cone(bm, pts[k], pts[k + 1], (0.02 * (1 - k / 5) + 0.004) * (0.5 + L), (0.02 * (1 - (k + 1) / 5) + 0.003) * (0.5 + L), 6)
+            t = 0.1
+            while t < 0.98:                                       # побеги веером по обе стороны лапы, к кончику короче
+                p = P(t); tg = (P(min(1.0, t + 0.03)) - P(max(0.0, t - 0.03))).normalized()
+                for sg in (-1, 1):
+                    ls = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.7, 1.1)
+                    sd = (tg * 0.8 + pv * sg * 0.6 + Vector((0, 0, -0.22))).normalized()
+                    for q in range(3):
+                        _leaf_cluster(fol, cl, p + sd * ls * (q + 0.6) / 3, 0.04 + 0.02 * (1 - t), 12, rng, shades, 0.45, 0.045, True)
+                t += 0.075 + rng.uniform(0, 0.03)
+            _leaf_cluster(fol, cl, P(1.0), 0.055, 16, rng, shades, 0.5, 0.045, True)
+            t = 0.12                                              # снег на верхней стороне лапы, с разрывами
+            while main and t < 0.92:
+                if rng.random() < (0.75 if u < 0.62 else 0.5):
+                    w = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.55, 0.95)
+                    snow.append((P(t) + Vector((0, 0, 0.045)) + pv * rng.uniform(-0.04, 0.04), w, a, rng.uniform(0.6, 1.3) * (0.45 + 0.55 * min(1.0, L / 0.55))))
+                t += 0.07 + rng.uniform(0, 0.025)
+        h += rng.uniform(0.17, 0.27)
+    _cone(bm, Vector((0, 0, Ht - 0.15)), Vector((0, 0, Ht + 0.12)), 0.012, 0.003, 6)           # верхушка
+    _leaf_cluster(fol, cl, Vector((0, 0, Ht)), 0.07, 30, rng, shades, 1.4, 0.05, True)
+    snow.append((Vector((0, 0, Ht + 0.02)), 0.06, 0.0, 1.0))
+    tr = bpy.data.meshes.new('trunk'); bm.to_mesh(tr); bm.free()
+    tr.materials.append(mat_stone('bark', (0.24, 0.19, 0.15), (0.42, 0.34, 0.26), rough=0.85, spec=0.2, scale=9, bumpk=1.0))
+    for pl in tr.polygons: pl.use_smooth = True
+    ob = bpy.data.objects.new('trunk', tr); ob['tone'] = 0.0; sc.collection.objects.link(ob)
+    lm = bpy.data.meshes.new('needles'); fol.to_mesh(lm); fol.free()
+    m, nt, b = principled('needles', 0.6, 0.3)
+    at = nt.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'Col'; nt.links.new(at.outputs['Color'], b.inputs['Base Color'])
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.15; break
+    lm.materials.append(m); sc.collection.objects.link(bpy.data.objects.new('needles', lm))
+    # снег: метасферы сливаются в мягкие комья вдоль лап
+    mb = bpy.data.metaballs.new('snow'); mb.resolution = 0.02; mb.render_resolution = 0.012; mb.threshold = 0.6
+    for (p, w, a, k) in snow:
+        el = mb.elements.new(type='ELLIPSOID'); el.co = p; el.radius = 0.2 * k
+        el.size_x = 1.0; el.size_y = max(0.4, min(1.2, w / 0.2)); el.size_z = 0.3
+        el.rotation = Quaternion((0, 0, 1), a)
+        el.stiffness = 2.0
+    ms, nts, bs = principled('snow', 0.55, 0.4); bs.inputs['Base Color'].default_value = (0.9, 0.94, 1.0, 1)
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in bs.inputs: bs.inputs[key].default_value = 0.35; break
+    mb.materials.append(ms); sc.collection.objects.link(bpy.data.objects.new('snow', mb))
+    render(sc, name)
+
+
 def tree_sprite(name, seed, kind, px=320):
+    if kind == 'pine_snow': return snow_spruce(name, seed, px)
     sc = reset(); rng = random.Random(seed)
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'

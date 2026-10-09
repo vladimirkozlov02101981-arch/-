@@ -5,6 +5,7 @@
    ========================================================= */
 let DECOR_THEME = 'valley';
 let DECOR_T = null;   // ландшафт карты, на которую сейчас ставится декор (тени ложатся по его поверхности)
+let DECOR_LAYER = null;   // слой спрайтов декора на время placeDecor: { layer: TerrainSurface, rec, ctx }
 /** тень предмета на земле: в каждом столбце ложится на поверхность прямо под ним, повторяя склон; над пустотой
     (край обрыва, крутой склон, узкая опора) её нет — прежний плоский овал висел в воздухе */
 function groundShadow(c, cx, cy, rx, ry, alpha) {
@@ -79,10 +80,13 @@ function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1)
 /** дерево-спрайт из Blender (прозрачный фон, основание ствола — низ кадра). Нет файла — false, рисуем процедурно */
 function treeSprite(c, names, x, y, s, r, size) {
   const have = names.filter((n) => TexLib.data[n]); if (!have.length) return false;
-  const T = TexLib.data[have[(r() * have.length) | 0]], D = size * s * r.range(0.9, 1.1);
+  const name = have[(r() * have.length) | 0], T = TexLib.data[name], D = size * s * r.range(0.9, 1.1);
   groundShadow(c, x + D * 0.06, y + 2, D * 0.26, D * 0.035, 0.28);   // тень кроны на земле
-  c.save(); c.translate(x, y + 3); if (r() < 0.5) c.scale(-1, 1);
-  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(T.canvas, -D / 2, -D, D, D); c.restore();
+  // сам спрайт — через запись слоя спрайтов (тот же холст): при приближении он перерисовывается из версии ×3, а не растягивается
+  const L = DECOR_LAYER && DECOR_LAYER.ctx === c ? DECOR_LAYER : null, cc = L ? L.rec : c;
+  if (L) L.layer.sprite(T.canvas, name);
+  cc.save(); cc.translate(x, y + 3); if (r() < 0.5) cc.scale(-1, 1);
+  cc.imageSmoothingEnabled = true; cc.imageSmoothingQuality = 'high'; cc.drawImage(T.canvas, -D / 2, -D, D, D); cc.restore();
   return true;
 }
 
@@ -714,8 +718,14 @@ function lightDecorLayer(cv) {
 function placeDecor(T, theme, map, waterY, tops, mat) {
   // объекты рисуются на отдельный слой, освещаются одним солнцем и переносятся на слой декора
   const layer = makeCanvas(T.W, T.H), c = layer.getContext('2d', { willReadFrequently: true });
-  placeDecorOn(T, theme, map, waterY, tops, mat, c);
+  // спрайты из Blender (деревья, кусты, стога) записываются командами: при приближении Renderer.drawSpriteLayer рисует их
+  // из версий ×3 (assets/tex/surface) поверх ландшафта, скрывая там, где земля, — как будто они по-прежнему позади неё
+  const sl = typeof TerrainSurface !== 'undefined' ? new TerrainSurface(T, c) : null;
+  DECOR_LAYER = sl ? { layer: sl, rec: sl.recorder(), ctx: c } : null;
+  try { placeDecorOn(T, theme, map, waterY, tops, mat, c); } finally { DECOR_LAYER = null; }
   lightDecorLayer(layer); T.dctx.drawImage(layer, 0, 0);
+  T.spriteLayer = sl && sl.commands.length ? sl : null;
+  if (sl) { sl.canvas = null; sl.ctx = null; }   // 1× уже в слое декора; временный холст не держим
 }
 /** полуширина опоры предметов, которым нужна ровная земля под всем основанием (деревья стоят на склонах и сюда не входят) */
 const DECOR_FOOT = { windmill: 26, well: 15, fence: 28, haystack: 20, column: 9, watertower: 24, pot: 7, igloo: 30, snowman: 9, sled: 13, chest: 14, barrel: 8, cottage: 38, car: 30, planter: 13, bench: 15, billboard: 18, farmhouse: 44, pod: 8 };
