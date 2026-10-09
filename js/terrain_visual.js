@@ -886,7 +886,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         const mt0 = mat[i] || 1, mt = mt0 === 1 && S.rockDirt ? 2 : mt0; const dd = D[i], d = dd / 3, t = TD[i];
         const capT = !capMat[mt] ? 0 : snowLip ? T.snowCapT[x]
           : capThick * (S.grassy ? 0.78 + 0.44 * capN[x] : 0.5 + capN[x] * capN[x] * 1.3) + capS[x] * 2.6 + (t2[ty2 | ((x >> 1) & 255)] - 0.5) * 4 + fringe[x];
-        shadeMaterial(S, mt, x, y, t, capT, d, infos[sid[i]] || infos[0], o, false);
+        shadeMaterial(S, mt === 9 && S.rockDirt ? 2 : mt, x, y, t, capT, d, infos[sid[i]] || infos[0], o, false);   /* базальт вулкана — те же пласты с лавовыми трещинами, что и порода (эталон), а не «столбы-доски» */
         if (snowLip && capT > 0 && t < capT && capT - t < 1) {
           // граница снега и скалы со сглаживанием: доля снега в пикселе = дробная часть толщины шапки (без «лесенки»)
           const cov = capT - t, sr = o.r, sg = o.g, sb = o.b;
@@ -982,7 +982,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (o.tT && !o.emit) refF[i] = texRefId(o, x, y);
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
-        shadeMaterial(S, back[i] === 1 || back[i] === 2 ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
+        shadeMaterial(S, back[i] === 1 || back[i] === 2 || (back[i] === 9 && S.rockDirt) ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
         let wd = 24; for (let q = 1; q < 24; q++) { if ((y - q >= 0 && m[i - q * W]) ) { wd = Math.min(wd, q); break; } } for (let q = 1; q < wd; q++) { if ((x - q >= 0 && m[i - q]) || (x + q < W && m[i + q])) { wd = Math.min(wd, q * 1.3); break; } }
         const k = back[i] === 6 && S.snowy ? (0.86 + (1 - occ) * 0.14) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.2) * (0.74 + 0.26 * Math.min(1, wd / 24))
           : back[i] === 3 ? 0.97 * (0.86 + 0.14 * Math.min(1, wd / 24)) * (1 - shadowAt(x, y) * 0.12) * (1 + o.n1 * 0.04) : (back[i] <= 2 ? (0.3 + (1 - occ) * 0.5) * S.backK : back[i] === 3 ? 0.78 + (1 - occ) * 0.2 : 0.56 + (1 - occ) * 0.4) * (1 + o.n1 * 0.05) * (1 - shadowAt(x, y) * 0.3) * (back[i] === 3 ? 0.7 + 0.3 * Math.min(1, wd / 24) : 0.4 + 0.6 * Math.min(1, wd / 24)) * caveAO(m, i, W, y, back[i], H, wallShade) * (back[i] <= 2 ? 1.3 : 1); const j = i * 4;

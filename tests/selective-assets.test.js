@@ -46,11 +46,11 @@ test('Startup requests only common artwork and battle promotion shares pending r
 
 const expected = {
   valley: ['dirt_valley', 'cave_wall', 'grass_valley', 'stone_valley', 'ivy', 'wood_ship', 'brick_keep', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'haystack1', 'bush1', 'bush2'],
-  canyon: ['dirt_canyon', 'rock_canyon', 'cave_canyon', 'cap_sand', 'stone_sand', 'wood_light'],
-  arctic: ['rock_arctic', 'cave_arctic', 'cap_snow', 'tree_pine_snow1', 'tree_pine_snow2', 'wood_light'],   /* с версии 38 у станции тоже заснеженные ели */
-  volcano: ['rock_volcano', 'cave_volcano', 'cap_ash', 'stone_dark', 'wood_light'],
+  canyon: ['dirt_canyon', 'rock_canyon', 'cave_canyon', 'cap_sand', 'stone_sand', 'cactus1', 'cactus2', 'cactus3', 'deadtree1', 'deadtree2', 'wood_light'],
+  arctic: ['rock_arctic', 'cave_arctic', 'cap_snow', 'tree_pine_snow1', 'tree_pine_snow2', 'snowman1', 'snowman2', 'igloo1', 'icecrystal1', 'icecrystal2', 'wood_light'],   /* с версии 38 у станции тоже заснеженные ели */
+  volcano: ['rock_volcano', 'cave_volcano', 'cap_ash', 'stone_dark', 'deadtree_char1', 'deadtree_char2', 'wood_light'],
   alien: ['dirt_alien', 'rock_alien', 'cave_alien', 'grass_alien', 'alien_tree1', 'alien_tree2', 'wood_light'],
-  pirate: ['dirt_tropical', 'cave_wall', 'grass_tropical', 'wood_hull', 'stone_light', 'ivy', 'wood_light', 'bush1', 'bush2'],   /* с версии 38 обшивка — wood_hull */
+  pirate: ['dirt_tropical', 'cave_wall', 'grass_tropical', 'wood_hull', 'stone_light', 'ivy', 'palm1', 'palm2', 'palm3', 'wood_light', 'bush1', 'bush2'],   /* с версии 38 обшивка — wood_hull */
   castles: ['dirt_castle', 'cave_wall', 'grass_valley', 'stone_castle', 'ivy', 'wood_hull', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'haystack1', 'bush1', 'bush2'],
   city: ['concrete_city', 'facade_city', 'wood_light']
 };
@@ -59,7 +59,7 @@ for (const [id, names] of Object.entries(expected)) test('Selected ' + id + ' wa
   assert.deepEqual(Array.from(assets.names).sort(), names.slice().sort());
   assert.equal(assets.panorama, id);
   /* версия 38: родные версии ×3–4 (assets/tex/surface) — трава, плющ, деревья, кусты и стога, если они есть на карте */
-  const SURF = ['grass_valley', 'grass_alien', 'bush1', 'bush2', 'ivy', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'tree_pine_snow1', 'tree_pine_snow2', 'haystack1', 'alien_tree1', 'alien_tree2'];
+  const SURF = ['grass_valley', 'grass_alien', 'bush1', 'bush2', 'ivy', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'tree_pine_snow1', 'tree_pine_snow2', 'haystack1', 'alien_tree1', 'alien_tree2', 'snowman1', 'snowman2', 'cactus1', 'cactus2', 'cactus3', 'palm1', 'palm2', 'palm3', 'deadtree1', 'deadtree2', 'deadtree_char1', 'deadtree_char2', 'igloo1', 'icecrystal1', 'icecrystal2'];
   assert.deepEqual(Array.from(assets.surface).sort(), names.filter(n => SURF.includes(n)).sort());
   const ready = f.TexLib.loadForMap(id), again = f.TexLib.loadForMap(map);
   assert.equal(new Set(f.requests).size, f.requests.length);

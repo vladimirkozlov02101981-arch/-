@@ -163,6 +163,7 @@ const DECOR = {
   },
   pineSnow(c, g, x, y, s, r) { DECOR.pine(c, g, x, y, s, r, true); },
   palm(c, g, x, y, s, r) {
+    if (treeSprite(c, ['palm1', 'palm2', 'palm3'], x, y, s, r, 170)) return;   // пальма из Blender
     const h = r.range(90, 120) * s; const bend = r.range(-0.3, 0.3) * h;
     const P0 = [x, y + 4], P1 = [x + bend * 0.15, y - h * 0.55], P2 = [x + bend, y - h];
     const q = (t) => { const u = 1 - t; return [u * u * P0[0] + 2 * u * t * P1[0] + t * t * P2[0], u * u * P0[1] + 2 * u * t * P1[1] + t * t * P2[1]]; };
@@ -194,6 +195,7 @@ const DECOR = {
   },
   deadtree(c, g, x, y, s, r) {
     const charred = DECOR_THEME === 'volcano';
+    if (treeSprite(c, charred ? ['deadtree_char1', 'deadtree_char2'] : ['deadtree1', 'deadtree2'], x, y, s, r, 130)) return;   // сухое дерево из Blender
     const col = charred ? '#1c1412' : '#8c7862';
     const br = (x0, y0, a, len, w, d) => {
       const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
@@ -204,6 +206,7 @@ const DECOR = {
     br(x, y + 4, -Math.PI / 2 + r.range(-0.15, 0.15), r.range(28, 38) * s, 6 * s, 4);
   },
   cactus(c, g, x, y, s, r) {
+    if (treeSprite(c, ['cactus1', 'cactus2', 'cactus3'], x, y, s, r, 90)) return;   // сагуаро из Blender
     const h = r.range(48, 72) * s, w = r.range(10, 13) * s;
     const body = hgrad(c, x - w, x + w, ['#7cc05c', '#4a9440', '#2a5e26']);
     c.fillStyle = body; rrect(c, x - w / 2, y - h, w, h + 6, w / 2); c.fill();
@@ -304,7 +307,8 @@ const DECOR = {
     c.beginPath(); c.moveTo(x - 4 * s, y + 2); c.quadraticCurveTo(x - 12 * s, y - 10 * s, x - 5 * s, y - 20 * s); c.lineTo(x - 4 * s, y - 25 * s); c.lineTo(x + 4 * s, y - 25 * s); c.lineTo(x + 5 * s, y - 20 * s); c.quadraticCurveTo(x + 12 * s, y - 10 * s, x + 4 * s, y + 2); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(40,15,5,0.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 8 * s, y - 12 * s); c.lineTo(x + 8 * s, y - 12 * s); c.stroke();
   },
-  igloo(c, g, x, y, s) {
+  igloo(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['igloo1'], x, y, s, r, 90)) return;   // иглу из снежных блоков (Blender)
     const R = 34 * s;
     c.fillStyle = vgrad(c, y - R, y, ['#ffffff', '#e0ecfa', '#a9c2e0']); c.beginPath(); c.arc(x, y + 2, R, Math.PI, 0); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(120,150,190,0.55)'; c.lineWidth = 1;
@@ -312,7 +316,8 @@ const DECOR = {
     c.fillStyle = vgrad(c, y - 16 * s, y, ['#f4f8ff', '#b8cde6']); c.beginPath(); c.arc(x + R * 0.78, y + 2, 15 * s, Math.PI, 0); c.closePath(); c.fill();
     c.fillStyle = '#2a3a55'; c.beginPath(); c.arc(x + R * 0.86, y + 2, 9 * s, Math.PI, 0); c.closePath(); c.fill();
   },
-  snowman(c, g, x, y, s) {
+  snowman(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['snowman1', 'snowman2'], x, y, s, r, 80)) return;   // снеговик из Blender
     const balls = [[0, -11, 13], [0, -31, 10], [0, -47, 7.5]];
     for (const [dx, dy, r0] of balls) { const R = r0 * s; c.fillStyle = hgrad(c, x - R, x + R, ['#ffffff', '#eef4fb', '#b6c6dc']); circ(c, x + dx * s, y + dy * s, R); }
     c.fillStyle = '#1a1a1a'; circ(c, x - 2.6 * s, y - 49 * s, 1.1 * s); circ(c, x + 2.6 * s, y - 49 * s, 1.1 * s);
@@ -446,6 +451,7 @@ const DECOR = {
     if (g) { g.fillStyle = 'rgba(255,110,20,0.7)'; circ(g, x, y - 6 * s, 9 * s); }
   },
   iceCrystal(c, g, x, y, s, r) {
+    if (treeSprite(c, ['icecrystal1', 'icecrystal2'], x, y, s, r, 48)) return;   // полупрозрачные осколки льда (Blender)
     for (let i = 0; i < 4; i++) {
       const a = -Math.PI / 2 + r.range(-0.5, 0.5); const l = r.range(10, 22) * s; const w = r.range(3, 5) * s;
       const ex = x + Math.cos(a) * l, ey = y + Math.sin(a) * l; const nx = -Math.sin(a) * w, ny = Math.cos(a) * w;
