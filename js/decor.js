@@ -283,7 +283,8 @@ const DECOR = {
     for (let i = 0; i <= 4; i++) c.fillRect(x - len / 2 + i * len / 4 - 2 * s, y - 20 * s, 4 * s, 22 * s);
     c.fillRect(x - len / 2, y - 16 * s, len, 3 * s); c.fillRect(x - len / 2, y - 8 * s, len, 3 * s);
   },
-  watertower(c, g, x, y, s) {
+  watertower(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['watertower1'], x, y, s, r, 180)) return;   // деревянная водокачка из Blender
     const h = 110 * s; c.strokeStyle = '#5a3a22'; c.lineWidth = 4 * s;
     for (const dx of [-26, -9, 9, 26]) { c.beginPath(); c.moveTo(x + dx * s, y + 4); c.lineTo(x + dx * 0.8 * s, y - h); c.stroke(); }
     c.lineWidth = 1.6 * s; c.beginPath();
@@ -373,7 +374,8 @@ const DECOR = {
     c.fillStyle = '#3a3a3a'; c.fillRect(x - 10 * s, y - 20 * s, 20 * s, 2 * s); c.fillRect(x - 10 * s, y - 4 * s, 20 * s, 2 * s);
   },
   /* ---------- пустыня, лёд, вулкан ---------- */
-  skull(c, g, x, y, s) {
+  skull(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['skull1'], x, y, s, r, 44)) return;   // бычий череп из Blender
     c.fillStyle = '#efe6d2'; c.beginPath(); c.ellipse(x, y - 6 * s, 8 * s, 6 * s, 0, 0, TAU); c.fill();
     c.beginPath(); c.moveTo(x - 7 * s, y - 9 * s); c.quadraticCurveTo(x - 16 * s, y - 14 * s, x - 18 * s, y - 20 * s); c.quadraticCurveTo(x - 12 * s, y - 13 * s, x - 5 * s, y - 11 * s); c.fill();
     c.beginPath(); c.moveTo(x + 7 * s, y - 9 * s); c.quadraticCurveTo(x + 16 * s, y - 14 * s, x + 18 * s, y - 20 * s); c.quadraticCurveTo(x + 12 * s, y - 13 * s, x + 5 * s, y - 11 * s); c.fill();
@@ -427,6 +429,7 @@ const DECOR = {
     for (let i = 0; i < 6; i++) { const px = x + r.range(-9, 9) * s, rr = r.range(0.8, 2) * s; c.fillStyle = r.pick(['#8a6a4a', '#a88660', '#6e5238']); c.beginPath(); c.ellipse(px, y + 0.5, rr * 1.3, rr, 0, 0, TAU); c.fill(); }
   },
   spike(c, g, x, y, s, r) {
+    if (treeSprite(c, ['spike1', 'spike2'], x, y, s, r, 84)) { if (g) { g.fillStyle = 'rgba(255,90,20,0.3)'; g.beginPath(); g.ellipse(x, y - 28 * s, 5 * s, 22 * s, 0, 0, TAU); g.fill(); } return; }   // обсидиановый шип (Blender)
     const h = r.range(50, 70) * s, w = 14 * s;
     c.fillStyle = hgrad(c, x - w, x + w, ['#4a3a5a', '#1a1420', '#0a0708']);
     c.beginPath(); c.moveTo(x - w, y + 4); c.lineTo(x + r.range(-4, 4), y - h); c.lineTo(x + w, y + 4); c.closePath(); c.fill();
@@ -434,17 +437,20 @@ const DECOR = {
     if (g) { g.strokeStyle = 'rgba(255,90,20,0.8)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 2, y - h * 0.2); g.lineTo(x - 2, y - h * 0.5); g.lineTo(x + 3, y - h * 0.7); g.stroke(); }
     c.strokeStyle = '#ff7a2a'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x + 2, y - h * 0.2); c.lineTo(x - 2, y - h * 0.5); c.lineTo(x + 3, y - h * 0.7); c.stroke();
   },
-  bones(c, g, x, y, s) {
+  bones(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['bones1'], x, y, s, r, 44)) return;   // кости из Blender
     c.strokeStyle = '#d9cfb8'; c.lineWidth = 2.2 * s; c.lineCap = 'round';
     for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(x, y + 2, (8 + i * 4) * s, Math.PI * 1.1, Math.PI * 1.45); c.stroke(); }
     c.beginPath(); c.moveTo(x - 20 * s, y); c.lineTo(x + 6 * s, y - 2 * s); c.stroke();
   },
   obsidian(c, g, x, y, s, r) {
+    if (treeSprite(c, ['obsidian1', 'obsidian2'], x, y, s, r, 36)) return;   // осколки вулканического стекла (Blender)
     c.fillStyle = hgrad(c, x - 10 * s, x + 10 * s, ['#3a2e4a', '#16121c', '#050407']);
     c.beginPath(); c.moveTo(x - 10 * s, y + 3); c.lineTo(x - 6 * s, y - r.range(8, 16) * s); c.lineTo(x + 1 * s, y - r.range(14, 22) * s); c.lineTo(x + 8 * s, y - r.range(6, 12) * s); c.lineTo(x + 11 * s, y + 3); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(200,180,255,0.45)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 5 * s, y - 4 * s); c.lineTo(x, y - 14 * s); c.stroke();
   },
   lavarock(c, g, x, y, s, r) {
+    if (treeSprite(c, ['lavarock1', 'lavarock2'], x, y, s, r, 34)) { if (g) { g.fillStyle = 'rgba(255,110,20,0.55)'; circ(g, x, y - 6 * s, 9 * s); } return; }   // остывающая лава (Blender)
     c.fillStyle = hgrad(c, x - 12 * s, x + 12 * s, ['#4a3a36', '#2a201e', '#140e0d']);
     c.beginPath(); c.ellipse(x, y - 5 * s, 12 * s, 8 * s, 0, 0, TAU); c.fill();
     c.strokeStyle = '#ff8a2a'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 7 * s, y - 5 * s); c.lineTo(x - 1 * s, y - 8 * s); c.lineTo(x + 5 * s, y - 3 * s); c.stroke();
@@ -502,6 +508,7 @@ const DECOR = {
     c.restore();
   },
   tentacle(c, g, x, y, s, r) {
+    if (treeSprite(c, ['tentacle1'], x, y, s, r, 72)) return;   // щупальца (Blender)
     for (let i = 0; i < 4; i++) {
       const h = r.range(28, 50) * s, sw = r.range(-16, 16) * s; const x0 = x + (i - 1.5) * 7 * s;
       c.strokeStyle = i % 2 ? '#7a3fb0' : '#5a2a8a'; c.lineWidth = r.range(4, 6) * s; c.lineCap = 'round';
@@ -510,19 +517,25 @@ const DECOR = {
     }
   },
   alienplant(c, g, x, y, s, r) {
+    if (treeSprite(c, ['alienplant1', 'alienplant2'], x, y, s, r, 40)) { if (g) { g.fillStyle = 'rgba(120,255,230,0.35)'; circ(g, x, y - 22 * s, 12 * s); } return; }   // светящиеся побеги (Blender)
     for (let i = 0; i < 3; i++) {
       const h = r.range(14, 26) * s, a = r.range(-0.4, 0.4); const ex = x + Math.sin(a) * h, ey = y - Math.cos(a) * h;
       c.strokeStyle = '#2fa08a'; c.lineWidth = 1.5 * s; c.beginPath(); c.moveTo(x, y + 2); c.quadraticCurveTo(x, y - h * 0.5, ex, ey); c.stroke();
       c.fillStyle = '#5fd8c0'; circ(c, ex, ey, 2.6 * s); c.fillStyle = '#c8fff4'; circ(c, ex - 0.6 * s, ey - 0.6 * s, 1.1 * s); if (g) { g.fillStyle = 'rgba(120,255,230,0.45)'; circ(g, ex, ey, 4 * s); }
     }
   },
-  pod(c, g, x, y, s) {
+  pod(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['pod1'], x, y, s, r, 36)) { if (g) { g.fillStyle = 'rgba(255,120,230,0.35)'; circ(g, x, y - 12 * s, 11 * s); } return; }   // светящийся стручок (Blender)
     c.fillStyle = vgrad(c, y - 22 * s, y, ['#ffb0f0', '#c040b0', '#5a1a50']); c.beginPath(); c.ellipse(x, y - 10 * s, 9 * s, 13 * s, 0, 0, TAU); c.fill();
     c.strokeStyle = 'rgba(255,220,250,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y - 10 * s, 5 * s, 11 * s, 0, 0, TAU); c.stroke();
     if (g) { g.fillStyle = 'rgba(255,120,230,0.4)'; circ(g, x, y - 10 * s, 10 * s); }
   },
   crystal(c, g, x, y, s, r) {
     const cols = r() < 0.5 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];
+    if (treeSprite(c, cols[1] === '#5ff4ff' ? ['crystal_c1', 'crystal_c2'] : ['crystal_m1', 'crystal_m2'], x, y, s, r, 56)) {   // гранёные кристаллы (Blender), свечение — в слой света
+      if (g) { g.fillStyle = cols[1]; g.globalAlpha = 0.3; circ(g, x, y - 16 * s, 16 * s); g.globalAlpha = 1; }
+      return;
+    }
     for (let i = 0; i < 3; i++) {
       const a = -Math.PI / 2 + (i - 1) * 0.45 + r.range(-0.1, 0.1); const l = r.range(12, 22) * s * (i === 1 ? 1.3 : 1); const w = r.range(3, 5) * s;
       const ex = x + Math.cos(a) * l, ey = y + Math.sin(a) * l, nx = -Math.sin(a) * w, ny = Math.cos(a) * w;
@@ -609,6 +622,7 @@ const DECOR = {
     c.fillStyle = '#f4f8ff'; for (const b of blobs) { c.beginPath(); c.ellipse(b.x - b.r * 0.1, b.y - b.r * 0.55, b.r * 0.8, b.r * 0.45, 0, 0, TAU); c.fill(); }
   },
   rock(c, g, x, y, s, r, pal) {
+    if (!Array.isArray(pal) && treeSprite(c, DECOR_THEME === 'tropical' ? ['rockb1', 'rockb2'] : ['rock1', 'rock2', 'rock3'], x, y, s, r, 36)) return;   // валун с колотыми гранями (Blender)
     const w = r.range(9, 16) * s, h = r.range(6, 11) * s;
     const cols = pal || (DECOR_THEME === 'tropical' ? ['#a89880', '#7a6c58', '#4a4034'] : ['#a9a296', '#7c766c', '#4c4740']);
     // гранёный валун: контур из 7 точек, каждая грань (центр → ребро) освещена по своей нормали
@@ -628,7 +642,7 @@ const DECOR = {
     c.fillStyle = 'rgba(0,0,0,0.18)'; for (let i = 0; i < 8; i++) circ(c, x + r.range(-w, w) * 0.7, y - r.range(0, h) * 0.8, r.range(0.5, 1.2) * s);
     if (DECOR_THEME === 'valley' && r() < 0.5) { c.fillStyle = 'rgba(90,150,50,0.8)'; c.beginPath(); c.ellipse(x - w * 0.1, y - h * 0.85, w * 0.45, h * 0.22, 0, 0, TAU); c.fill(); }
   },
-  rockSnow(c, g, x, y, s, r) { DECOR.rock(c, g, x, y, s, r, ['#9fb0c6', '#6f8098', '#3f4c60']); c.fillStyle = '#f4f8ff'; c.beginPath(); c.ellipse(x - 2 * s, y - 8 * s, 9 * s, 3.5 * s, 0, 0, TAU); c.fill(); },
+  rockSnow(c, g, x, y, s, r) { if (treeSprite(c, ['rocksnow1', 'rocksnow2'], x, y, s, r, 36)) return; DECOR.rock(c, g, x, y, s, r, ['#9fb0c6', '#6f8098', '#3f4c60']); c.fillStyle = '#f4f8ff'; c.beginPath(); c.ellipse(x - 2 * s, y - 8 * s, 9 * s, 3.5 * s, 0, 0, TAU); c.fill(); },
   flowers(c, g, x, y, s, r) {
     // полевые цветы: мелкие (2–3 px) головки на тонких стеблях, приглушённые природные цвета, прячутся в траве
     for (let i = 0; i < 7; i++) {
