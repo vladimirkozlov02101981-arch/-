@@ -157,7 +157,7 @@ def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     for key in (argv or list(STYLES)):
         st = STYLES[key]; H, C, E = field(st)
-        hf.render_blocks(mt, st['name'], H, C, E, R2=R, up=1, light=st.get('light'), samples=128, rough=0.86, spec=0.22, emit=1.6)
+        hf.render_blocks(mt, st['name'], H, C, E, R2=R, up=1, light=st.get('light'), samples=128, rough=0.86, spec=0.22, emit=1.6, hgrain=0.25, cgrain=0.5, speck=0.004)
         print('RUBBLE', st['name'], flush=True)
 
 

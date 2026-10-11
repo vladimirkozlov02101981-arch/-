@@ -64,8 +64,11 @@ class HiResTerrain {
     const x0 = tx * T - P, y0 = ty * T - P, sx = this.sx;
     sx.clearRect(0, 0, w, w); sx.drawImage(terr.decor, x0, y0, w, w, 0, 0, w, w); sx.drawImage(terr.canvas, x0, y0, w, w, 0, 0, w, w);
     const src = sx.getImageData(0, 0, w, w).data;
+    // твёрдое/воздух: контур сглаживается и там, где за воздухом задняя стена (пещеры, комнаты, уступы со снегом) — не только на фоне неба
+    const mk = new Uint8Array(w * w), TM = terr.mask, TW = terr.W, TH = terr.H;
+    for (let y = 0; y < w; y++) { const gy = y0 + y; if (gy < 0) continue; for (let x = 0; x < w; x++) { const gx = x0 + x; if (gx < 0 || gx >= TW) continue; mk[y * w + x] = gy >= TH ? 1 : TM[gy * TW + gx]; } }
     // ссылки на текстуры: какой пиксель из какой текстуры (перед — твёрдое, иначе задняя стена)
-    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {}, transfer = [src.buffer, ref.buffer];
+    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {}, transfer = [src.buffer, ref.buffer, mk.buffer];
     let LF = null;
     if (R) for (let y = 0; y < w; y++) {
       const gy = y0 + y; if (gy < 0 || gy >= H) continue;
@@ -94,7 +97,7 @@ class HiResTerrain {
     }
     // поле освещения не сглаживается: в нём и резкость запекания карты (местный контраст), без неё родной цвет выглядит плоским
     wk.idle = false; this.pending.add(key);
-    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: this.scale, P, G: HIRES_G, src, ref, tab, LF }, transfer);
+    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: this.scale, P, G: HIRES_G, src, ref, tab, LF, mk }, transfer);
     return true;
   }
   done(wk, m) {
@@ -178,13 +181,13 @@ function hiresWorkerMain() {
   const HI = {}, FINE = {};
   onmessage = (ev) => {
     const m = ev.data; if (m.hi) { HI[m.hi.name] = m.hi; return; } if (m.fine) { FINE[m.fine.name] = m.fine; return; }
-    const { T, S, P, G: pad, src: sd, tx, ty } = m, w = T + 2 * P, n = w * w, N = (T + 2 * pad) * S;
+    const { T, S, P, G: pad, src: sd, tx, ty } = m, MK = m.mk, w = T + 2 * P, n = w * w, N = (T + 2 * pad) * S;
     const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), A = new Float32Array(n), L = new Float32Array(n);
     let any = false;
     for (let i = 0; i < n; i++) {
       const a = sd[i * 4 + 3] / 255; A[i] = a; if (a > 0) any = true;
       R[i] = sd[i * 4] / 255 * a; G[i] = sd[i * 4 + 1] / 255 * a; B[i] = sd[i * 4 + 2] / 255 * a;
-      L[i] = R[i] * 0.3 + G[i] * 0.59 + B[i] * 0.11 + a * 0.6;
+      L[i] = R[i] * 0.3 + G[i] * 0.59 + B[i] * 0.11 + a * 0.6 + (MK ? MK[i] * 0.6 : 0);
     }
     if (!any) { postMessage({ key: m.key, g: m.g, ep: m.ep, out: null }); return; }
     const Jxx = new Float32Array(n), Jxy = new Float32Array(n), Jyy = new Float32Array(n);
@@ -200,7 +203,8 @@ function hiresWorkerMain() {
       const dif = Math.sqrt((a - c) * (a - c) + 4 * b * b), th = 0.5 * Math.atan2(2 * b, a - c);
       // только контур (рядом есть прозрачность): фактуру породы не трогаем, иначе она «плывёт» как масло
       let amin = 1, amax = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const av = A[(y + dy) * w + x + dx]; if (av < amin) amin = av; if (av > amax) amax = av; }
-      if (amax - amin < 0.25) continue;
+      let mch = false; if (MK) { const m0 = MK[i]; for (let dy = -1; dy <= 1 && !mch; dy++) for (let dx = -1; dx <= 1; dx++) if (MK[(y + dy) * w + x + dx] !== m0) { mch = true; break; } }
+      if (amax - amin < 0.25 && !mch) continue;
       NX[i] = Math.cos(th); NY[i] = Math.sin(th); CO[i] = Math.min(1, (dif / sum) * Math.min(1, sum / 0.03));
     }
     const bil = (arr, u, v) => {

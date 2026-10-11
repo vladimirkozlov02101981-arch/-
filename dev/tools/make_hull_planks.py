@@ -34,9 +34,11 @@ fiber = fnoise(0.7 * K, 7 * K, 1) * 0.6 + fnoise(1.6 * K, 22 * K, 2) * 0.4      
 streak = fnoise(4 * K, 60 * K, 3)                                                 # полосы тона внутри доски
 stain = fnoise(26 * K, 48 * K, 4)                                                 # крупные пятна: выгоревшее/грязное
 pores = fnoise(0.5 * K, 2.2 * K, 5)
+fine = fnoise(0.35 * K, 3.5 * K, 7) * 0.7 + fnoise(0.18 * K, 0.6 * K, 8) * 0.3
+dash = fnoise(0.15 * K, 1.4 * K, 9)                                              # поры-штрихи     # волокна и поры в 1–2 текселя (критик r24: обшивка была фактически ×1)
 warp = fnoise(10 * K, 40 * K, 6)
 
-DARK = np.array([30, 18, 11], np.float32); MID = np.array([66, 42, 25], np.float32); LIGHT = np.array([104, 72, 44], np.float32)
+DARK = np.array([30, 18, 11], np.float32); MID = np.array([70, 45, 27], np.float32); LIGHT = np.array([122, 86, 52], np.float32)   # контраст шире (эталон: sd 26 против 16)
 GAP = np.array([9, 6, 4], np.float32)
 
 img = np.zeros((H, W, 3), np.float32)
@@ -50,13 +52,18 @@ for r in range(ROWS):
     off = rng.uniform(0, W1); joints = sorted(((off + np.concatenate([[0], np.cumsum(Ls)[:-1]])) % W1).tolist())
     for j, ja in enumerate(joints):
         jb = joints[(j + 1) % len(joints)] + (W1 if j + 1 == len(joints) else 0)
-        L = jb - ja; tone = rng.normal(0, 0.09); warm = rng.normal(0, 0.035); arcs = rng.random() < 0.4
+        L = jb - ja; tone = rng.normal(0, 0.11); warm = rng.normal(0, 0.035); arcs = rng.random() < 0.4
         xs = np.arange(int(np.floor(ja * K)), int(np.ceil(jb * K)))
         cols = xs % W
         sub = (slice(y0, y1), cols)
         fy = (yy[y0:y1][:, :len(xs)] - y0) / K                          # 0..24 поперёк доски
         fx = (xs[None, :] / K - ja).astype(np.float32) * np.ones_like(fy)   # 0..L вдоль доски
-        v = 0.5 + tone + fiber[sub] * 0.10 + streak[sub] * 0.07 + stain[sub] * 0.07 + pores[sub] * 0.025
+        v = 0.5 + tone + fiber[sub] * 0.14 + streak[sub] * 0.09 + stain[sub] * 0.07 + pores[sub] * 0.05 + fine[sub] * 0.12
+        # чёткие линии годичных слоёв (≈1–2 текселя) с волной и поры-штрихи: деталь, которая видна только при приближении
+        sp = rng.uniform(1.2, 2.4); t = (fy + warp[sub] * 1.5 + fiber[sub] * 0.35) / sp
+        dl = np.abs((t - np.floor(t)) - 0.5) * sp * K
+        v -= np.clip(1 - dl / 0.9, 0, 1) * rng.uniform(0.06, 0.12)
+        v -= (dash[sub] > 2.0) * 0.09
         if arcs:                                                         # «соборные» дуги годичных слоёв
             ph = (fy - ROW / 2 + warp[sub] * 2.5) * 0.55 + ((fx - L * rng.uniform(0.3, 0.7)) / L) ** 2 * rng.uniform(14, 26)
             v += (np.abs(np.sin(ph)) ** 6) * -0.09

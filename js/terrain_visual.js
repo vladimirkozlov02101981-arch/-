@@ -209,7 +209,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
   const ty = (y & 255) << 8, ty2 = ((y >> 1) & 255) << 8, ty3 = ((y >> 2) & 255) << 8;
   const n1 = tl.t1[ty | (x & 255)], n2 = tl.t2[ty2 | ((x >> 1) & 255)], n3 = tl.t3[ty3 | ((x >> 2) & 255)];
-  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false; o.tex = false; o.tT = null;
+  o.n1 = n1; o.ga = 0; o.cap = false; o.spec = 0; o.emit = false; o.emitTex = false; o.tex = false; o.tT = null;
   let r, g, bl;
   if (t < capT) {
     // шапка (трава/снег/песок): светлая кромка, сочная середина, тёмная «губа» снизу
@@ -485,6 +485,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       }
       case 4: if (P.tex && TexLib.data[P.tex]) {
         texAt(TexLib.data[P.tex], x, y - (prm ? prm.y0 : 0), o); { const kw = P.texK || 1, kr = Array.isArray(kw) ? kw : [kw, kw, kw]; r = o.r * kr[0]; g = o.g * kr[1]; bl = o.b * kr[2]; } o.tex = true;
+        if (prm && prm.w <= 64 && prm.h <= 24) { const lb = prm.h - 1 - (y - prm.y0); if (lb < 3.5) { const k = 0.35 + 0.15 * lb; r *= k; g *= k; bl *= k; } }   /* ящик-баррикада: низ в тени — без светлой полоски следующей доски («свечения») */
         if (prm && prm.h > 60) { const k = 1.1 - 0.35 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h)); r *= k; g *= k; bl *= k; }
         if (S.glass && !isBack) {
           // корпус судна: железные полосы с заклёпками, мокрая тёмная полоса и водоросли у ватерлинии
@@ -531,6 +532,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (prm && prm.h > 60) f *= 1.06 - 0.3 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h));   // объём корпуса: низ темнее
           else if (!prm && S.glass && !isBack) f *= 1.18 - Math.min(1, Math.max(0, (y - S.hullTop) / 380)) * 0.6;   // выпуклый корпус: светлее у борта, темнее к килю
           r = P.base[0] * f * (1 + hue); g = P.base[1] * f; bl = P.base[2] * f * (1 - hue);
+          if (prm && prm.w <= 64 && prm.h <= 24) { const lb = prm.h - 1 - (y - prm.y0); if (lb < 3.5) { const k = 0.35 + 0.15 * lb; r *= k; g *= k; bl *= k; } }   /* ящик: низ в тени — без светлого края неполной доски («свечения») */
           { const nx2 = Math.min(Math.abs(fx - 3.5), Math.abs(fx - (segL - 3.5))), ny2 = Math.abs(fy - ph * 0.5); if (nx2 * nx2 + ny2 * ny2 < 1.8) { r = 44; g = 36; bl = 30; o.spec = 0.8; } else if (nx2 < 2.2 && ny2 < 2.2 && fy > ph * 0.5) { r *= 0.8; g *= 0.8; bl *= 0.8; } }   // гвозди с тенью
         }
         break;
@@ -553,7 +555,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         else if (P.win && prm && S.tx.facade) {                                              // фасад из Blender: окна, кондиционеры, водостоки
           texAt(S.tx.facade, x - prm.x0, y - prm.y0, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
-          if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) { o.emit = true; o.ga = isBack ? 150 : 230; o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
+          if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) { o.emit = true; o.emitTex = true; o.ga = isBack ? 150 : 230; o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           else { r *= S.tgR; g *= S.tgG; bl *= S.tgB; }                                              // стены: яркость по эталону (gain темы)
         } else if (P.win && prm) {
           const lx = x - prm.x0, ly = y - prm.y0;
@@ -731,7 +733,7 @@ function floorShade(S, mt, x, y, t, i, W, m, back, sid, infos, o) {
   const WT = TexLib.data.wood_light;
   if (mt === 5) {   /* бетонное перекрытие: тёмная затёртая стяжка с редкими швами плит (светлая «плитка» 118–148 под ночным грейдом города была сиреневыми пластинами: L 79 против 48 у эталона) */
     let v; if (S.tx.concrete) { texAt(S.tx.concrete, x, y * 2 + 23, o); v = (o.r + o.g + o.b) / 3 * 0.5; } else v = 70 + o.n1 * 12;
-    o.r = v * 1.03; o.g = v; o.b = v * 0.93; if (x % 48 < 1) { o.r *= 0.6; o.g *= 0.6; o.b *= 0.6; }
+    o.r = v * 1.06; o.g = v * 0.99; o.b = v * 0.8; if (x % 48 < 1) { o.r *= 0.6; o.g *= 0.6; o.b *= 0.6; }   /* r24: под ночным грейдом стяжка синела (B/R 1.27) */
   } else if (mt === 6) { const tl2 = ((x >> 4) + (y >> 3)) & 1; const v = 118 + tl2 * 16 + o.n1 * 14; o.r = v; o.g = v * 0.97; o.b = v * 0.92; if ((x & 15) === 0) { o.r *= 0.6; o.g *= 0.6; o.b *= 0.6; } }
   else if (WT) { texAt(WT, x * 1.0, y * 2 + 37, o); const l = (o.r + o.g + o.b) / 3; o.r = (l + (o.r - l) * 0.68) * 0.97; o.g = (l + (o.g - l) * 0.68) * 0.93; o.b = (l + (o.b - l) * 0.68) * 0.86; }   /* доски пола: спокойнее, без «оранжевого пластика» */
   else { o.r = 150; o.g = 104; o.b = 62; }
@@ -1023,7 +1025,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         }
         if (S.snowy && mt === 2 && !o.cap) { const L = 0.299 * r + 0.587 * g + 0.114 * bl; if (L > 190) { const k = snowRockL(L) / L; r *= k; g *= k; bl *= k; } }   // снег на уступах без пересвета
         const j = i * 4; px[j] = r; px[j + 1] = g; px[j + 2] = bl; px[j + 3] = 255;
-        if (o.tT && !o.emit) refF[i] = texRefId(o, x, y);
+        if (o.tT && (!o.emit || o.emitTex)) refF[i] = texRefId(o, x, y);   /* светящиеся окна фасада — тоже из родной текстуры: при приближении рамы и шторы чёткие */
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
       } else {
         shadeMaterial(S, back[i] === 1 || back[i] === 2 || (back[i] === 9 && S.rockDirt) ? 12 : back[i], x, y, 60000, 0, 99, infos[bsid[i]] || infos[0], o, true);   // земляные пещеры — стены из плитняка
@@ -1040,7 +1042,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
           bb = bb * (1 - depthK) + dt[2] * depthK * 0.9;
         }
         bpx[j] = br; bpx[j + 1] = bg; bpx[j + 2] = bb; bpx[j + 3] = 255;
-        if (o.tT && !o.emit) refB[i] = texRefId(o, x, y);
+        if (o.tT && (!o.emit || o.emitTex)) refB[i] = texRefId(o, x, y);
         if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
       }
     }

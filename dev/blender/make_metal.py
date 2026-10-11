@@ -106,7 +106,8 @@ def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     for key in (argv or list(STYLES)):
         st = STYLES[key]; H, C = field(st)
-        hf.render_blocks(mt, st['name'], H, C, None, R2=R, up=1, light=st.get('light'), samples=128, rough=0.5, spec=0.45, micro=0.05)
+        hf.render_blocks(mt, st['name'], H, C, None, R2=R, up=1, light=st.get('light'), samples=128, rough=0.5, spec=0.45, micro=0.05,
+                         hgrain=0.04, cgrain=0.22)   # микроцарапины и зерно краски в 1–2 текселя
         print('METAL', st['name'], flush=True)
 
 

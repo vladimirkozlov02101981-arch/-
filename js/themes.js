@@ -44,7 +44,7 @@ const THEMES = {
       strata: ['#e39b5b', '#c97944', '#f2b877', '#b4643a', '#d98b52', '#a8552f', '#eaa66a'], band: 17, bandSharp: 0.55,
       rock: ['#d98b52', '#c47444', '#e8a468', '#b3623a', '#cf8250'],
       pebbles: ['#b98a5e', '#9c6f48', '#d0a57a'],
-      outline: '#4d240f', veins: null, ceiling: null, capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand', gain: [1.51, 1.55, 1.51] },
+      outline: '#4d240f', veins: null, ceiling: null, capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand', gain: [1.34, 1.36, 1.32] /* r24: порода каньона была на 22 % ярче эталона */ },
     },
     scatter: ['rock', 'drygrass', 'cactusSmall', 'drygrass', 'rock', 'drygrass', 'skull', 'tumbleweed'], scatterRock: true,
     weather: 'dust', birds: false, ambient: null, ambientSound: 'wind',
@@ -67,7 +67,7 @@ const THEMES = {
       strata: ['#b0c1d6', '#a3b5cc', '#bccbdd', '#98abc3', '#c3d0e0'], band: 30, bandSharp: 0.2,
       rock: ['#7c8cac', '#6e7e9e', '#8898b6', '#647494', '#9aa8c2'], rockDirt: true, rockBand: 62, rim: '#b0c8ff',
       pebbles: ['#c2cfdd', '#a9b8ca', '#d5dee8'],
-      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.45, 1.38, 1.27] },   // v38: пласты гранита со снегом из Blender (make_masonry.py strata), яркость — по эталону
+      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.62, 1.55, 1.42] /* r24: порода арктики темнее эталона (34 против 41) */ },   // v38: пласты гранита со снегом из Blender (make_masonry.py strata), яркость — по эталону
     },
     scatter: ['rockSnow', 'iceCrystal', 'bushSnow', 'rockSnow'],
     weather: 'snow', birds: false, ambient: '#c3cde6', ambientSound: 'snow',
@@ -157,7 +157,7 @@ const THEMES = {
       strata: ['#8e6a4c', '#9a7658', '#806046', '#a07c5e'], band: 38, bandSharp: 0.4,
       rock: ['#8e8478', '#7a7266', '#9c9286'],
       pebbles: ['#86796c', '#7a6e62', '#928476', '#7e7064'], smoothStones: true,
-      outline: '#23170c', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_castle', cave: 'cave_wall', grass: 'grass_valley' },
+      outline: '#23170c', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_castle', cave: 'cave_wall', grass: 'grass_valley', gain: [0.94, 0.96, 1.04] /* r24: новый грунт чуть спокойнее по цвету */ },
     },
     scatter: ['bush', 'rock', 'flowers', 'tuft', 'bush'],
     weather: 'leaves', birds: true, ambient: '#ffe6d0', ambientSound: 'wind', glow: true,

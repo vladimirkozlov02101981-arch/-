@@ -56,7 +56,7 @@ const TexLib = {
   pending: new Map(), images: new Map(), surfacePending: new Map(), surfaceImages: new Map(),
   surfaceNames: ['grass_valley', 'grass_alien', 'bush1', 'bush2', 'ivy', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'tree_pine_snow1', 'tree_pine_snow2', 'haystack1', 'alien_tree1', 'alien_tree2', 'snowman1', 'snowman2', 'cactus1', 'cactus2', 'cactus3', 'palm1', 'palm2', 'palm3', 'deadtree1', 'deadtree2', 'deadtree_char1', 'deadtree_char2', 'igloo1', 'icecrystal1', 'icecrystal2', 'watertower1', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'spike1', 'spike2', 'skull1', 'bones1', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'rock1', 'rock2', 'rock3', 'rockb1', 'rockb2', 'rocksnow1', 'rocksnow2'],   // версии ×2–4 в assets/tex/surface
   hi: {},
-  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'facade_city', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
+  hiAvail: new Set(['brick_castle', 'brick_light']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
   loadHi(n) {
     if (this.hi[n] !== undefined) return this.hi[n];
@@ -79,7 +79,7 @@ const TexLib = {
       а освещение, тени и подпалины карты переносятся отношением «нарисовано / малая текстура» (js/hires.js).
       Загружается лениво — только для материалов карты, которую приближают; давно не нужные (другая карта) выгружаются */
   native: {}, nativeUse: new Map(),
-  nativeAvail: new Map([['cave_canyon', 4], ['cave_volcano', 4], ['cave_wall', 4], ['dirt_canyon', 4], ['dirt_castle', 4], ['dirt_tropical', 4], ['dirt_valley', 4], ['metal_station', 4], ['metal_steel', 4], ['metal_ufo', 4], ['rock_alien', 4], ['rock_arctic', 4], ['rock_canyon', 4], ['rock_volcano', 4], ['stone_castle', 4], ['stone_dark', 4], ['stone_light', 4], ['stone_sand', 4], ['stone_valley', 4], ['wood_hull', 4]]),   // имя → k (обновляет dev/make_native.py)
+  nativeAvail: new Map([['brick_keep', 4], ['cap_ash', 4], ['cap_sand', 4], ['cap_snow', 4], ['cave_alien', 4], ['cave_arctic', 4], ['cave_canyon', 4], ['cave_volcano', 4], ['cave_wall', 4], ['concrete_city', 4], ['dirt_canyon', 4], ['dirt_castle', 4], ['dirt_tropical', 4], ['dirt_valley', 4], ['facade_city', 4], ['metal_station', 4], ['metal_steel', 4], ['metal_ufo', 4], ['rock_alien', 4], ['rock_arctic', 4], ['rock_canyon', 4], ['rock_volcano', 4], ['stone_castle', 4], ['stone_dark', 4], ['stone_light', 4], ['stone_sand', 4], ['stone_valley', 4], ['wood_hull', 4], ['wood_light', 4], ['wood_ship', 4]]),   // имя → k (обновляет dev/make_native.py)
   loadNative(n) {
     const have = this.native[n];
     if (have !== undefined) { if (have) this.nativeUse.set(n, performance.now()); return have; }
