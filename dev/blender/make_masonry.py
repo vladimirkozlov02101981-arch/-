@@ -6,8 +6,10 @@
 настоящий рельеф (≈1,3 млн вершин): тени в швах, объём фасок, шероховатость. Поле с запасом по краям (заворот) —
 тени у краёв плитки правильные, текстура бесшовная.
 
-blender -b --python dev/blender/make_masonry.py -- <стиль> [...]     стили: valley, castle
-Пишет test-results/<имя>_2x.png (1 ед. мира = 2 px); затем: python dev/make_detail.py test-results/<имя>_2x.png <имя>
+blender -b --python dev/blender/make_masonry.py -- <стиль> [...]     стили: valley, castle, sand, dark, strata, light
+Поле считается с шагом 1/2 ед., рендер — блоками в 4 раза подробнее игровой текстуры (dev/blender/hf_render.py):
+test-results/blocks/<имя>/b_*.png → python dev/tools/stitch_blocks.py test-results/blocks/<имя> test-results/<имя>_4x.png
+→ python dev/make_native.py test-results/<имя>_4x.png <имя> --no-match --lossy --quality 90 (родная ×4 и малая текстура).
 """
 import importlib.util
 import math
@@ -23,16 +25,20 @@ spec = importlib.util.spec_from_file_location('mt', os.path.join(HERE, 'make_tex
 mt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mt)
 
-R = 2                                   # пикселей рендера на единицу мира (двойное разрешение)
+R = int(os.environ.get('HF_R', '4'))    # точек поля (и пикселей рендера) на единицу мира: 4 — родная ×4 для приближения
+UP = int(os.environ.get('HF_UP', '1'))   # дополнительное увеличение при рендере (1 — поле уже в нужном разрешении)
+spec2 = importlib.util.spec_from_file_location('hf', os.path.join(HERE, 'hf_render.py'))
+hf = importlib.util.module_from_spec(spec2)
+spec2.loader.exec_module(hf)
 STYLES = {
     # мост-акведук и руины долины: светлый серый гранит, крупные камни, лишайник
-    'valley': dict(name='stone_valley', seed=11, T=512, hr=(16, 21), wr=(26, 54), joint=2.8, bev=2.2, recess=2.6,
-                   stone=[(176, 174, 166), (160, 158, 151), (190, 186, 175), (146, 143, 136), (168, 162, 150)],
-                   mortar=(96, 92, 85), lichen=0.2, moss=0.24, light=None),
+    'valley': dict(name='stone_valley', seed=11, T=512, hr=(16, 21), wr=(26, 54), joint=2.4, bev=1.3, recess=1.6, tilt=0.7,
+                   stone=[(184, 172, 152), (166, 156, 140), (196, 184, 164), (150, 140, 126), (176, 162, 142)],
+                   mortar=(88, 76, 60), lichen=0.3, moss=0.24, light=None),   # r23: швы тёплые и не чёрные, камень теплее, фаска −40 %
     # замки на закате: тёплый песчаник-известняк, камни мельче, швы тоньше
-    'castle': dict(name='stone_castle', seed=23, T=512, hr=(14, 18), wr=(24, 46), joint=2.0, bev=1.8, recess=1.5,
-                   stone=[(188, 172, 150), (172, 158, 138), (200, 186, 162), (160, 146, 128), (182, 170, 156)],
-                   mortar=(116, 106, 92), lichen=0.12, moss=0.1, light=dict(col=(1.0, 0.66, 0.40), elev=14, energy=5.2)),
+    'castle': dict(name='stone_castle', seed=23, T=512, hr=(14, 18), wr=(24, 46), joint=2.0, bev=1.2, recess=1.4, tilt=0.6,
+                   stone=[(178, 170, 158), (164, 156, 145), (190, 182, 168), (152, 144, 134), (172, 166, 156)],
+                   mortar=(104, 96, 86), lichen=0.12, moss=0.1, light=dict(col=(1.0, 0.78, 0.58), elev=18, energy=5.2)),   # r23: насыщенность −35 %
     # каньон: тёплый песчаник, мелкие блоки, швы с песком, без лишайника и мха
     'sand': dict(name='stone_sand', seed=31, T=512, hr=(11, 14), wr=(19, 36), joint=2.0, bev=1.6, recess=1.4,
                  stone=[(222, 176, 120), (206, 160, 106), (232, 192, 138), (196, 150, 98), (214, 170, 118)],
@@ -43,9 +49,12 @@ STYLES = {
                  mortar=(30, 25, 23), lichen=0.0, moss=0.0, light=None),
     # арктика: тёмные гранитные пласты 30–64 ед. с длинными глыбами, на кромке каждого пласта — тонкий снег 2–7 ед.
     # с разрывами, под ним мелкие сосульки и тёмные потёки, по камню редкий иней (как в эталоне arctic.png)
-    'strata': dict(name='rock_arctic', seed=61, T=1024, hr=(28, 62), wr=(70, 240), joint=1.8, bev=3.6, recess=2.6,
+    # r23: пласты 40–120 ед. разной толщины, трещины редкие (300–500) и косые (10–25°), у каждого пласта карниз сверху
+    # (светлый верх, тень под уступом — от настоящего рельефа), крупные пятна тона ±10 L
+    'strata': dict(name='rock_arctic', seed=61, T=1024, TY=512, hr=(40, 120), wr=(300, 500), joint=1.8, bev=3.6, recess=2.6, tilt=0.8,
+                   slant=(10, 25), ledge=2.4, mottk=0.16,
                    stone=[(56, 61, 72), (50, 55, 66), (62, 67, 78), (45, 50, 60), (54, 59, 70)],
-                   mortar=(13, 15, 20), lichen=0.0, moss=0.0, wob=1.8, rough=1.35, warp=(3.2, 3.0),
+                   mortar=(13, 15, 20), lichen=0.0, moss=0.0, wob=1.8, rough=1.6, warp=(3.2, 3.0),
                    snow=dict(th=(1.5, 8.0), col=(232, 238, 250), gaps=-0.8, icicles=1.0),
                    light=dict(col=(0.82, 0.88, 1.0), elev=32, energy=4.2)),
     # пиратский маяк: побелённый камень, мелкие блоки, светлый раствор
@@ -56,11 +65,11 @@ STYLES = {
 
 
 def gnoise(shape, sy, sx, rng):
-    """бесшовный гауссов шум (σ в пикселях рендера по y и x), нормирован к σ=1"""
-    a = rng.normal(size=shape)
-    fy = np.fft.fftfreq(shape[0])[:, None]; fx = np.fft.fftfreq(shape[1])[None, :]
-    b = np.real(np.fft.ifft2(np.fft.fft2(a) * np.exp(-2 * math.pi ** 2 * ((fy * sy) ** 2 + (fx * sx) ** 2))))
-    return (b - b.mean()) / (b.std() + 1e-9)
+    """бесшовный гауссов шум (σ в пикселях рендера по y и x), нормирован к σ=1; float32 — экономия памяти при 4×"""
+    a = rng.standard_normal(size=shape, dtype=np.float32)
+    fy = np.fft.fftfreq(shape[0])[:, None]; fx = np.fft.rfftfreq(shape[1])[None, :]
+    b = np.fft.irfft2(np.fft.rfft2(a) * np.exp(-2 * math.pi ** 2 * ((fy * sy) ** 2 + (fx * sx) ** 2)), s=shape).astype(np.float32)
+    b -= b.mean(); b /= (b.std() + 1e-9); return b
 
 
 def split(total, lo, hi, rng):
@@ -72,43 +81,48 @@ def split(total, lo, hi, rng):
 
 
 def field(st):
-    rng = np.random.default_rng(st['seed']); T = st['T']; N = T * R
-    yy, xx = (np.mgrid[0:N, 0:N] + 0.5) / R                              # координаты в единицах мира
-    H = np.zeros((N, N), np.float32); C = np.zeros((N, N, 3), np.float32)
+    rng = np.random.default_rng(st['seed']); T = st['T']; TY = st.get('TY', T); NX = T * R; NY = TY * R; SH = (NY, NX)
+    yy, xx = (np.mgrid[0:NY, 0:NX].astype(np.float32) + 0.5) / R          # координаты в единицах мира
+    H = np.zeros(SH, np.float32); C = np.zeros((NY, NX, 3), np.float32)
     wk = st.get('wob', 1.0); rk = st.get('rough', 1.0)
-    wob = (gnoise((N, N), 2.5 * R, 2.5 * R, rng) * 0.9 + gnoise((N, N), 0.8 * R, 0.8 * R, rng) * 0.25 + gnoise((N, N), 9 * R, 9 * R, rng) * (wk - 1)) * min(wk, 1.4)   # «гуляющий» шов, неровные края
-    rough = (gnoise((N, N), 1.1 * R, 1.1 * R, rng) * 0.12 + gnoise((N, N), 3 * R, 3 * R, rng) * 0.3 + gnoise((N, N), 8 * R, 8 * R, rng) * 0.45
-             + np.abs(gnoise((N, N), 2.4 * R, 2.4 * R, rng)) * 0.18) * rk            # колотая лицевая сторона: грани, бугры, гребни
+    wob = (gnoise(SH, 2.5 * R, 2.5 * R, rng) * 0.9 + gnoise(SH, 0.8 * R, 0.8 * R, rng) * 0.25 + gnoise(SH, 9 * R, 9 * R, rng) * (wk - 1)) * min(wk, 1.4)   # «гуляющий» шов, неровные края
+    rough = (gnoise(SH, 1.1 * R, 1.1 * R, rng) * 0.12 + gnoise(SH, 3 * R, 3 * R, rng) * 0.3 + gnoise(SH, 8 * R, 8 * R, rng) * 0.45
+             + np.abs(gnoise(SH, 2.4 * R, 2.4 * R, rng)) * 0.18 + gnoise(SH, 0.35 * R, 0.35 * R, rng) * 0.05) * rk   # колотая лицевая сторона: грани, бугры, гребни, зерно
     SN = st.get('snow')
     if SN:
-        snowv = gnoise((N, N), 5 * R, 14 * R, rng); snowg = gnoise((N, N), 4 * R, 26 * R, rng); sgrain = gnoise((N, N), 0.6 * R, 0.6 * R, rng)
-        frost = gnoise((N, N), 0.5 * R, 0.5 * R, rng); drip = gnoise((N, N), 9 * R, 0.9 * R, rng); gran = gnoise((N, N), 0.38 * R, 0.38 * R, rng)
-    pits = gnoise((N, N), 0.7 * R, 0.7 * R, rng)
-    speck = gnoise((N, N), 0.45 * R, 0.45 * R, rng); mott = gnoise((N, N), 6 * R, 6 * R, rng) * 0.6 + gnoise((N, N), 14 * R, 14 * R, rng) * 0.4
-    lich = gnoise((N, N), 4.5 * R, 4.5 * R, rng); lich2 = gnoise((N, N), 1.2 * R, 1.2 * R, rng)
-    streak = gnoise((N, N), 26 * R, 1.3 * R, rng); mossn = gnoise((N, N), 5 * R, 5 * R, rng)
-    mortn = gnoise((N, N), 0.7 * R, 0.7 * R, rng) * 0.6 + gnoise((N, N), 3 * R, 3 * R, rng) * 0.4
-    hs = split(T, *st['hr'], rng); cum = np.concatenate([[0], np.cumsum(hs)])
+        snowv = gnoise(SH, 5 * R, 14 * R, rng); snowg = gnoise(SH, 4 * R, 26 * R, rng); sgrain = gnoise(SH, 0.6 * R, 0.6 * R, rng)
+        frost = gnoise(SH, 0.5 * R, 0.5 * R, rng); drip = gnoise(SH, 9 * R, 0.9 * R, rng); gran = gnoise(SH, 0.38 * R, 0.38 * R, rng)
+    pits = gnoise(SH, 0.7 * R, 0.7 * R, rng)
+    speck = gnoise(SH, 0.45 * R, 0.45 * R, rng); mott = gnoise(SH, 6 * R, 6 * R, rng) * 0.6 + gnoise(SH, 14 * R, 14 * R, rng) * 0.4
+    lich = gnoise(SH, 4.5 * R, 4.5 * R, rng); lich2 = gnoise(SH, 1.2 * R, 1.2 * R, rng)
+    streak = gnoise(SH, 26 * R, 1.3 * R, rng); mossn = gnoise(SH, 5 * R, 5 * R, rng)
+    mortn = gnoise(SH, 0.7 * R, 0.7 * R, rng) * 0.6 + gnoise(SH, 3 * R, 3 * R, rng) * 0.4
+    hs = split(TY, *st['hr'], rng); cum = np.concatenate([[0], np.cumsum(hs)])
     stone_cols = np.array(st['stone'], np.float32)
     WP = st.get('warp')
     if WP:                                                   # природные пласты: границы волнистые, вертикальные трещины кривые
-        YY = (yy + gnoise((N, N), 18 * R, 40 * R, rng) * WP[0] + gnoise((N, N), 4 * R, 8 * R, rng) * WP[0] * 0.08) % T
-        XX = xx + gnoise((N, N), 5 * R, 14 * R, rng) * WP[1]
+        YY = (yy + gnoise(SH, 18 * R, 40 * R, rng) * WP[0] + gnoise(SH, 4 * R, 8 * R, rng) * WP[0] * 0.08) % TY
+        XX = xx + gnoise(SH, 5 * R, 14 * R, rng) * WP[1]
     for r in range(len(hs)):
         rows = ((YY >= cum[r]) & (YY < cum[r + 1])) if WP else (yy[:, 0] >= cum[r]) & (yy[:, 0] < cum[r + 1])
         ws = split(T, *st['wr'], rng); cw = np.concatenate([[0], np.cumsum(ws)]); off = rng.uniform(0, T)
-        X = ((XX[rows] if WP else xx[rows]) + off) % T; Y = (YY[rows] if WP else yy[rows]) - cum[r]; bh = hs[r]
+        Y = (YY[rows] if WP else yy[rows]) - cum[r]; bh = hs[r]
+        SL = st.get('slant'); ang = math.radians(rng.uniform(*SL)) * (1 if rng.random() < 0.5 else -1) if SL else 0.0
+        X = ((XX[rows] if WP else xx[rows]) + off + (Y - bh / 2) * math.tan(ang)) % T                  # косые трещины пласта
         b = np.clip(np.searchsorted(cw, X, side='right') - 1, 0, len(ws) - 1); bw = ws[b]; fx = X - cw[b]
         # свойства камня
         nb = len(ws); tone = rng.normal(0, 0.06, nb); kind = rng.integers(0, len(stone_cols), nb)
         lift = rng.uniform(-0.35, 0.35, nb); dome = rng.uniform(0.15, 0.55, nb); has_l = rng.random(nb) < st['lichen'] * 2.2
         chip = rng.integers(0, 6, nb); chr_ = rng.uniform(3, 6.5, nb); bevb = st['bev'] * rng.uniform(0.7, 1.6, nb)
         wc = rng.normal(0, 0.018, nb); jwb = st['joint'] / 2 * rng.uniform(0.85, 1.35, nb)
+        tlx = rng.uniform(-1, 1, nb) * st.get('tilt', 0.0); tly = rng.uniform(-1, 1, nb) * st.get('tilt', 0.0)   # наклон грани — камни освещены по-разному
         e = np.minimum(np.minimum(fx, bw - fx), np.minimum(Y, bh - Y)) + wob[rows]
         jw = jwb[b]
         t = np.clip((e - jw) / bevb[b], 0, 1)
         u = 2 * fx / bw - 1; v = 2 * Y / bh - 1
-        face = st['recess'] + lift[b] + dome[b] * (1 - u * u) * (1 - v * v) + rough[rows] + np.where(pits[rows] > 2.3, -0.35, 0)
+        face = st['recess'] + lift[b] + dome[b] * (1 - u * u) * (1 - v * v) + rough[rows] + np.where(pits[rows] > 2.3, -0.35, 0) + tlx[b] * u + tly[b] * v
+        if st.get('ledge'):                                   # карниз вверху пласта и подрезка внизу: светлый верх, тень под уступом
+            v01 = np.clip(Y / bh, 0, 1); face = face + st['ledge'] * (1 - np.clip(v01 / 0.3, 0, 1)) ** 2 - 0.6 * st['ledge'] * np.clip((v01 - 0.65) / 0.35, 0, 1) ** 2
         cx = np.where(chip[b] % 2 == 0, 0, bw); cy = np.where(chip[b] < 2, 0, bh)        # скол одного угла (chip 4,5 — без)
         dc = np.hypot(fx - cx, Y - cy); cut = np.where((chip[b] < 4) & (dc < chr_[b]), (1 - dc / chr_[b]) * 1.4, 0)
         hs_ = face * (1 - (1 - t) ** 2) - cut
@@ -117,7 +131,7 @@ def field(st):
         H[rows] = np.where(stone, np.maximum(hs_, mort), mort)
         # цвет камня
         base = stone_cols[kind[b]] * (1 + tone[b])[:, :, None] if b.ndim == 2 else stone_cols[kind[b]] * ((1 + tone[b])[:, None] if WP else 1)
-        base = base * (1 + mott[rows] * 0.07)[..., None] * np.stack([1 + wc[b], np.ones_like(wc[b]), 1 - wc[b]], -1)   # чуть теплее/холоднее
+        base = base * (1 + mott[rows] * st.get('mottk', 0.07))[..., None] * np.stack([1 + wc[b], np.ones_like(wc[b]), 1 - wc[b]], -1)   # чуть теплее/холоднее
         base = base * np.where(speck[rows] > 2.0, 0.84, np.where(speck[rows] < -2.1, 1.08, 1.0))[..., None]
         lk = np.clip((lich[rows] - 0.55) * 2.2, 0, 1) * has_l[b] * (0.6 + 0.4 * (1 - Y / bh)) * (0.75 + 0.25 * np.clip(lich2[rows], -1, 1))
         lcol = np.where((kind[b] % 2 == 0)[..., None], np.array([206, 176, 118], np.float32), np.array([168, 176, 140], np.float32))
@@ -168,9 +182,12 @@ def render_field(st, H, C):
     bpy.ops.mesh.primitive_grid_add(x_subdivisions=n, y_subdivisions=n, size=size, calc_uvs=True)
     ob = bpy.context.active_object; me = ob.data
     co = np.zeros(len(me.vertices) * 3, np.float32); me.vertices.foreach_get('co', co); co = co.reshape(-1, 3)
-    ix = np.clip(np.round((co[:, 0] + size / 2) / size * n - 0.5).astype(int), 0, n - 1)
-    iy = np.clip(np.round((size / 2 - co[:, 1]) / size * n - 0.5).astype(int), 0, n - 1)   # строки массива — сверху вниз
-    co[:, 2] = Hp[iy, ix] / 100.0
+    # вершины сетки стоят в углах пикселей (n+1 на сторону): высота угла — среднее четырёх соседних пикселей
+    # (прежнее «ближайший пиксель» брало рельеф через пиксель — полосы и рябь на гранях)
+    ix = np.clip(np.round((co[:, 0] + size / 2) / size * n).astype(int), 0, n)
+    iy = np.clip(np.round((size / 2 - co[:, 1]) / size * n).astype(int), 0, n)
+    Hc = np.pad(Hp, 1, mode='edge')
+    co[:, 2] = 0.25 * (Hc[iy, ix] + Hc[iy + 1, ix] + Hc[iy, ix + 1] + Hc[iy + 1, ix + 1]) / 100.0
     me.vertices.foreach_set('co', co.ravel()); me.update()
     for p in me.polygons: p.use_smooth = True
     img = bpy.data.images.new('albedo', n, n, alpha=False); img.colorspace_settings.name = 'sRGB'   # цветовое пространство — до пикселей
@@ -193,7 +210,9 @@ def render_field(st, H, C):
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     for key in (argv or list(STYLES)):
-        st = STYLES[key]; H, C = field(st); render_field(st, H, C); print('MASONRY', st['name'], flush=True)
+        st = STYLES[key]; H, C = field(st)
+        hf.render_blocks(mt, st['name'], H, C, None, R2=R, up=UP, light=st['light'], samples=128)
+        print('MASONRY', st['name'], flush=True)
 
 
 main()

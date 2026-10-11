@@ -2,9 +2,9 @@
 доски 150–330 px со сдвинутыми стыками, тёмные щели 2 px, светлая фаска сверху и тень снизу у каждой доски, длинные волокна
 (вытянутость 1:8), у части досок — дуги годичных слоёв, грязь у щелей, пятна, по два болта у каждого торца и редкие гвозди.
 
-Пишет бесшовную текстуру двойного разрешения (2048×1920 = 1024×960 игровых единиц, 40 рядов) и сразу делает из неё
-обычную текстуру и карту деталей: python dev/tools/make_hull_planks.py [имя=wood_hull]
-(внутри вызывается dev/make_detail.py: assets/tex/<имя>.png и assets/tex/hi/<имя>.webp, список hiAvail в js/art.js).
+Пишет бесшовную текстуру в 4 раза подробнее игровой (4096×3840 = 1024×960 единиц, 40 рядов) и делает из неё родную ×4 и
+обычную текстуру: python dev/tools/make_hull_planks.py [имя=wood_hull]   (HULL_K=2 — прежний вариант с картой деталей)
+(внутри вызывается dev/make_native.py: assets/tex/native/<имя>.webp и assets/tex/<имя>.png, список nativeAvail в js/art.js).
 """
 import os
 import subprocess
@@ -15,7 +15,7 @@ from PIL import Image
 from scipy import ndimage as nd
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-K = 2                      # двойное разрешение
+K = int(os.environ.get('HULL_K', '4'))   # пикселей на единицу мира: 4 — родная ×4 (чёткая при приближении), 2 — прежний вариант с картой деталей
 W1, ROW, ROWS = 1024, 24, 40
 H1 = ROW * ROWS
 W, H = W1 * K, H1 * K
@@ -94,7 +94,8 @@ for (bx, by, br) in bolts:
     img[cyy[head], cxx[head]] = col[head]
 img = np.clip(img + 0.5, 0, 255).astype(np.uint8)
 name = sys.argv[1] if len(sys.argv) > 1 else 'wood_hull'
-src = os.path.join(ROOT, 'test-results', name + '_2x.png'); os.makedirs(os.path.dirname(src), exist_ok=True)
+src = os.path.join(ROOT, 'test-results', '%s_%dx.png' % (name, K)); os.makedirs(os.path.dirname(src), exist_ok=True)
 Image.fromarray(img).save(src)
 print('WROTE', src, img.shape)
-subprocess.run([sys.executable, os.path.join(ROOT, 'dev', 'make_detail.py'), src, name], cwd=ROOT, check=True)
+if K == 4: subprocess.run([sys.executable, os.path.join(ROOT, 'dev', 'make_native.py'), src, name, '--no-match', '--lossy', '--quality', '90'], cwd=ROOT, check=True)
+else: subprocess.run([sys.executable, os.path.join(ROOT, 'dev', 'make_detail.py'), src, name], cwd=ROOT, check=True)

@@ -47,7 +47,7 @@ const MapArt = {
 const TexLib = {
   names: ['dirt_valley', 'brick_keep', 'brick_light', 'cave_wall', 'grass_valley', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'bush1', 'bush2',
     'rock_canyon', 'dirt_canyon', 'cave_canyon', 'rock_arctic', 'cave_arctic', 'rock_volcano', 'cave_volcano', 'rock_alien', 'dirt_alien', 'cave_alien', 'grass_alien',
-    'wood_ship', 'wood_hull', 'stone_valley', 'stone_castle', 'stone_sand', 'stone_dark', 'stone_light', 'ivy', 'snowman1', 'snowman2', 'cactus1', 'cactus2', 'cactus3', 'palm1', 'palm2', 'palm3', 'deadtree1', 'deadtree2', 'deadtree_char1', 'deadtree_char2', 'igloo1', 'icecrystal1', 'icecrystal2', 'watertower1', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'spike1', 'spike2', 'skull1', 'bones1', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'rock1', 'rock2', 'rock3', 'rockb1', 'rockb2', 'rocksnow1', 'rocksnow2', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash', 'soldier_free', 'soldier_aim', 'haystack1', 'alien_tree1', 'alien_tree2', 'facade_city', 'tree_pine_snow1', 'tree_pine_snow2',
+    'wood_ship', 'wood_hull', 'stone_valley', 'stone_castle', 'stone_sand', 'stone_dark', 'stone_light', 'ivy', 'snowman1', 'snowman2', 'cactus1', 'cactus2', 'cactus3', 'palm1', 'palm2', 'palm3', 'deadtree1', 'deadtree2', 'deadtree_char1', 'deadtree_char2', 'igloo1', 'icecrystal1', 'icecrystal2', 'watertower1', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'spike1', 'spike2', 'skull1', 'bones1', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'rock1', 'rock2', 'rock3', 'rockb1', 'rockb2', 'rocksnow1', 'rocksnow2', 'ladder_wood', 'ladder_steel', 'ladder_steelY', 'metal_station', 'metal_steel', 'metal_ufo', 'wood_light', 'dirt_tropical', 'grass_tropical', 'concrete_city', 'dirt_castle', 'brick_castle', 'cap_snow', 'cap_sand', 'cap_ash', 'soldier_free', 'soldier_aim', 'haystack1', 'alien_tree1', 'alien_tree2', 'facade_city', 'tree_pine_snow1', 'tree_pine_snow2',
     // оружие в руках (wpn_*, кадр 48×24 ед.) и метательное в полёте (ent_*, кадр 16×16 ед.) — рендер Blender, dev/blender/make_weapons2.py
     'wpn_assault', 'wpn_revolver', 'wpn_magnum', 'wpn_uzi', 'wpn_acid', 'wpn_plasma', 'wpn_autocannon', 'wpn_tesla', 'wpn_repulsor', 'wpn_rpg', 'wpn_bazooka', 'wpn_homing', 'wpn_mortar', 'wpn_drill', 'wpn_salvo', 'wpn_grenade', 'wpn_cluster', 'wpn_sticky', 'wpn_molotov', 'wpn_blackhole', 'wpn_shotgun', 'wpn_sniper', 'wpn_minigun', 'wpn_flamer', 'wpn_railgun', 'wpn_dynamite', 'wpn_mine', 'wpn_robot', 'wpn_boot', 'wpn_bat', 'wpn_airstrike', 'wpn_lightning', 'wpn_orbital', 'wpn_nuke', 'wpn_tpgrenade', 'wpn_teleport', 'wpn_girder', 'wpn_pickaxe', 'wpn_medkit', 'wpn_skip', 'wpn_jetpack', 'ent_grenade', 'ent_cluster', 'ent_sticky', 'ent_molotov', 'ent_blackhole', 'ent_dynamite', 'ent_mine', 'ent_robot', 'ent_tpgrenade'],
   data: {},
@@ -56,7 +56,7 @@ const TexLib = {
   pending: new Map(), images: new Map(), surfacePending: new Map(), surfaceImages: new Map(),
   surfaceNames: ['grass_valley', 'grass_alien', 'bush1', 'bush2', 'ivy', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'tree_pine_snow1', 'tree_pine_snow2', 'haystack1', 'alien_tree1', 'alien_tree2', 'snowman1', 'snowman2', 'cactus1', 'cactus2', 'cactus3', 'palm1', 'palm2', 'palm3', 'deadtree1', 'deadtree2', 'deadtree_char1', 'deadtree_char2', 'igloo1', 'icecrystal1', 'icecrystal2', 'watertower1', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'spike1', 'spike2', 'skull1', 'bones1', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'rock1', 'rock2', 'rock3', 'rockb1', 'rockb2', 'rocksnow1', 'rocksnow2'],   // версии ×2–4 в assets/tex/surface
   hi: {},
-  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'cave_wall', 'dirt_alien', 'dirt_canyon', 'dirt_castle', 'facade_city', 'rock_alien', 'rock_arctic', 'rock_volcano', 'stone_castle', 'stone_dark', 'stone_light', 'stone_sand', 'stone_valley', 'wood_hull', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
+  hiAvail: new Set(['brick_castle', 'brick_keep', 'brick_light', 'facade_city', 'wood_ship']),   // какие карты деталей есть в assets/tex/hi (обновляет dev/make_detail.py)
   /** карта мелких деталей текстуры (рендер в двойном разрешении): яркость деталей мельче пикселя карты, 128 = без изменения */
   loadHi(n) {
     if (this.hi[n] !== undefined) return this.hi[n];
@@ -79,11 +79,14 @@ const TexLib = {
       а освещение, тени и подпалины карты переносятся отношением «нарисовано / малая текстура» (js/hires.js).
       Загружается лениво — только для материалов карты, которую приближают; давно не нужные (другая карта) выгружаются */
   native: {}, nativeUse: new Map(),
-  nativeAvail: new Map([['dirt_valley', 4], ['rock_canyon', 4]]),   // имя → k (обновляет dev/make_native.py)
+  nativeAvail: new Map([['cave_canyon', 4], ['cave_volcano', 4], ['cave_wall', 4], ['dirt_canyon', 4], ['dirt_castle', 4], ['dirt_tropical', 4], ['dirt_valley', 4], ['metal_station', 4], ['metal_steel', 4], ['metal_ufo', 4], ['rock_alien', 4], ['rock_arctic', 4], ['rock_canyon', 4], ['rock_volcano', 4], ['stone_castle', 4], ['stone_dark', 4], ['stone_light', 4], ['stone_sand', 4], ['stone_valley', 4], ['wood_hull', 4]]),   // имя → k (обновляет dev/make_native.py)
   loadNative(n) {
     const have = this.native[n];
     if (have !== undefined) { if (have) this.nativeUse.set(n, performance.now()); return have; }
     this.native[n] = null; const k = this.nativeAvail.get(n); if (!k) return null;
+    // родные ×4 — до 50 МБ памяти на материал: на телефонах и слабых устройствах обходимся малой текстурой
+    const mem = typeof navigator !== 'undefined' && navigator.deviceMemory, touch = typeof Input !== 'undefined' && Input.isTouch;
+    if ((mem && mem < 4) || (touch && !(mem >= 8))) return null;
     const im = new Image();
     im.onload = () => {
       try {
@@ -203,6 +206,7 @@ const TexLib = {
       alienplant: ['alienplant1', 'alienplant2'], pod: ['pod1'], tentacle: ['tentacle1'], rock: theme.id === 'tropical' ? ['rockb1', 'rockb2'] : ['rock1', 'rock2', 'rock3'], rockSnow: ['rocksnow1', 'rocksnow2'] };   /* декор из Blender: dev/blender/make_decor.py */
     for (const d of map.decor || []) for (const n of trees[d[0]] || []) add(n);
     for (const k of theme.scatter || []) for (const n of trees[k] || []) add(n);   // россыпь по поверхности (камни, кристаллы, кости)
+    if ((map.ladders || []).length) add('ladder_' + (theme.id === 'city' ? 'steelY' : theme.id === 'alien' ? 'steel' : 'wood'));   // лестницы из Blender (как в drawTacticalRoutes)
     // The cap uses these sprites even when a scatter list contains no explicit bush.
     const cap = theme.ground.cap;
     if (cap.blades && !cap.snow && !cap.bushPal) { add('bush1'); add('bush2'); }

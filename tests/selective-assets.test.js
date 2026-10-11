@@ -45,14 +45,14 @@ test('Startup requests only common artwork and battle promotion shares pending r
 });
 
 const expected = {
-  valley: ['dirt_valley', 'cave_wall', 'grass_valley', 'stone_valley', 'ivy', 'wood_ship', 'brick_keep', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'haystack1', 'bush1', 'bush2', 'rock1', 'rock2', 'rock3'],   /* v40: декор и россыпь из Blender */
-  canyon: ['dirt_canyon', 'rock_canyon', 'cave_canyon', 'cap_sand', 'stone_sand', 'cactus1', 'cactus2', 'cactus3', 'deadtree1', 'deadtree2', 'watertower1', 'skull1', 'rock1', 'rock2', 'rock3', 'wood_light'],   /* v40: декор и россыпь из Blender */
-  arctic: ['rock_arctic', 'cave_arctic', 'cap_snow', 'tree_pine_snow1', 'tree_pine_snow2', 'snowman1', 'snowman2', 'igloo1', 'icecrystal1', 'icecrystal2', 'rocksnow1', 'rocksnow2', 'wood_light'],   /* с версии 38 у станции тоже заснеженные ели; v40: декор и россыпь из Blender */
-  volcano: ['rock_volcano', 'cave_volcano', 'cap_ash', 'stone_dark', 'deadtree_char1', 'deadtree_char2', 'spike1', 'spike2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'bones1', 'wood_light'],   /* v40: декор и россыпь из Blender */
-  alien: ['dirt_alien', 'rock_alien', 'cave_alien', 'grass_alien', 'alien_tree1', 'alien_tree2', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'wood_light'],   /* v40: декор и россыпь из Blender */
-  pirate: ['dirt_tropical', 'cave_wall', 'grass_tropical', 'wood_hull', 'stone_light', 'ivy', 'palm1', 'palm2', 'palm3', 'rockb1', 'rockb2', 'wood_light', 'bush1', 'bush2'],   /* v40: декор и россыпь из Blender */
-  castles: ['dirt_castle', 'cave_wall', 'grass_valley', 'stone_castle', 'ivy', 'wood_hull', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'haystack1', 'bush1', 'bush2', 'rock1', 'rock2', 'rock3'],   /* v40: декор и россыпь из Blender */
-  city: ['concrete_city', 'facade_city', 'wood_light']
+  valley: ['dirt_valley', 'cave_wall', 'grass_valley', 'stone_valley', 'ivy', 'wood_ship', 'brick_keep', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'tree_birch1', 'haystack1', 'bush1', 'bush2', 'rock1', 'rock2', 'rock3', 'ladder_wood'],   /* v40: декор и россыпь из Blender */
+  canyon: ['dirt_canyon', 'rock_canyon', 'cave_canyon', 'cap_sand', 'stone_sand', 'cactus1', 'cactus2', 'cactus3', 'deadtree1', 'deadtree2', 'watertower1', 'skull1', 'rock1', 'rock2', 'rock3', 'wood_light', 'ladder_wood'],   /* v40: декор и россыпь из Blender */
+  arctic: ['rock_arctic', 'cave_arctic', 'cap_snow', 'tree_pine_snow1', 'tree_pine_snow2', 'snowman1', 'snowman2', 'igloo1', 'icecrystal1', 'icecrystal2', 'rocksnow1', 'rocksnow2', 'wood_light', 'ladder_wood', 'metal_station', 'metal_steel'],   /* с версии 38 у станции тоже заснеженные ели; v40: декор и россыпь из Blender */
+  volcano: ['rock_volcano', 'cave_volcano', 'cap_ash', 'stone_dark', 'deadtree_char1', 'deadtree_char2', 'spike1', 'spike2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'bones1', 'wood_light', 'ladder_wood', 'metal_steel'],   /* v40: декор и россыпь из Blender */
+  alien: ['rock_alien', 'cave_alien', 'grass_alien', 'alien_tree1', 'alien_tree2', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'wood_light', 'ladder_steel', 'metal_ufo'],   /* v40: декор и россыпь из Blender */
+  pirate: ['dirt_tropical', 'cave_wall', 'grass_tropical', 'wood_hull', 'stone_light', 'ivy', 'palm1', 'palm2', 'palm3', 'rockb1', 'rockb2', 'wood_light', 'bush1', 'bush2', 'ladder_wood'],   /* v40: декор и россыпь из Blender */
+  castles: ['dirt_castle', 'cave_wall', 'grass_valley', 'stone_castle', 'ivy', 'wood_hull', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'haystack1', 'bush1', 'bush2', 'rock1', 'rock2', 'rock3', 'ladder_wood'],   /* v40: декор и россыпь из Blender */
+  city: ['concrete_city', 'facade_city', 'wood_light', 'ladder_steelY', 'metal_steel']   /* v41: металл из Blender (make_metal.py) */
 };
 for (const [id, names] of Object.entries(expected)) test('Selected ' + id + ' waits for all required map art without unrelated terrain', async () => {
   const f = fixture(), map = f.MAPS.find(m => m.id === id), assets = f.TexLib.mapAssets(map);

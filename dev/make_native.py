@@ -64,6 +64,7 @@ def main():
     ap.add_argument('render'); ap.add_argument('name')
     ap.add_argument('--k', type=int, default=4); ap.add_argument('--quality', type=int, default=92)
     ap.add_argument('--match', default=None); ap.add_argument('--no-match', action='store_true')
+    ap.add_argument('--lossy', action='store_true', help='родная WebP с потерями (quality): в 4–6 раз меньше, при приближении разницы не видно')
     a = ap.parse_args()
     k, name = a.k, a.name
     if k < 1:
@@ -83,13 +84,18 @@ def main():
     native8 = native.round().astype(np.uint8)
     out = ROOT / 'assets' / 'tex' / 'native' / (name + '.webp')
     out.parent.mkdir(parents=True, exist_ok=True)
-    # Согласованный native RGB сохраняет настоящие исходные пиксели без потерь.
-    Image.fromarray(native8).save(out, 'WEBP', lossless=True, quality=a.quality, method=6)
+    # Согласованный native RGB: без потерь (по умолчанию) или с потерями (--lossy); малая — из декодированной, поэтому согласована в обоих случаях
+    if a.lossy: Image.fromarray(native8).save(out, 'WEBP', lossless=False, quality=a.quality, method=6)
+    else: Image.fromarray(native8).save(out, 'WEBP', lossless=True, quality=a.quality, method=6)
     # малая — точное уменьшение того, что увидит игра после декодирования WebP
     decoded = np.asarray(Image.open(out).convert('RGB'), dtype=np.float32)
     low = box(decoded, k).round().clip(0, 255).astype(np.uint8)
     Image.fromarray(low).save(low_path)
-    update_art(name, k)
+    for attempt in range(60):   # js/art.js может быть занят другим процессом (параллельная пакетная обработка) — повторяем, перечитывая файл
+        try:
+            update_art(name, k); break
+        except OSError:
+            import time; time.sleep(0.5)
     print('NATIVE', out, native8.shape[1], 'x', native8.shape[0], round(out.stat().st_size / 1048576, 2), 'MB;',
           'LOW', low_path, low.shape[1], 'x', low.shape[0], '; backup', backup if backup.exists() else '-')
 

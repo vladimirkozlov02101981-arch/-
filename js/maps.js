@@ -115,7 +115,7 @@ function rasterizeMap(def) {
       for (let x = 0; x < bw; x++) {
         if (data[(drow + x) * 4 + 3] < 128) continue;
         const i = row + x;
-        if (cut) { mask[i] = 0; if (through) back[i] = 0; }
+        if (cut) { if (sh.backfill && mask[i] && !back[i]) { back[i] = mat[i] || 1; bsid[i] = sid[i]; } mask[i] = 0; if (through) back[i] = 0; }   /* шахта лестницы сквозь пол без задней стены: стена из того же материала, а не панорама */
         else if (paint) { if (mask[i]) { mat[i] = mid; sid[i] = idx; } }
         else {
           mask[i] = 1; mat[i] = mid; sid[i] = idx;
@@ -132,13 +132,13 @@ function rasterizeMap(def) {
 
 /* ---------- строители сооружений ---------- */
 const PAL = {
-  castleStone: { base: '#a89684', alt: '#8a7a6c', mortar: '#2a221c', w: 28, h: 14, var: 0.13, tex: 'stone_castle', texK: 1.05, world: true },   /* тёсаный камень на закате: dev/blender/make_masonry.py castle */
+  castleStone: { base: '#a89684', alt: '#8a7a6c', mortar: '#2a221c', w: 28, h: 14, var: 0.13, tex: 'stone_castle', texK: 0.92, world: true },   /* тёсаный камень на закате: dev/blender/make_masonry.py castle */
   sandBrick: { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 22, h: 11, var: 0.08, tex: 'stone_sand', texK: 1.2, world: true },
   darkStone: { base: '#4a4040', alt: '#3c3434', mortar: '#1a1414', w: 20, h: 10, var: 0.1, tex: 'stone_dark', texK: 1.45, world: true },   /* базальт: make_masonry.py dark */
   shipWood: { base: '#7a4a2a', gap: '#2a160a', plank: 8, var: 0.18, tex: 'wood_hull', texK: 1 },   /* обшивка рядами досок 24 px: dev/tools/make_hull_planks.py */
   lightWood: { base: '#a0703f', gap: '#3a220e', plank: 7, var: 0.16, tex: 'wood_light' },
-  ufoMetal: { base: '#9aa3b5', rust: '#6a7080', plate: [34, 18] },
-  steel: { base: '#7a8290', rust: '#8a4a2a', plate: [30, 16] },
+  ufoMetal: { base: '#9aa3b5', rust: '#6a7080', plate: [34, 18], tex: 'metal_ufo', world: true },   /* металл из Blender: make_metal.py */
+  steel: { base: '#7a8290', rust: '#8a4a2a', plate: [30, 16], tex: 'metal_steel', world: true },
 };
 function floatIsland(cx, top, hw, depth, o = {}) {
   return Sh.blob([

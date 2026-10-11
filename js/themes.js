@@ -112,7 +112,7 @@ const THEMES = {
       strata: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98', '#50387a'], band: 28, bandSharp: 0.3,
       rock: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98'],
       pebbles: ['#6a55a0', '#56448a', '#7d68b8'], smoothStones: true, stoneRim: '#7ae8ff',
-      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'dirt_alien', rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], gain: [2.76, 3.31, 1.92] },
+      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], gain: [2.76, 3.31, 1.92] },
     },
     scatter: ['crystal', 'pod', 'crystal', 'alienplant'],
     weather: 'spores', birds: false, ambient: '#8474b0', gravity: 0.72, ambientSound: 'space', glow: true,

@@ -26,7 +26,7 @@ function buildLevel(def, fn) {
     tunnel(floor, h, o) { return B.add(tunnelShape(floor, h, o)); },
     room(x, y, w, h, through) { return B.add(roomShape(x, y, w, h, through)); },
     /** лестница: шахта вырезается в самом конце, поверх всех построек */
-    ladder(x, y1, y2) { L.ladders.push({ x, y1, y2 }); L.late.push(Sh.cut(Sh.rect(x - 17, y1 - 30, 34, y2 - y1 + 30))); return B; },
+    ladder(x, y1, y2) { L.ladders.push({ x, y1, y2 }); L.late.push(Object.assign(Sh.cut(Sh.rect(x - 17, y1 - 30, 34, y2 - y1 + 30)), { backfill: true })); return B; },
     late(...s) { L.late.push(...s.flat()); return B; },
     decor(...d) { L.decor.push(...d); return B; },
     prop(...p) { L.props.push(...p); return B; },
@@ -220,7 +220,7 @@ const MAP_CANYON = buildLevel({
    3. Ледяной перевал
    ========================================================= */
 // полярная станция: выцветшая матовая красная краска с инеем (раньше — глянцевый ярко-красный «пластик»)
-const P_STATION = { base: '#8e4234', rust: '#4e2418', plate: [128, 96], ribs: 8, matte: true, frost: [226, 233, 242] };   /* профнастил: гофр 8 px, лист 128×96 */
+const P_STATION = { base: '#8e4234', rust: '#4e2418', plate: [128, 96], ribs: 8, matte: true, frost: [226, 233, 242], tex: 'metal_station', world: true };   /* профнастил: гофр 8 px, лист 128×96 */
 const MAP_ARCTIC = buildLevel({
   id: 'arctic', name: 'Ледяной перевал', theme: 'arctic', W: 6400, H: 1800, water: 1700, seed: 303,
   desc: 'Деревня иглу, ледяная пещера сквозь гору, метеостанция на пике, ледник с трещиной и полярная станция',
@@ -456,7 +456,7 @@ function fixtureState(T, f, pts, deck, hit) {
   const ver = T ? T.version : 0;
   if (f._ok && f._ver === ver && f._ok.length === pts.length && f._T === T) return f._ok;
   // где настила не было и на целой карте (край пролёта, стык с домом), участок не считается разрушенным
-  if (!f._d0 || f._d0.length !== pts.length || f._T !== T) { f._d0 = new Uint8Array(pts.length); for (let i = 0; i < pts.length; i++) f._d0[i] = deck(pts[i]) ? 1 : 0; f._T = T; }
+  if (!f._d0 || f._d0.length !== pts.length || f._T !== T) { f._d0 = new Uint8Array(pts.length); for (let i = 0; i < pts.length; i++) f._d0[i] = deck(pts[i]) ? 1 : 0; Object.defineProperty(f, '_T', { value: T, writable: true, configurable: true }); }   /* ссылка на ландшафт — неперечисляемая: описание карты остаётся сериализуемым (у ландшафта есть слой растений со ссылкой назад) */
   const ok = new Uint8Array(pts.length); for (let i = 0; i < pts.length; i++) ok[i] = (!f._d0[i] || deck(pts[i])) && !hit(pts[i]) ? 1 : 0;
   f._ok = ok; f._ver = ver; return ok;
 }
@@ -509,7 +509,7 @@ function drawTacticalRoutes(c, map, T) {
     }
   }
   const kind = map.theme === 'city' ? 'steelY' : map.theme === 'alien' ? 'steel' : 'wood';
-  for (const { x, y1, y2 } of map.ladders || []) { const L = ladderSprite(Math.round(y2 - y1 + 12), kind); c.drawImage(L, x - 14, y1 - 12); }
+  for (const { x, y1, y2 } of map.ladders || []) { const L = ladderSprite(Math.round(y2 - y1 + 12), kind), S = L.S || 1; c.drawImage(L, x - 14, y1 - 12, L.width / S, L.height / S); }
   c.restore();
 }
 
@@ -517,7 +517,19 @@ function drawTacticalRoutes(c, map, T) {
     металлические скобы крепления, тень на стене. wood — дерево, steel — сталь, steelY — сталь с жёлтой краской (город) */
 const _ladderCache = new Map();
 function ladderSprite(h, kind) {
-  const key = kind + h; let cv = _ladderCache.get(key); if (cv) return cv;
+  const tile = typeof TexLib !== 'undefined' && TexLib.data['ladder_' + kind];
+  const key = kind + h + (tile ? 'b' : ''); let cv = _ladderCache.get(key); if (cv) return cv;
+  if (tile) {
+    // лестница из Blender (dev/blender/make_ladders.py): участок 28×48 ед. повторяется по высоте; холст втрое подробнее — при
+    // приближении тетивы, волокна и облупленная краска чёткие
+    const S = 3; cv = makeCanvas(28 * S, (h + 4) * S); cv.S = S; const c = cv.getContext('2d'); c.scale(S, S);
+    c.fillStyle = 'rgba(0,0,0,0.28)'; c.fillRect(7, 3, 3, h); c.fillRect(22, 3, 3, h);                       // тень на стене
+    for (let y = 10; y < h - 2; y += 12) c.fillRect(8, y + 3, 16, 2.5);
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    for (let y = 0; y < h; y += 48) { const hh = Math.min(48, h - y); c.drawImage(tile.canvas, 0, 0, tile.w, tile.h * hh / 48, 0, y, 28, hh); }
+    for (let y = 20; y < h - 10; y += 60) for (const x0 of [3, 21]) { c.fillStyle = '#4a4e56'; c.fillRect(x0 - 1, y, 6, 3); c.fillStyle = '#9aa0aa'; c.fillRect(x0 - 1, y, 6, 1); c.fillStyle = '#2a2c30'; c.fillRect(x0 + 1.5, y + 0.8, 1, 1.2); }
+    _ladderCache.set(key, cv); return cv;
+  }
   cv = makeCanvas(28, h + 4); const c = cv.getContext('2d');
   const P = kind === 'wood' ? { hi: '#d8a86a', mid: '#9a6a3c', lo: '#5a3a1e', rung: ['#e2b87c', '#a8763f', '#6a4424'] }
     : kind === 'steelY' ? { hi: '#ffe27a', mid: '#e0b020', lo: '#8a6408', rung: ['#ffe68c', '#d4a41c', '#7a5806'] }

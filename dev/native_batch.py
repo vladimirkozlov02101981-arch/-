@@ -64,7 +64,7 @@ MATERIALS = {
     'rock_arctic': 'snowrock', 'cave_arctic': 'stone', 'rock_volcano': 'basalt', 'cave_volcano': 'basalt',
     'rock_alien': 'basalt', 'cave_alien': 'stone', 'wood_ship': 'wood', 'wood_light': 'wood',
     'brick_castle': 'brick', 'brick_keep': 'brick', 'brick_light': 'brick', 'concrete_city': 'concrete',
-    'cap_snow': 'snow', 'cap_sand': 'sand', 'cap_ash': 'ash',
+    'cap_snow': 'snow', 'cap_sand': 'sand', 'cap_ash': 'ash', 'facade_city': 'concrete',
 }
 
 
@@ -109,7 +109,7 @@ def build(name):
           ['--stages', '2', '--lum', '--gain', '1.3'] + (['--stride', '3'] if w >= 1024 else [])
     print('SR', name, family, w, flush=True)
     subprocess.run(cmd, check=True)
-    subprocess.run([sys.executable, str(ROOT / 'dev' / 'make_native.py'), str(out), name, '--no-match'], check=True)
+    subprocess.run([sys.executable, str(ROOT / 'dev' / 'make_native.py'), str(out), name, '--no-match', '--lossy', '--quality', '90'], check=True)
 
 
 if __name__ == '__main__':
