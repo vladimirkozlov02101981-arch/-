@@ -14,52 +14,63 @@ const TGL_PAD = 4, TGL_SLOTS = 6, TGL_STRIP = 256;
 const TGL_VS = `#version 300 es
 void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2)); gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
 
-/* направление контура по карте (структурный тензор 3×3 градиентов): как NX/NY/CO в hiresWorkerMain */
+/* направление края по карте (как NX/NY/CO в hiresWorkerMain) — только у края: контур на фоне воздуха (w = 1) или граница
+   материалов и слоёв внутри ландшафта (w = 0.5: снег/порода, передний слой/задняя стена). Направление — структурный тензор
+   градиентов Собеля в окне 5×5 с весами Гаусса: по одной ступеньке пиксельного края наклон не угадать, по нескольким — точно */
 const TGL_FLOW_FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler2D; precision highp usampler2D;
-uniform sampler2D tComp; uniform usampler2D tM; uniform ivec2 uSize;
+uniform sampler2D tComp; uniform usampler2D tM; uniform usampler2D tF; uniform usampler2D tB; uniform ivec2 uSize;
 out vec4 fragColor;
-vec4 compAt(ivec2 p) { return texelFetch(tComp, clamp(p, ivec2(-4), uSize + 3) + ivec2(4), 0); }
-float maskAt(ivec2 p) { if (p.x < 0 || p.x >= uSize.x || p.y < 0) return 0.0; if (p.y >= uSize.y) return 1.0; return texelFetch(tM, p, 0).r > 0u ? 1.0 : 0.0; }
-float lum(ivec2 p) { vec4 c = compAt(p); return dot(c.rgb, vec3(0.3, 0.59, 0.11)) + c.a * 0.6 + maskAt(p) * 0.6; }
+float alphaAt(ivec2 p) { return texelFetch(tComp, clamp(p, ivec2(-4), uSize + 3) + ivec2(4), 0).a; }
+/* материал пикселя: 0 — воздух, иначе texRef + 1 (передний твёрдый слой — ещё + 256) */
+int labelAt(ivec2 p) {
+  if (alphaAt(p) < 0.5) return 0;
+  ivec2 q = clamp(p, ivec2(0), uSize - 1);
+  return texelFetch(tM, q, 0).r > 0u ? int(texelFetch(tF, q, 0).r) + 257 : int(texelFetch(tB, q, 0).r) + 1;
+}
 void main() {
   ivec2 p = ivec2(gl_FragCoord.xy);
-  float L[25];
-  for (int j = 0; j < 5; j++) for (int i = 0; i < 5; i++) L[j * 5 + i] = lum(p + ivec2(i - 2, j - 2));
+  float amin = 1.0, amax = 0.0; int l0 = labelAt(p); bool lch = false;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    ivec2 q = p + ivec2(i, j); float av = alphaAt(q); amin = min(amin, av); amax = max(amax, av);
+    if (labelAt(q) != l0) lch = true;
+  }
+  bool ae = amax - amin >= 0.25;
+  if (!ae && !lch) { fragColor = vec4(0.5, 0.5, 0.0, 0.0); return; }
+  float I[49];
+  for (int j = 0; j < 7; j++) for (int i = 0; i < 7; i++) { ivec2 q = p + ivec2(i - 3, j - 3); I[j * 7 + i] = ae ? alphaAt(q) : (labelAt(q) == l0 ? 1.0 : 0.0); }
   float a = 0.0, b = 0.0, c = 0.0;
-  for (int j = 1; j <= 3; j++) for (int i = 1; i <= 3; i++) {
-    float gx = L[j * 5 + i + 1] - L[j * 5 + i - 1], gy = L[(j + 1) * 5 + i] - L[(j - 1) * 5 + i];
-    a += gx * gx; b += gx * gy; c += gy * gy;
+  for (int j = 1; j <= 5; j++) for (int i = 1; i <= 5; i++) {
+    int k = j * 7 + i;
+    float gx = I[k - 6] + 2.0 * I[k + 1] + I[k + 8] - I[k - 8] - 2.0 * I[k - 1] - I[k + 6];
+    float gy = I[k + 6] + 2.0 * I[k + 7] + I[k + 8] - I[k - 8] - 2.0 * I[k - 7] - I[k - 6];
+    float wg = exp(-float((i - 3) * (i - 3) + (j - 3) * (j - 3)) / 4.5);
+    a += wg * gx * gx; b += wg * gx * gy; c += wg * gy * gy;
   }
-  vec4 r = vec4(0.5, 0.5, 0.0, 0.0);
   float sum = a + c;
-  if (sum >= 0.004) {
-    float amin = 1.0, amax = 0.0, m0 = maskAt(p); bool mch = false;
-    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-      ivec2 q = p + ivec2(i, j); float av = compAt(q).a; amin = min(amin, av); amax = max(amax, av);
-      if (maskAt(q) != m0) mch = true;
-    }
-    if (amax - amin >= 0.25 || mch) {
-      float dif = sqrt((a - c) * (a - c) + 4.0 * b * b), th = 0.5 * atan(2.0 * b, a - c);
-      r = vec4(cos(th) * 0.5 + 0.5, sin(th) * 0.5 + 0.5, min(1.0, (dif / sum) * min(1.0, sum / 0.03)), 0.0);
-    }
-  }
-  fragColor = r;
+  if (sum < 0.05) { fragColor = vec4(0.5, 0.5, 0.0, 0.0); return; }
+  float dif = sqrt((a - c) * (a - c) + 4.0 * b * b), th = 0.5 * atan(2.0 * b, a - c);
+  fragColor = vec4(cos(th) * 0.5 + 0.5, sin(th) * 0.5 + 0.5, min(1.0, (dif / sum) * min(1.0, sum)), ae ? 1.0 : 0.5);
 }`;
 
-/* пиксель экрана: сглаженный контур, кубическая интерполяция, родной цвет × освещение карты (как в hiresWorkerMain) */
+/* пиксель экрана (как в hiresWorkerMain): у края — сглаживание вдоль него, внутри материала — родной цвет × освещение карты,
+   остальное — кубическая интерполяция нарисованного цвета (без ореолов) */
 const TGL_MAIN_FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler2D; precision highp usampler2D;
 uniform sampler2D tComp; uniform usampler2D tF; uniform usampler2D tB; uniform usampler2D tM; uniform sampler2D tFlow; uniform sampler2D tIds; uniform sampler2D tLow; uniform sampler2D tFine;
 uniform sampler2D tN0; uniform sampler2D tN1; uniform sampler2D tN2; uniform sampler2D tN3; uniform sampler2D tN4; uniform sampler2D tN5;
 uniform ivec2 uSize; uniform vec2 uCompSize; uniform vec4 uXf; uniform float uCanvasH;
 uniform vec4 uNat[6]; uniform vec4 uLow[6]; uniform vec4 uFine;
+uniform int uNL; uniform vec4 uLP[16]; uniform vec4 uLC[16]; uniform float uBump; uniform vec4 uLiq; uniform vec3 uLiqC;
 out vec4 fragColor;
+const vec3 Y3 = vec3(0.3, 0.59, 0.11);
 vec4 bil(vec2 q) { return texture(tComp, (q + 4.5) / uCompSize); }
 vec4 compAt(ivec2 p) { return texelFetch(tComp, clamp(p, ivec2(-4), uSize + 3) + ivec2(4), 0); }
-int ridAt(ivec2 p) {
-  if (p.x < 0 || p.y < 0 || p.x >= uSize.x || p.y >= uSize.y) return 0;
-  return int(texelFetch(tM, p, 0).r > 0u ? texelFetch(tF, p, 0).r : texelFetch(tB, p, 0).r);
+/* материал пикселя, как в TGL_FLOW_FS: 0 — воздух, иначе texRef + 1 (передний твёрдый слой — ещё + 256) */
+int labelAt(ivec2 p) {
+  if (compAt(p).a < 0.5) return 0;
+  ivec2 q = clamp(p, ivec2(0), uSize - 1);
+  return texelFetch(tM, q, 0).r > 0u ? int(texelFetch(tF, q, 0).r) + 257 : int(texelFetch(tB, q, 0).r) + 1;
 }
 vec4 cw(float t) { float t2 = t * t, t3 = t2 * t; return vec4(-0.5 * t + t2 - 0.5 * t3, 1.0 - 2.5 * t2 + 1.5 * t3, 0.5 * t + 2.0 * t2 - 1.5 * t3, -0.5 * t2 + 0.5 * t3); }
 bool catmull(vec2 u, out vec3 res) {
@@ -79,14 +90,52 @@ vec3 natSample(int s, vec2 tc, vec2 gx, vec2 gy) {
   if (s == 4) return textureGrad(tN4, tc, gx, gy).rgb;
   return textureGrad(tN5, tc, gx, gy).rgb;
 }
-/* освещение карты в пикселе: нарисованный цвет / цвет малой текстуры (тёмный канал — по яркости, без выбросов) */
-vec3 lfAt(ivec2 q, vec4 low, vec2 d) {
-  vec4 c = compAt(q); vec3 src = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);
-  vec2 lw = low.zw, t = vec2(q) + d; t -= lw * floor(t / lw);
-  vec3 D = texelFetch(tLow, ivec2(low.xy + t), 0).rgb;
-  float lc = dot(src, vec3(0.3, 0.59, 0.11)), ld = max(8.0 / 255.0, dot(D, vec3(0.3, 0.59, 0.11)));
+float natH(int s, vec2 tc, vec2 gx, vec2 gy) { return dot(natSample(s, tc, gx, gy), Y3); }
+/* родной цвет материала в точке карты w (с фото-порами мельче текселя) */
+vec3 natAt(int s, vec2 w, vec2 d) {
+  vec4 ni = uNat[s];
+  vec3 c = natSample(s, (w + d) * ni.z / ni.xy, vec2(ni.z / (uXf.x * ni.x), 0.0), vec2(0.0, ni.z / (uXf.y * ni.y)));
+  if (float(s) == uFine.x) {
+    vec2 fc = (w + d) * uFine.y / uFine.zw;
+    c *= dot(textureGrad(tFine, fc, vec2(uFine.y / (uXf.x * uFine.z), 0.0), vec2(0.0, uFine.y / (uXf.y * uFine.w))).rgb, vec3(0.299, 0.587, 0.114)) * (255.0 / 128.0);
+  }
+  return c;
+}
+/* слот родной текстуры материала L (−1 — нет) и сдвиг его текстуры d */
+int slotOf(int L, out vec2 d) {
+  int rid = L > 256 ? L - 257 : L - 1; d = vec2(0.0);
+  if (rid <= 0) return -1;
+  vec4 e = texelFetch(tIds, ivec2(rid, 0), 0); d = e.yz; int s = int(e.x + 0.5) - 1;
+  return s >= 0 && uNat[s].w > 0.5 ? s : -1;
+}
+vec3 lowAt(vec4 low, vec2 d, ivec2 q) { vec2 lw = low.zw, t = vec2(q) + d; t -= lw * floor(t / lw); return texelFetch(tLow, ivec2(low.xy + t), 0).rgb; }
+/* освещение карты: нарисованный цвет / цвет малой текстуры (тёмный канал — по яркости, без выбросов) */
+vec3 lfOf(vec3 src, vec3 D) {
+  float lc = dot(src, Y3), ld = max(8.0 / 255.0, dot(D, Y3));
   vec3 l = vec3(D.r >= 7.5 / 255.0 ? src.r / D.r : lc / ld, D.g >= 7.5 / 255.0 ? src.g / D.g : lc / ld, D.b >= 7.5 / 255.0 ? src.b / D.b : lc / ld);
   return min(l, vec3(6.0));
+}
+vec3 lfAt(ivec2 q, vec4 low, vec2 d) { vec4 c = compAt(q); return lfOf(c.a > 0.0 ? c.rgb / c.a : vec3(0.0), lowAt(low, d, q)); }
+/* цвет материала L в точке: родной × освещение карты по соседям того же материала (или их нарисованный цвет) — у границы
+   материалов цвет одной стороны не смешивается с другой */
+vec3 colOf(int L, vec2 w, vec2 u) {
+  vec2 d; int s = slotOf(L, d);
+  ivec2 b = ivec2(floor(u)); vec2 f = u - vec2(b);
+  vec3 acc = vec3(0.0); float sw = 0.0;
+  for (int j = 0; j < 4; j++) {
+    ivec2 q = b + ivec2(j & 1, j >> 1); if (labelAt(q) != L) continue;
+    float k = ((j & 1) == 1 ? f.x : 1.0 - f.x) * ((j >> 1) == 1 ? f.y : 1.0 - f.y) + 1e-3; vec4 c = compAt(q);
+    acc += (s >= 0 ? lfAt(q, uLow[s], d) : c.rgb / max(c.a, 1e-4)) * k; sw += k;
+  }
+  if (sw == 0.0) {   // плавная граница прошла за пиксель: ближайшие пиксели того же материала
+    for (int j = -1; j <= 2; j++) for (int i = -1; i <= 2; i++) {
+      ivec2 q = b + ivec2(i, j); if (labelAt(q) != L) continue;
+      vec2 dq = vec2(q) - u; float k = 1.0 / (0.1 + dot(dq, dq)); vec4 c = compAt(q);
+      acc += (s >= 0 ? lfAt(q, uLow[s], d) : c.rgb / max(c.a, 1e-4)) * k; sw += k;
+    }
+  }
+  vec3 v = sw > 0.0 ? acc / sw : vec3(0.0);
+  return s >= 0 ? natAt(s, w, d) * v : v;
 }
 void main() {
   vec2 w = (vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y) - uXf.zw) / uXf.xy, u = w - 0.5;
@@ -94,43 +143,94 @@ void main() {
   bool inMap = li.x >= 0 && li.y >= 0 && li.x < uSize.x && li.y < uSize.y;
   vec4 fl = inMap ? texelFetch(tFlow, li, 0) : vec4(0.5, 0.5, 0.0, 0.0);
   float co = fl.z;
-  vec4 s;
-  if (co > 0.12) {
-    // вдоль края — усреднение (ступеньки пропадают), поперёк — резкость
-    vec2 n = fl.xy * 2.0 - 1.0, t = vec2(-n.y, n.x) * co;
-    s = (bil(u) + 0.8 * (bil(u + 0.55 * t) + bil(u - 0.55 * t)) + 0.5 * (bil(u + 1.15 * t) + bil(u - 1.15 * t))) / 3.6;
-    s += 0.7 * co * (s - 0.5 * (bil(u + 0.55 * n) + bil(u - 0.55 * n)));
-  } else s = bil(u);
-  float a = clamp(s.a, 0.0, 1.0);
-  if (a <= 0.003) { fragColor = vec4(0.0); return; }
-  vec3 rgb = s.rgb / max(s.a, 1e-4);
-  if (co > 0.12) a = clamp((a - 0.5) * 1.7 + 0.5, 0.0, 1.0);   // чёткий контур на фоне неба
-  float kb = 0.0; vec3 nat = vec3(0.0);
-  int rid = inMap ? ridAt(li) : 0;
-  if (rid > 0 && co <= 0.12 && a >= 0.999) {
-    vec4 e = texelFetch(tIds, ivec2(rid, 0), 0); int slot = int(e.x + 0.5) - 1;
-    if (slot >= 0 && uNat[slot].w > 0.5) {
-      vec2 d = e.yz; vec4 low = uLow[slot], ni = uNat[slot];
+  bool edgeA = co > 0.12 && fl.w > 0.75, edgeL = co > 0.12 && !edgeA && fl.w > 0.25;
+  // вдоль края — до ±3 пикселей карты (ступенька пиксельного края бывает длиной 5–6 пикселей), поперёк — резкость
+  vec2 en = fl.xy * 2.0 - 1.0, tg = vec2(-en.y, en.x) * (3.0 * co);
+  vec4 s; vec3 rgb; float a;
+  // источники света рядом (вспышки, огонь, фонари): рельеф поверхности ловит их свет
+  bool lit = uLiq.z > 0.0 && w.y < uLiq.x && w.y > uLiq.x - uLiq.y;   // лава/кислота подсвечивает снизу
+  for (int i = 0; i < 16; i++) { if (lit || i >= uNL) break; if (distance(uLP[i].xy, w) < uLP[i].z) lit = true; }
+  vec2 hg = vec2(0.0); bool hgSet = false;
+  if (edgeA) {   // контур на фоне воздуха: ступеньки пропадают, переход — около пикселя экрана при любом увеличении
+    ivec2 qa = li; float best = 1e9;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { ivec2 q = li + ivec2(i, j); vec2 dq = vec2(q) + 0.5 - w; float dd = dot(dq, dq); if (dd < best && compAt(q).a >= 0.5) { best = dd; qa = q; } }
+    vec2 dA; int sA = best < 1e8 ? slotOf(labelAt(qa), dA) : -1;
+    vec4 sp = vec4(0.0), sm = vec4(0.0); vec3 Dacc = vec3(0.0); float gs = 0.0, Da = 0.0; s = vec4(0.0);
+    for (int k = -4; k <= 4; k++) {
+      float f = float(k) * 0.25, g = 1.0 - 0.6 * f * f; vec2 o = tg * f; vec4 c = bil(u + o);
+      s += g * c; sp += g * bil(u + o + 0.55 * en); sm += g * bil(u + o - 0.55 * en); gs += g;
+      if (sA >= 0) { Dacc += (g * c.a) * lowAt(uLow[sA], dA, ivec2(floor(w + o))); Da += g * c.a; }
+    }
+    s /= gs; s += 0.7 * co * (s - 0.5 * (sp + sm) / gs);
+    a = clamp(s.a, 0.0, 1.0);
+    if (a <= 0.003) { fragColor = vec4(0.0); return; }
+    rgb = s.rgb / max(s.a, 1e-4);
+    a = clamp((a - 0.5) * max(1.7, uXf.x * 0.9) + 0.5, 0.0, 1.0);
+    if (sA >= 0 && Da > 1e-3) rgb = natAt(sA, w, dA) * lfOf(clamp(rgb, 0.0, 1.0), Dacc / Da);   // родная фактура до самого края
+  } else if (edgeL) {   // граница материалов внутри ландшафта: плавная кривая по доле материала вдоль края, цвет сторон не смешивается
+    int A = labelAt(li), B = 0; float cA = 0.0, gs = 0.0;
+    for (int k = -4; k <= 4; k++) {
+      float f = float(k) * 0.25, g = 1.0 - 0.6 * f * f; vec2 x = u + tg * f; ivec2 b = ivec2(floor(x)); vec2 fx = x - vec2(b);
+      for (int j = 0; j < 4; j++) {
+        int L = labelAt(b + ivec2(j & 1, j >> 1));
+        if (L == A) cA += g * ((j & 1) == 1 ? fx.x : 1.0 - fx.x) * ((j >> 1) == 1 ? fx.y : 1.0 - fx.y); else if (B == 0 && L != 0) B = L;
+      }
+      gs += g;
+    }
+    s = bil(u); a = clamp(s.a, 0.0, 1.0);
+    if (a <= 0.003) { fragColor = vec4(0.0); return; }
+    float tA = B == 0 ? 1.0 : clamp(0.5 + (cA / gs - 0.5) * max(1.0, uXf.x), 0.0, 1.0);
+    rgb = tA >= 0.999 ? colOf(A, w, u) : tA <= 0.001 ? colOf(B, w, u) : mix(colOf(B, w, u), colOf(A, w, u), tA);
+  } else {
+    s = bil(u); a = clamp(s.a, 0.0, 1.0);
+    if (a <= 0.003) { fragColor = vec4(0.0); return; }
+    rgb = s.rgb / max(s.a, 1e-4);
+    float kb = 0.0; vec3 nat = vec3(0.0);
+    int L = inMap && a >= 0.999 ? labelAt(li) : 0; vec2 d; int slot = L > 0 ? slotOf(L, d) : -1;
+    if (slot >= 0) {
+      vec4 low = uLow[slot], ni = uNat[slot];
       ivec2 b = ivec2(floor(u)); vec2 f = u - vec2(b);
       vec3 acc = vec3(0.0); float sw = 0.0;
       for (int j = 0; j < 4; j++) {
-        ivec2 q = b + ivec2(j & 1, j >> 1); if (ridAt(q) != rid) continue;
+        ivec2 q = b + ivec2(j & 1, j >> 1); if (labelAt(q) != L) continue;
         float k = ((j & 1) == 1 ? f.x : 1.0 - f.x) * ((j >> 1) == 1 ? f.y : 1.0 - f.y);
         acc += lfAt(q, low, d) * k; sw += k;
       }
-      vec3 L = sw > 1e-4 ? acc / sw : lfAt(li, low, d);
-      vec2 tc = (w + d) * ni.z / ni.xy;
-      nat = natSample(slot, tc, vec2(ni.z / (uXf.x * ni.x), 0.0), vec2(0.0, ni.z / (uXf.y * ni.y))) * L;
-      if (float(slot) == uFine.x) {   // фото-поры мельче текселя родной текстуры
-        vec2 fc = (w + d) * uFine.y / uFine.zw;
-        nat *= dot(textureGrad(tFine, fc, vec2(uFine.y / (uXf.x * uFine.z), 0.0), vec2(0.0, uFine.y / (uXf.y * uFine.w))).rgb, vec3(0.299, 0.587, 0.114)) * (255.0 / 128.0);
+      vec3 LF = sw > 1e-4 ? acc / sw : lfAt(li, low, d);
+      nat = natAt(slot, w, d) * LF;
+      if (lit) {   // высота — яркость родной текстуры (швы и щели темнее — ниже), перепад на один пиксель экрана
+        vec2 tc = (w + d) * ni.z / ni.xy, gx = vec2(ni.z / (uXf.x * ni.x), 0.0), gy = vec2(0.0, ni.z / (uXf.y * ni.y));
+        hg = vec2(natH(slot, tc + gx, gx, gy) - natH(slot, tc - gx, gx, gy), natH(slot, tc + gy, gx, gy) - natH(slot, tc - gy, gx, gy)) * 0.5 * uXf.xy; hgSet = true;
       }
       // у границы с другим материалом родной цвет плавно переходит в гладкое увеличение
       kb = sw >= 0.999 ? 1.0 : clamp((sw - 0.5) * 2.0, 0.0, 1.0);
     }
+    if (kb < 1.0 && s.a >= 0.999) { vec3 cr; if (catmull(u, cr)) rgb = cr; }
+    rgb = mix(rgb, nat, kb);
   }
-  if (kb < 1.0 && co <= 0.12 && s.a >= 0.999) { vec3 cr; if (catmull(u, cr)) rgb = cr; }
-  rgb = clamp(mix(rgb, nat, kb), 0.0, 1.0);
+  rgb = clamp(rgb, 0.0, 1.0);
+  if (lit) {
+    if (!hgSet) {   // без родной текстуры — перепад яркости нарисованного ландшафта
+      vec4 px = bil(u + vec2(0.5, 0.0)), mx = bil(u - vec2(0.5, 0.0)), py = bil(u + vec2(0.0, 0.5)), my = bil(u - vec2(0.0, 0.5));
+      hg = vec2(dot(px.rgb, Y3) - dot(mx.rgb, Y3), dot(py.rgb, Y3) - dot(my.rgb, Y3));
+    }
+    vec3 n = normalize(vec3(-hg * uBump, 1.0)), add = vec3(0.0);
+    if (uLiq.z > 0.0) {   // свет снизу от поверхности лавы: грани, обращённые вниз, светятся сильнее
+      float dy = uLiq.x - w.y;
+      if (dy > 0.0 && dy < uLiq.y) { float att = 1.0 - dy / uLiq.y; att *= att; add += uLiqC * (uLiq.z * att * (0.2 + 0.8 * max(0.0, dot(n, normalize(vec3(0.0, dy, uLiq.y * 0.3)))))); }
+    }
+    for (int i = 0; i < 16; i++) {
+      if (i >= uNL) break;
+      vec4 lp = uLP[i]; vec2 dl = lp.xy - w; float dist = length(dl); if (dist >= lp.z) continue;
+      float att = 1.0 - dist / lp.z; att *= att;
+      float nd = max(0.0, dot(n, normalize(vec3(dl, lp.z * 0.3))));
+      add += uLC[i].rgb * (lp.w * att * (0.15 + 0.8 * nd));
+    }
+    // свет умножается на цвет поверхности: тёмные щели почти не светлеют; яркое мягко сжимается, без выгорания в белое
+    vec3 lt = rgb * (1.0 + add); float mxv = max(lt.r, max(lt.g, lt.b));
+    if (mxv > 0.85) lt *= (0.85 + (mxv - 0.85) / (1.0 + (mxv - 0.85) * 4.0)) / mxv;
+    rgb = lt;
+  }
   fragColor = vec4(rgb * a, a);
 }`;
 
@@ -157,8 +257,8 @@ class TerrainGL {
     const gl = this.gl;
     this.pFlow = this.program(TGL_FLOW_FS); this.pMain = this.program(TGL_MAIN_FS);
     this.vao = gl.createVertexArray(); this.fb = gl.createFramebuffer();
-    this.uFlow = this.locations(this.pFlow, ['tComp', 'tM', 'uSize']);
-    this.uMain = this.locations(this.pMain, ['tComp', 'tF', 'tB', 'tM', 'tFlow', 'tIds', 'tLow', 'tFine', 'tN0', 'tN1', 'tN2', 'tN3', 'tN4', 'tN5', 'uSize', 'uCompSize', 'uXf', 'uCanvasH', 'uNat', 'uLow', 'uFine']);
+    this.uFlow = this.locations(this.pFlow, ['tComp', 'tM', 'tF', 'tB', 'uSize']);
+    this.uMain = this.locations(this.pMain, ['tComp', 'tF', 'tB', 'tM', 'tFlow', 'tIds', 'tLow', 'tFine', 'tN0', 'tN1', 'tN2', 'tN3', 'tN4', 'tN5', 'uSize', 'uCompSize', 'uXf', 'uCanvasH', 'uNat', 'uLow', 'uFine', 'uNL', 'uLP', 'uLC', 'uBump', 'uLiq', 'uLiqC']);
     this.dummy = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.dummy);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128, 128, 128, 255]));
     this.dummyU = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.dummyU);
@@ -176,6 +276,8 @@ class TerrainGL {
     gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('шейдер ландшафта: ' + gl.getProgramInfoLog(p));
     return p;
   }
+  /** цвет источника света '#rrggbb' → [0..1] (с запоминанием) */
+  rgb(hex) { const m = this.cols || (this.cols = new Map()); let c = m.get(hex); if (!c) { const v = hex2rgb(hex || '#ffffff'); c = [v[0] / 255, v[1] / 255, v[2] / 255]; m.set(hex, c); } return c; }
   locations(p, names) { const o = {}; for (const n of names) o[n] = this.gl.getUniformLocation(p, n); return o; }
   texture(w, h, internal, filter, wrap, levels = 1) {
     const gl = this.gl, t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
@@ -280,6 +382,8 @@ class TerrainGL {
     gl.useProgram(this.pFlow);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex.comp); gl.uniform1i(u.tComp, 0);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.tex.M); gl.uniform1i(u.tM, 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.tex.F); gl.uniform1i(u.tF, 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.tex.B); gl.uniform1i(u.tB, 3);
     gl.uniform2i(u.uSize, this.W, this.H);
     gl.bindVertexArray(this.vao); gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.SCISSOR_TEST); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -317,7 +421,7 @@ class TerrainGL {
     try { if (sc.terrain !== this.terr && !this.bind(sc)) return; this.sync(sc.terrain); this.natives(); } catch (e) { console.warn('TerrainGL', e); this.broken = true; }
   }
   /** рисует видимую часть ландшафта; false — пусть рисует прежний путь */
-  draw(c, sc, v, zp) {
+  draw(c, sc, v, zp, lights) {
     if (this.lost || this.broken || zp < 1.15 || window.__noHiRes) return false;
     const terr = sc.terrain; if (!terr || !terr.texRef || !terr.canvas) return false;
     try {
@@ -347,6 +451,17 @@ class TerrainGL {
       gl.uniform4f(u.uFine, fineOk ? this.fineSlot : -1, fineOk ? fs.fine.scale : 1, fineOk ? fs.fine.w : 1, fineOk ? fs.fine.h : 1);
       gl.uniform2i(u.uSize, W, H); gl.uniform2f(u.uCompSize, W + 2 * TGL_PAD, H + 2 * TGL_PAD);
       gl.uniform4f(u.uXf, m.a, m.d, m.e, m.f); gl.uniform1f(u.uCanvasH, cv.height);
+      // свет кадра (FX.frameLights): только источники в кадре, самые сильные
+      const LP = this.lp || (this.lp = new Float32Array(64)), LC = this.lc || (this.lc = new Float32Array(64)); let nl = 0;
+      if (lights && lights.length && v) {
+        const near = lights.filter(l => l.r > 0 && l.a > 0.02 && l.x + l.r > v.x0 && l.x - l.r < v.x1 && l.y + l.r > v.y0 && l.y - l.r < v.y1);
+        if (near.length > 16) near.sort((p, q) => q.a * q.r - p.a * p.r);
+        for (const l of near) { if (nl >= 16) break; const col = this.rgb(l.col); LP.set([l.x, l.y, l.r, Math.min(1, l.a)], nl * 4); LC.set([col[0], col[1], col[2], 0], nl * 4); nl++; }
+      }
+      gl.uniform1i(u.uNL, nl); if (nl) { gl.uniform4fv(u.uLP, LP); gl.uniform4fv(u.uLC, LC); } gl.uniform1f(u.uBump, 6);
+      const liq = sc.theme && sc.theme.liquid, glowLiq = liq && (liq.kind === 'lava' || liq.kind === 'acid');
+      const lc = glowLiq ? this.rgb(liq.kind === 'lava' ? '#ff7a2a' : '#8aff5a') : [0, 0, 0];
+      gl.uniform4f(u.uLiq, sc.waterY, 260, glowLiq ? (liq.kind === 'lava' ? 1.6 : 0.5) : 0, 0); gl.uniform3f(u.uLiqC, lc[0], lc[1], lc[2]);
       gl.bindVertexArray(this.vao); gl.drawArrays(gl.TRIANGLES, 0, 3); gl.disable(gl.SCISSOR_TEST);
       c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.drawImage(this.cv, 0, 0); c.restore();
       return true;

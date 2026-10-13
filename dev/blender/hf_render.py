@@ -49,11 +49,12 @@ def tex_hash(yy, xx, seed):
 
 
 def render_blocks(mt, name, H, C, E=None, R2=2, up=2, light=None, block=1024, margin=128, samples=128,
-                  rough=0.82, spec=0.25, micro=0.08, emit=1.6, out_dir=None, hgrain=0.0, cgrain=0.0, speck=0.0):
+                  rough=0.82, spec=0.25, micro=0.08, emit=1.6, out_dir=None, hgrain=0.0, cgrain=0.0, speck=0.0, sss=0.0):
     """H (N2×N2, единицы мира), C (N2×N2×3, sRGB 0..255), E (N2×N2×3 свечение 0..1 или None); бесшовные по краям.
     Пишет out_dir/<name>/b_<by>_<bx>.png (block×block px).
     hgrain / cgrain / speck — деталь в 1–2 текселя (критик r24: «родные» Blender-текстуры были фактически ×2): микрорельеф
-    (ед. мира), зерно тона (доля яркости) и доля искр-блёсток (+25 %); считаются по глобальным координатам — без швов."""
+    (ед. мира), зерно тона (доля яркости) и доля искр-блёсток (+25 %); считаются по глобальным координатам — без швов.
+    sss — доля подповерхностного рассеяния (снег: мягкие голубоватые тени комьев)."""
     R = R2 * up; NY2, NX2 = H.shape; nby = max(1, NY2 * up // block); nbx = max(1, NX2 * up // block)
     B = NX2 * up // nbx; B2 = B // up; M2 = margin // up
     assert NY2 * up // nby == B, 'блоки должны быть квадратными'
@@ -100,6 +101,10 @@ def render_blocks(mt, name, H, C, E=None, R2=2, up=2, light=None, block=1024, ma
                 img = bpy.data.images.new(nm, n, n, alpha=False); img.colorspace_settings.name = 'sRGB' if srgb else 'Non-Color'
                 px = np.ones((n, n, 4), np.float32); px[..., :3] = arr[::-1]; img.pixels.foreach_set(px.ravel()); img.update(); img.pack(); return img
             m, nt, b = mt.principled('hf', rough, spec); N_ = nt.nodes; L = nt.links
+            if sss > 0 and 'Subsurface Weight' in b.inputs:
+                b.inputs['Subsurface Weight'].default_value = sss
+                b.inputs['Subsurface Radius'].default_value = (0.6, 0.8, 1.0)
+                b.inputs['Subsurface Scale'].default_value = 3.0 / R / 100.0      # ~3 текселя: рассеяние в комьях, не туман
             tx = N_.new('ShaderNodeTexImage'); tx.image = image('albedo', np.clip(Cb / 255.0, 0, 1), True); tx.interpolation = 'Closest' if up == 1 else 'Linear'
             tc = N_.new('ShaderNodeNewGeometry')                    # мировые координаты: зерно непрерывно через стыки блоков
             # мелкое зерно цвета в мировых координатах: ~3 и ~1,3 текселя (прежние масштабы 520/1900 давали зерно мельче текселя —

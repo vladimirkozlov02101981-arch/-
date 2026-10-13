@@ -24,13 +24,23 @@ function fixture() {
 }
 function angle(actual, expected) { assert(Math.abs(actual - expected) < 1e-10, `${actual} differs from ${expected}`); }
 
-test('A new turn always starts the sniper scope at the initial position by the soldier, never at a stale far point', () => {
+test('A new turn always starts the sniper scope on the barrel line at the edge of the soldier frame, never at a stale far point', () => {
   fixture.fresh = true; const f = fixture(); fixture.fresh = false;
   f.T.weapon = 'sniper'; f.Input.mouse.x = 5000; f.Input.mouse.y = 50; f.tick();
-  const p = f.ctl.scopePoint, d = Math.hypot(p.x - f.s.x, p.y - (f.s.y - GUN_Y_TEST));
-  assert(d < 200, 'scope ' + JSON.stringify(p) + ' is ' + d + ' from the soldier'); angle(Math.atan2(p.y - (f.s.y - GUN_Y_TEST), p.x - f.s.x), f.s.aim);
-  // следующий ход того же бойца с далёкой прошлой точкой — снова у бойца
-  f.ctl.scopePoint.x = 6000; f.T.round++; f.tick(); assert(Math.hypot(f.ctl.scopePoint.x - f.s.x, f.ctl.scopePoint.y - f.s.y) < 220);
+  const p = f.ctl.scopePoint, gx = f.s.x, gy = f.s.y - GUN_Y_TEST, pad = Math.round(600 * 0.16) + 16;
+  angle(Math.atan2(p.y - gy, p.x - gx), f.s.aim);
+  // кадр у бойца 800×600 (z = 1): вся линза в кадре, у его края по стволу
+  assert(Math.abs(p.x - f.s.x) <= 400 - pad + 1e-6 && Math.abs(p.y - (f.s.y - 20)) <= 300 - Math.min(300, pad + 40) + 1e-6, 'scope ' + JSON.stringify(p) + ' is out of the soldier frame');
+  assert(Math.abs(p.x - f.s.x) > 400 - pad - 1 || Math.abs(p.y - (f.s.y - 20)) > 300 - Math.min(300, pad + 40) - 1, 'scope ' + JSON.stringify(p) + ' is not at the frame edge');
+  // следующий ход того же бойца с далёкой прошлой точкой — снова в кадре у бойца
+  f.ctl.scopePoint.x = 6000; f.T.round++; f.tick(); assert(Math.abs(f.ctl.scopePoint.x - f.s.x) <= 400 && Math.abs(f.ctl.scopePoint.y - f.s.y) <= 320);
+});
+test('Selecting the sniper during a turn puts the scope on the current barrel line at the screen edge, not under the cursor', () => {
+  const f = fixture(); f.ctl.aimMode = 'keys'; f.ctl.base = 0.3; f.tick(); const base = f.ctl.base;
+  f.cam.x = 100; f.cam.y = 104; f.cam.tz = 1; f.cam.sx = f.cam.sy = 0; f.Input.mouse.x = 700; f.Input.mouse.y = 40;
+  f.T.weapon = 'sniper'; f.tick();
+  const p = f.ctl.scopePoint; angle(Math.atan2(p.y - (f.s.y - GUN_Y_TEST), p.x - f.s.x), base); angle(f.ctl.base, base);
+  const pad = Math.round(600 * 0.16) + 16; assert(Math.abs((p.x - 100) - (400 - pad)) < 1e-6 || Math.abs((p.y - 104) - (300 - pad)) < 1e-6, 'scope ' + JSON.stringify(p) + ' is not at the edge');
 });
 
 test('Selecting sniper opens the historical scope and immediately aims at the mouse', () => {
@@ -40,10 +50,10 @@ test('Selecting sniper opens the historical scope and immediately aims at the mo
 });
 
 test('Ctrl hides only the optic: mouse control remains active and Ctrl never cycles weapons', () => {
-  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.pressed.ControlLeft = true; f.tick();
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); const p0 = { ...f.ctl.scopePoint }; f.Input.pressed.ControlLeft = true; f.tick();
   assert.equal(f.ctl.scopeOn, false); assert.equal(f.Input.pressed.ControlLeft, false);
   f.Input.mouse.x = 20; f.Input.mouse.y = 40; f.Input.mouse.dx = -230; f.Input.mouse.dy = -10; f.Input.mouse.moved = true; f.tick();
-  angle(f.ctl.base, Math.atan2(-60, -80)); assert.equal(f.sent.some(c => c.c === 'weapon'), false);
+  angle(f.ctl.base, Math.atan2(p0.y - 10 - (f.s.y - GUN_Y_TEST), Math.max(0, p0.x - 230) - f.s.x));   // точка не уходит за край карты assert.equal(f.sent.some(c => c.c === 'weapon'), false);
   assert.match(f.ctl.hint(f.sc, f.T), /по всей карте.*ЛКМ.*показать/);
 });
 
@@ -75,9 +85,9 @@ test('Non-sniper keyboard and mouse aiming, and binocular click protection, keep
 
 
 test('Locked sniper retains all relative motion beyond the screen and reaches every map boundary', () => {
-  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true;
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true; const p0 = { ...f.ctl.scopePoint };
   const move = (dx, dy) => { f.Input.mouse.dx = dx; f.Input.mouse.dy = dy; f.Input.mouse.moved = true; f.tick(); f.Input.endFrame(); };
-  move(5000, 1000); assert.equal(f.ctl.mouseW.x, 5250); assert.equal(f.ctl.mouseW.y, 1050);
+  move(5000, 1000); assert.equal(f.ctl.mouseW.x, Math.min(6399, p0.x + 5000)); assert.equal(f.ctl.mouseW.y, Math.min(1799, p0.y + 1000));
   move(10000, 10000); assert.equal(f.ctl.mouseW.x, 6399); assert.equal(f.ctl.mouseW.y, 1799);
   move(-20000, -20000); assert.equal(f.ctl.mouseW.x, 0); assert.equal(f.ctl.mouseW.y, -900);
   move(6000, 2200); assert.equal(f.ctl.mouseW.x, 6000); assert.equal(f.ctl.mouseW.y, 1300);
@@ -97,9 +107,9 @@ test('Stationary scope keeps its world target when the camera moves or zooms and
 });
 
 test('Scope sensitivity follows zoom and binocular movement preserves the selected world target', () => {
-  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true; f.cam.z = 4;
+  const f = fixture(); f.T.weapon = 'sniper'; f.tick(); f.Input.locked = true; f.cam.z = 4; const p0 = { ...f.ctl.scopePoint };
   f.Input.mouse.dx = 120; f.Input.mouse.dy = -40; f.Input.mouse.moved = true; f.tick(); f.Input.endFrame();
-  assert.equal(f.ctl.scopePoint.x, 280); assert.equal(f.ctl.scopePoint.y, 40);
+  assert(Math.abs(f.ctl.scopePoint.x - (p0.x + 30)) < 1e-9); assert(Math.abs(f.ctl.scopePoint.y - (p0.y - 10)) < 1e-9);
   const point = { ...f.ctl.scopePoint }; f.ctl.binoc = true;
   f.Input.mouse.dx = 2000; f.Input.mouse.dy = 3000; f.Input.mouse.moved = true; f.tick(); f.Input.endFrame();
   assert.deepEqual({ ...f.ctl.scopePoint }, point);

@@ -490,6 +490,30 @@ table.keys td:first-child { white-space: nowrap; color: var(--text); padding-rig
 #loading-text { font: 500 13px var(--ui); letter-spacing: 1.4px; color: var(--text-2); text-transform: uppercase; }
 .dialog { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(4, 6, 10, .6); backdrop-filter: blur(4px); pointer-events: auto; z-index: 7; }
 #dialog-text { font-size: 15px; line-height: 1.6; color: var(--text); margin-bottom: 4px; }
+/* плашка подтверждения (удаление): одно нажатие — вопрос, «Отмена» по умолчанию, красная кнопка действия */
+.dialog.confirm { z-index: 9; background: rgba(4, 6, 10, .52); animation: fadeIn .16s var(--ease); }
+.confirm-box { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "icon body" "actions actions"; gap: 14px 16px;
+  width: min(520px, calc(100vw - 32px)); padding: 20px 22px 18px; border-radius: var(--r-lg); border: 1px solid rgba(255, 90, 95, .32);
+  background: linear-gradient(180deg, var(--surface-3), var(--surface-2)); box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .05);
+  animation: confirmIn .22s var(--ease); overflow: hidden; }
+.confirm-box::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, #ff7a7e, var(--bad)); }
+.confirm-icon { grid-area: icon; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; color: var(--bad);
+  background: rgba(255, 90, 95, .12); border: 1px solid rgba(255, 90, 95, .3); }
+.confirm-icon svg.ico { width: 20px; height: 20px; }
+.confirm-body { grid-area: body; min-width: 0; align-self: center; }
+.confirm-title { font: 600 16px var(--ui); color: var(--text); letter-spacing: .2px; }
+.confirm-text { margin-top: 5px; font-size: 13px; line-height: 1.5; color: var(--text-2); overflow-wrap: anywhere; }
+.confirm-actions { grid-area: actions; display: flex; justify-content: flex-end; gap: 10px; }
+.confirm-actions .btn { min-width: 112px; }
+.btn.danger { color: #fff; background: linear-gradient(180deg, #ff7a7e, var(--bad) 55%, #d93a40); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 18px rgba(255, 70, 80, .22); }
+.btn.danger:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 10px 26px rgba(255, 70, 80, .32); }
+.btn.danger svg.ico { color: #fff; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@keyframes confirmIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+/* справка: клавиши меняются прямо в таблице управления */
+.help-keys-cfg { margin: 0 0 2px; }
+.help-keys-note { margin: 0 0 6px; min-height: 1.3em; color: var(--accent-hi); }
+#help-keys .key-chip, #help-keys .key-add { margin: 1px 0; }
 
 /* =========================================================================================
    В бою: панель оружия, чат

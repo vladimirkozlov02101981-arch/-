@@ -51,11 +51,13 @@ STYLES = {
     # с разрывами, под ним мелкие сосульки и тёмные потёки, по камню редкий иней (как в эталоне arctic.png)
     # r23: пласты 40–120 ед. разной толщины, трещины редкие (300–500) и косые (10–25°), у каждого пласта карниз сверху
     # (светлый верх, тень под уступом — от настоящего рельефа), крупные пятна тона ±10 L
-    'strata': dict(name='rock_arctic', seed=61, T=1024, TY=512, hr=(40, 120), wr=(300, 500), joint=1.8, bev=3.6, recess=2.6, tilt=0.8,
-                   slant=(10, 25), ledge=2.4, mottk=0.16,
+    # r24 → v44: пласты как в эталоне (≈30 ед.: 24–42), трещины чаще (80–200), карниз сильнее (светлый верх, тень под
+    # уступом), снег на кромке почти сплошной и толще, сосулек и инея больше
+    'strata': dict(name='rock_arctic', seed=61, T=1024, TY=512, hr=(24, 42), wr=(80, 200), joint=1.8, bev=3.0, recess=2.6, tilt=0.8,
+                   slant=(5, 20), ledge=3.4, mottk=0.16, frostT=2.35,
                    stone=[(56, 61, 72), (50, 55, 66), (62, 67, 78), (45, 50, 60), (54, 59, 70)],
                    mortar=(13, 15, 20), lichen=0.0, moss=0.0, wob=1.8, rough=1.6, warp=(3.2, 3.0),
-                   snow=dict(th=(1.5, 8.0), col=(232, 238, 250), gaps=-0.8, icicles=1.0),
+                   snow=dict(th=(2.2, 7.5), col=(232, 238, 250), gaps=-1.3, icicles=1.7),
                    light=dict(col=(0.82, 0.88, 1.0), elev=32, energy=4.2)),
     # пиратский маяк: побелённый камень, мелкие блоки, светлый раствор
     'light': dict(name='stone_light', seed=51, T=512, hr=(10, 13), wr=(17, 32), joint=1.8, bev=1.5, recess=1.2,
@@ -147,7 +149,7 @@ def field(st):
             gr = gran[rows]; Cr = Cr * np.where(stone, 1 + gr * 0.09, 1)[..., None]
             Cr = Cr * np.where(stone & (gr > 1.9), 1.28, np.where(stone & (gr < -1.9), 0.68, 1.0))[..., None]
             # иней: редкие светлые крупинки по камню; тёмные потёки сырости под снегом
-            fr = (frost[rows] > 2.75) & stone; Cr = np.where(fr[..., None], Cr * 0.4 + np.array([200, 214, 234], np.float32) * 0.6, Cr)
+            fr = (frost[rows] > st.get('frostT', 2.75)) & stone; Cr = np.where(fr[..., None], Cr * 0.4 + np.array([200, 214, 234], np.float32) * 0.6, Cr)
             th = SN['th'][0] + (SN['th'][1] - SN['th'][0]) * np.clip(0.45 + 0.5 * snowv[rows], 0, 1) ** 1.3
             Yw = Y + wob[rows] * 0.6
             dk = (Yw >= th) & (Yw < th + 14) & (drip[rows] > 0.9); Cr = np.where(dk[..., None], Cr * 0.82, Cr)

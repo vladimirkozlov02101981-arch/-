@@ -74,8 +74,12 @@ const UI = {
       case 'cfg-save': if (Profile.saveConfig(this.workSrc, this.work)) { this.cfgNote('Настройки сохранены в конфигурации «' + Profile.config(this.workSrc).name + '»'); if (this.linked) Profile.setBase(this.work); this.refreshCfgBar(); } break;
       case 'cfg-del': {
         const c = Profile.config(this.workSrc); if (!c) break;
-        if (this.delArm !== c.id) { this.delArm = c.id; this.cfgNote('Нажмите «Удалить» ещё раз, чтобы удалить «' + c.name + '»'); setTimeout(() => { if (this.delArm === c.id) this.delArm = null; }, 4000); break; }
-        this.delArm = null; Profile.deleteConfig(c.id); this.workSrc = 'base'; this.cfgNote('Конфигурация «' + c.name + '» удалена'); this.refreshCfgBar(); break;
+        // одно нажатие — плашка подтверждения «Отмена / Удалить» (без второго нажатия на ту же кнопку)
+        this.confirm({ title: 'Удалить конфигурацию?', text: '«' + c.name + '» будет удалена. Основные настройки и другие конфигурации не изменятся.', ok: 'Удалить' }, () => {
+          if (!Profile.config(c.id)) return;
+          Profile.deleteConfig(c.id); if (this.workSrc === c.id) this.workSrc = 'base'; this.cfgNote('Конфигурация «' + c.name + '» удалена'); this.refreshCfgBar();
+        });
+        break;
       }
       case 'keys-reset': this.work.keys = sanitizeKeys(null); Keys.set(this.work.keys); this.buildKeys(); this.workChanged(); break;
       case 'help': this.show('s-help'); break;
@@ -140,6 +144,25 @@ const UI = {
   status(txt, err) { const s = $('online-status'); s.textContent = txt; s.classList.toggle('err', !!err); },
   setNote(txt) { $('setup-note').textContent = txt; },
   dialog(txt, cb) { $('dialog-text').textContent = txt; $('dialog').classList.remove('hidden'); this.dialogCb = cb || null; },
+  /** плашка подтверждения: «Отмена» (по умолчанию, Esc, щелчок мимо) и кнопка действия (Enter на ней) */
+  confirm(o, onOk) {
+    const box = $('confirm'); if (!box) { if (onOk) onOk(); return; }
+    $('confirm-title').textContent = o.title || 'Подтвердите действие'; $('confirm-text').textContent = o.text || '';
+    $('confirm-ok-label').textContent = o.ok || 'ОК';
+    const close = (ok) => {
+      if (box.classList.contains('hidden')) return;
+      box.classList.add('hidden'); document.removeEventListener('keydown', key, true); this.confirmClose = null;
+      if (this.confirmFocus && this.confirmFocus.focus) try { this.confirmFocus.focus(); } catch (e) { /* */ }
+      if (ok && onOk) onOk();
+    };
+    const key = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(false); } else if (e.key === 'Tab') { e.preventDefault(); (document.activeElement === $('confirm-ok') ? $('confirm-cancel') : $('confirm-ok')).focus(); } };
+    if (this.confirmClose) this.confirmClose(false);
+    this.confirmFocus = document.activeElement; this.confirmClose = close;
+    $('confirm-ok').onclick = () => close(true); $('confirm-cancel').onclick = () => close(false);
+    box.onclick = (e) => { if (e.target === box) close(false); };
+    document.addEventListener('keydown', key, true);
+    box.classList.remove('hidden'); $('confirm-cancel').focus();
+  },
   loading(on, txt) { $('loading').classList.toggle('hidden', !on); if (txt) $('loading-text').textContent = txt; },
   syncKeyHints() {
     const label = (id, title, mouse = '') => {
@@ -279,15 +302,28 @@ const UI = {
   },
   /** нажатая клавиша назначается действию; если она была у другого действия — там снимается (одна клавиша — одно действие) */
   assignKey(code) {
-    const w = this.keyWait; this.keyWait = null; if (!w || !this.work) return;
-    if (code === 'F11') { this.buildKeys(); $('keys-note').textContent = 'F11 переключает полный экран и не переназначается.'; return; }
-    if (/^Arrow|^(Digit|Numpad)\d$/.test(code) || ['KeyQ', 'KeyE', 'ControlLeft', 'ControlRight'].includes(code)) { this.buildKeys(); $('keys-note').textContent = 'Стрелки — камера, цифры — оружие (в непрерывном бою верхние цифры — бойцы), Q/E — листание, Ctrl — оптика. Эти клавиши закреплены.'; return; }
-    const K = this.work.keys; let moved = '';
+    const w = this.keyWait; this.keyWait = null; if (!w || (!this.work && !w.help)) return;
+    const rebuild = () => w.help ? this.buildHelpKeys() : this.buildKeys(), note = (t) => { const n = $(w.help ? 'help-keys-note' : 'keys-note'); if (n) n.textContent = t; };
+    if (code === 'F11') { rebuild(); note('F11 переключает полный экран и не переназначается.'); return; }
+    if (/^Arrow|^(Digit|Numpad)\d$/.test(code) || ['KeyQ', 'KeyE', 'ControlLeft', 'ControlRight'].includes(code)) { rebuild(); note('Стрелки — камера, цифры — оружие (в непрерывном бою верхние цифры — бойцы), Q/E — листание, Ctrl — оптика. Эти клавиши закреплены.'); return; }
+    const K = w.help ? snapCopy(Keys.map) : this.work.keys; let moved = '';
     for (const [id, title] of KEY_ACTIONS) { const L = K[id] || []; const j = L.indexOf(code); if (j >= 0 && id !== w.id) { L.splice(j, 1); moved = id === 'binoc' ? 'другого действия' : `«${title}»`; } }
     const L = K[w.id] || (K[w.id] = []);
     if (w.i >= 0 && w.i < L.length) L[w.i] = code; else if (!L.includes(code)) L.push(code);
+    const msg = keyLabel(code) + (moved ? ` — снята с ${moved}` : ' назначена');
+    if (w.help) { this.applyHelpKeys(K, msg); return; }
     Keys.set(K); this.buildKeys(); this.workChanged();
-    $('keys-note').textContent = keyLabel(code) + (moved ? ` — снята с ${moved}` : ' назначена');
+    note(msg);
+  },
+  /** клавиши из справки: действуют сразу и становятся основными для текущей конфигурации (основной набор и конфигурация ★;
+      открытый набор боя с той же конфигурацией — тоже) */
+  applyHelpKeys(K, msg = '') {
+    const keys = sanitizeKeys(K), id = Profile.data.defaultId || 'base', c = id !== 'base' ? Profile.config(id) : null;
+    Keys.set(keys);
+    Profile.data.base.keys = snapCopy(keys); if (c) c.data.keys = snapCopy(keys);
+    if (this.work && (this.workSrc === id || this.linked)) this.work.keys = snapCopy(keys);
+    Profile.save(); this.buildHelpKeys(); if (this.work) this.buildKeys();
+    const n = $('help-keys-note'); if (n) n.textContent = msg ? msg + ' — сохранено' : 'Сохранено';
   },
   setRoomCode(code) { $('room-code').textContent = code; },
   setPeerStatus(ok, txt) { const s = $('peer-status'); s.textContent = txt || (ok ? '● друг подключился' : '○ ждём друга…'); s.classList.toggle('ok', !!ok); },
@@ -442,20 +478,40 @@ const UI = {
   buildHelpKeys() {
     this.syncKeyHints();
     const t = $('help-keys'); if (!t) return; t.textContent = '';
+    const cfg = Profile.data.defaultId && Profile.config(Profile.data.defaultId), note = $('help-keys-cfg');
+    if (note) note.textContent = 'Щёлкните по клавише и нажмите новую; ✕ — убрать, + — добавить ещё одну. Изменения сразу действуют и сохраняются как основные' + (cfg ? ' в конфигурации «' + cfg.name + '»' : '') + '.';
+    const W = this.keyWait && this.keyWait.help ? this.keyWait : null;
+    // клавиша действия — кнопка: щелчок ждёт новую клавишу (Q/E/Ctrl закреплены — просто подпись)
+    const chips = (a, id) => {
+      if (id === 'prev' || id === 'next' || id === 'optic') { const k = document.createElement('kbd'); k.textContent = id === 'prev' ? 'Q' : id === 'next' ? 'E' : 'Ctrl'; a.appendChild(k); a.appendChild(document.createTextNode(' ')); return; }
+      const L = Keys.map[id] || [];
+      L.forEach((code, i) => {
+        const wait = W && W.id === id && W.i === i, b = document.createElement('button'); b.type = 'button'; b.className = 'key-chip' + (wait ? ' wait' : '');
+        b.textContent = wait ? 'нажмите клавишу…' : keyLabel(code); b.title = 'Щёлкните и нажмите новую клавишу';
+        b.addEventListener('click', (e) => { if (e.target.classList.contains('x')) return; this.keyWait = wait ? null : { id, i, help: true }; this.buildHelpKeys(); });
+        const x = document.createElement('span'); x.className = 'x'; x.textContent = '✕'; x.title = 'Убрать эту клавишу';
+        x.addEventListener('click', (e) => { e.stopPropagation(); const K = snapCopy(Keys.map); K[id].splice(i, 1); this.keyWait = null; this.applyHelpKeys(K, keyLabel(code) + ' убрана'); });
+        b.appendChild(x); a.appendChild(b); a.appendChild(document.createTextNode(' '));
+      });
+      if (L.length < 3) {
+        const wait = W && W.id === id && W.i === -1, add = document.createElement('button'); add.type = 'button'; add.className = 'key-add' + (wait ? ' wait' : '');
+        add.textContent = wait ? 'нажмите клавишу…' : '+'; add.title = 'Добавить ещё одну клавишу';
+        add.addEventListener('click', () => { this.keyWait = wait ? null : { id, i: -1, help: true }; this.buildHelpKeys(); });
+        a.appendChild(add); a.appendChild(document.createTextNode(' '));
+      }
+    };
     const row = (keys, text) => {
       const tr = document.createElement('tr'), a = document.createElement('td'), b = document.createElement('td');
       for (const part of keys) {
         if (typeof part === 'string' && part.startsWith('#')) { a.appendChild(document.createTextNode(part.slice(1))); continue; }
-        const L = Keys.map[part] || []; if (!L.length) { a.appendChild(document.createTextNode('—')); continue; }
-        L.forEach((c, i) => { if (i) a.appendChild(document.createTextNode(' / ')); const k = document.createElement('kbd'); k.textContent = keyLabel(c); a.appendChild(k); });
-        a.appendChild(document.createTextNode(' '));
+        chips(a, part);
       }
       b.textContent = text; tr.appendChild(a); tr.appendChild(b); t.appendChild(tr);
     };
     row(['left', 'right'], 'Ходьба (запас шагов ограничен, если ход не «на любую дистанцию»)');
     row(['jump'], 'Прыжок бойца; пока движется робо-бомба — её прыжок');
     row(['up', 'down', '#у лестницы'], 'Подъём / спуск; клавиши движения влево и вправо — сойти с лестницы, клавиша прыжка — отпрыгнуть');
-    row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки. Мышью можно вести оптику по всей карте. Прицел не колеблется. Пока стреляет автомат, узи, миниган, огнемёт, кислотомёт, автопушка или залп, ствол ведётся вверх-вниз мышью или клавишами прицела (разброс пуль прежний)');
+    row(['aimUp', 'aimDown', '#, ', 'precise'], 'Наведение прицела; с клавишей точного наведения — медленнее. Ctrl скрывает и показывает оптику снайперки; при выборе снайперки оптика появляется по направлению ствола у края экрана. Мышью можно вести оптику по всей карте. Прицел не колеблется. Пока стреляет автомат, узи, миниган, огнемёт, кислотомёт, автопушка или залп, ствол ведётся вверх-вниз мышью, клавишами прицела или стрелками ↑ ↓ (разброс пуль прежний)');
     row(['fire', '#/ ЛКМ'], 'Выстрел. Для базуки и гранат удерживайте кнопку выстрела: сила — на шкале слева и на кольце прицела');
     row(['#Мышь в бою'], 'Игра захватывает мышь и скрывает системный курсор. В Chrome и Edge бой идёт во весь экран («Играть.cmd» открывает игру в этих браузерах). Откройте меню, чтобы освободить мышь (в панели оружия свой курсор — он появляется в её центре и не выходит за её края); клик по полю боя возвращает управление в игру');
     row(['tray', '#/ ПКМ'], 'Панель оружия. Во время хода соперника (и после своего выстрела) панель, Q/E и цифры выбирают оружие на ваш следующий ход — оно будет в руках в начале хода');
@@ -472,7 +528,7 @@ const UI = {
     row(['holster'], 'Убрать оружие из рук; ещё раз — вернуть (мышь остаётся в игре)');
     row(['menu'], 'Меню (пауза), мышь свободна');
     row(['chat', '#/ ', 'sound'], 'Чат по сети / звук');
-    row(['#Клавиши'], 'Меняются в настройках боя: «Клавиши управления» (сохраняются вместе с конфигурацией)');
+    row(['#Клавиши'], 'Меняются прямо здесь (щёлкните по клавише) и в настройках боя: «Клавиши управления». Сохраняются вместе с конфигурацией');
   },
   buildHelp() {
     const box = $('help-weapons'); box.innerHTML = '';

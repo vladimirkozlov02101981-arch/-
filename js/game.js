@@ -5,6 +5,11 @@
    ========================================================= */
 const RETREAT_TIME = 3;
 const TURN_QUIET_TIME = 0.5;
+/** темп после атаки (v44): fast — после того как физика затихла (бойцы стоят, снаряды и огонь погасли, могилка встала),
+    видимые следы удара (частицы, дым, искры, самолёт уходит) держат ход не дольше fxCap секунд, затем обычная пауза
+    TURN_QUIET_TIME. Откат к прежнему темпу (ход ждал, пока погаснет последняя частица; после авиаудара — до 8 с):
+    PACE.fast = false */
+const PACE = { fast: true, fxCap: 0.7 };
 const WALK_BUDGET = 420;
 const MAX_WIND = 170;
 
@@ -79,7 +84,11 @@ class Game {
   }
   /* ---------- утилиты ---------- */
   /** событие для эффектов (у хоста и у гостя); при одновременных ходах — с номером хода (команды), в котором оно случилось */
-  emit(ev) { if (this.simul) ev.L = this.cur; if (['impact', 'girder', 'boom', 'frags', 'nuke', 'dmg', 'heal', 'die', 'splash', 'shot', 'trace', 'bolt', 'launch', 'land', 'beep', 'tp', 'storm', 'bat', 'gib', 'charge'].includes(ev.t)) ev.M = this.impactMask(); this.events.push(ev); }
+  emit(ev) {
+    if (this.simul) ev.L = this.cur; if (['impact', 'girder', 'boom', 'frags', 'nuke', 'dmg', 'heal', 'die', 'splash', 'shot', 'trace', 'bolt', 'launch', 'land', 'beep', 'tp', 'storm', 'bat', 'gib', 'charge'].includes(ev.t)) ev.M = this.impactMask();
+    if (ev.t === 'boom' || ev.t === 'nuke' || ev.t === 'frags' || ev.t === 'die') this.boomT = this.time;   // PACE: следы нового взрыва — снова до fxCap
+    this.events.push(ev);
+  }
   spawn(e, impactSource = null) {
     const mask = (this.activeImpactMask || 0) | (impactSource && impactSource.settleTeams || 0);
     if (mask) e.settleTeams = (e.settleTeams || 0) | mask;
@@ -282,15 +291,20 @@ class Game {
   }
   markImpact(object, owner) { object.settleTeams = (object.settleTeams || 0) | this.impactMask(owner); }
   anyBusy(own = this.simul ? this.turn.team : -1) {
-    for (const s of this.soldiers) if (!s.gone && (own < 0 || s.team === own || ((s.settleTeams || 0) & (1 << own))) && (s.st === 'air' || s.st === 'fly' || s.st === 'jet' || s.st === 'dead')) return true;
-    for (const e of this.entities) if (!e.dead && (e.busy || e.k === 'fire' && e.f > 0) && (own < 0 || e.team === own || ((e.settleTeams || 0) & (1 << own)))) return true;
-    for (const pending of this.pending || []) if (own < 0 || ((pending[3] || 0) & (1 << own))) return true;
+    for (const s of this.soldiers) if (!s.gone && (own < 0 || s.team === own || ((s.settleTeams || 0) & (1 << own))) && (s.st === 'air' || s.st === 'fly' || s.st === 'jet' || s.st === 'dead')) return this.markBusy(own);
+    for (const e of this.entities) if (!e.dead && (e.busy || e.k === 'fire' && e.f > 0) && (own < 0 || e.team === own || ((e.settleTeams || 0) & (1 << own)))) return this.markBusy(own);
+    for (const pending of this.pending || []) if (own < 0 || ((pending[3] || 0) & (1 << own))) return this.markBusy(own);
     // Если могилка уже встала, финал атаки отсчитывается от неё. Без могилки — от последних частиц удара.
-    if (this.visualBusy && this.events.some(ev => ev.M && (own < 0 || (ev.M & (1 << own))))) return true;
+    if (this.visualBusy && this.events.some(ev => ev.M && (own < 0 || (ev.M & (1 << own))))) return this.markBusy(own);
     const graves = own < 0 && this.simul ? this.lanes.flatMap(l => l.turn.graves || []) : this.turn.graves || [];
     const graveRest = graves.some(id => this.entities.some(e => e.id === id && e.k === 'tomb' && !e.dead && e.rest));
-    return !graveRest && !!(this.visualBusy && this.visualBusy(own));
+    if (graveRest || !(this.visualBusy && this.visualBusy(own))) return false;
+    if (!PACE.fast) return true;
+    const tp = this.physT && this.physT[own + 1], t0 = Math.max(tp === undefined ? -Infinity : tp, this.boomT === undefined ? -Infinity : this.boomT);
+    return !Number.isFinite(t0) || this.time - t0 < PACE.fxCap;   // остались только частицы удара — недолго
   }
+  /** физика ещё движется (для PACE: с какого момента ход ждёт только видимые следы удара) */
+  markBusy(own) { (this.physT || (this.physT = []))[own + 1] = this.time; return true; }
   /** Все живые бойцы получают один ход за цикл; выбор бойца не начинает новый цикл. */
   prepareSoldierCycle(team, reset = false) {
     const alive = this.soldiers.filter(s => s.team === team.idx && s.alive && !s.gone);
@@ -391,7 +405,7 @@ class Game {
     if (W.shots && T.shots < W.shots) { T.phase = 'aim'; return; }
     if (W.free) { T.phase = 'aim'; T.shots = 0; if (!this.canUse(this.teams[T.team], W.id)) T.weapon = this.fallbackWeapon(this.teams[T.team]); return; }
     if (W.ends) { this.endTurn(); return; }
-    T.phase = 'retreat'; T.retreat = RETREAT_TIME; T.idle = 0;
+    T.phase = 'retreat'; T.retreat = RETREAT_TIME; T.idle = 0; this.markBusy(this.simul ? T.team : -1);
   }
   /* ---------- цикл ---------- */
   /** активный боец дорожки и его управление в этом шаге */

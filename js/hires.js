@@ -9,7 +9,7 @@
       переносится отношением L = «нарисованный пиксель» / «пиксель малой текстуры» — так резкими становятся сами края
       камней, швы и трещины, а не только зерно поверх.
    Плитки кэшируются и пересчитываются только там, где ландшафт изменился (взрыв, балка). */
-const HIRES_T = 128, HIRES_S = 4, HIRES_P = 3, HIRES_G = 1, HIRES_BUDGET = 160 * 1048576;
+const HIRES_T = 128, HIRES_S = 4, HIRES_P = 5, HIRES_G = 1, HIRES_BUDGET = 160 * 1048576;
 
 class HiResTerrain {
   constructor() {
@@ -68,7 +68,12 @@ class HiResTerrain {
     const mk = new Uint8Array(w * w), TM = terr.mask, TW = terr.W, TH = terr.H;
     for (let y = 0; y < w; y++) { const gy = y0 + y; if (gy < 0) continue; for (let x = 0; x < w; x++) { const gx = x0 + x; if (gx < 0 || gx >= TW) continue; mk[y * w + x] = gy >= TH ? 1 : TM[gy * TW + gx]; } }
     // ссылки на текстуры: какой пиксель из какой текстуры (перед — твёрдое, иначе задняя стена)
-    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {}, transfer = [src.buffer, ref.buffer, mk.buffer];
+    const R = terr.texRef, W = sc.W, H = sc.H, ref = new Uint8Array(w * w), tab = {}, lb = new Uint16Array(w * w), transfer = [src.buffer, ref.buffer, mk.buffer, lb.buffer];
+    // материал пикселя (как labelAt в js/terrain_gl.js): 0 — воздух, иначе texRef + 1, у переднего твёрдого слоя ещё + 256
+    if (R) for (let y = 0; y < w; y++) {
+      const gy = y0 + y; if (gy < 0 || gy >= H) continue;
+      for (let x = 0; x < w; x++) { const gx = x0 + x; if (gx < 0 || gx >= W || src[(y * w + x) * 4 + 3] < 128) continue; const i = gy * W + gx; lb[y * w + x] = terr.mask[i] ? 257 + R.F[i] : 1 + R.B[i]; }
+    }
     let LF = null;
     if (R) for (let y = 0; y < w; y++) {
       const gy = y0 + y; if (gy < 0 || gy >= H) continue;
@@ -97,7 +102,7 @@ class HiResTerrain {
     }
     // поле освещения не сглаживается: в нём и резкость запекания карты (местный контраст), без неё родной цвет выглядит плоским
     wk.idle = false; this.pending.add(key);
-    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: this.scale, P, G: HIRES_G, src, ref, tab, LF, mk }, transfer);
+    wk.postMessage({ key, g: this.gen.get(key) || 0, ep: this.epoch, tx, ty, T, S: this.scale, P, G: HIRES_G, src, ref, tab, LF, mk, lb }, transfer);
     return true;
   }
   done(wk, m) {
@@ -176,42 +181,48 @@ function smoothLight(LF, ref, w) {
   }
 }
 
-/* код фонового потока (запускается из строки — работает и в сборке одним файлом) */
+/* код фонового потока (запускается из строки — работает и в сборке одним файлом); тот же расчёт, что шейдер js/terrain_gl.js */
 function hiresWorkerMain() {
   const HI = {}, FINE = {};
+  // веса Гаусса окна 5×5 структурного тензора (σ = 1.5)
+  const WG = new Float32Array(25); for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) WG[j * 5 + i] = Math.exp(-((i - 2) * (i - 2) + (j - 2) * (j - 2)) / 4.5);
+  const IND = new Float32Array(49);
   onmessage = (ev) => {
     const m = ev.data; if (m.hi) { HI[m.hi.name] = m.hi; return; } if (m.fine) { FINE[m.fine.name] = m.fine; return; }
-    const { T, S, P, G: pad, src: sd, tx, ty } = m, MK = m.mk, w = T + 2 * P, n = w * w, N = (T + 2 * pad) * S;
-    const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), A = new Float32Array(n), L = new Float32Array(n);
+    const { T, S, P, G: pad, src: sd, tx, ty } = m, LB = m.lb, w = T + 2 * P, n = w * w, N = (T + 2 * pad) * S;
+    const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), A = new Float32Array(n);
     let any = false;
     for (let i = 0; i < n; i++) {
       const a = sd[i * 4 + 3] / 255; A[i] = a; if (a > 0) any = true;
       R[i] = sd[i * 4] / 255 * a; G[i] = sd[i * 4 + 1] / 255 * a; B[i] = sd[i * 4 + 2] / 255 * a;
-      L[i] = R[i] * 0.3 + G[i] * 0.59 + B[i] * 0.11 + a * 0.6 + (MK ? MK[i] * 0.6 : 0);
     }
     if (!any) { postMessage({ key: m.key, g: m.g, ep: m.ep, out: null }); return; }
-    const Jxx = new Float32Array(n), Jxy = new Float32Array(n), Jyy = new Float32Array(n);
-    for (let y = 1; y < w - 1; y++) for (let x = 1; x < w - 1; x++) {
-      const i = y * w + x, gx = L[i + 1] - L[i - 1], gy = L[i + w] - L[i - w];
-      Jxx[i] = gx * gx; Jxy[i] = gx * gy; Jyy[i] = gy * gy;
-    }
-    const NX = new Float32Array(n), NY = new Float32Array(n), CO = new Float32Array(n);
-    for (let y = 1; y < w - 1; y++) for (let x = 1; x < w - 1; x++) {
+    // направление края — только у края: контур на фоне воздуха (TY 2) или граница материалов и слоёв (TY 1); структурный
+    // тензор градиентов Собеля в окне 5×5 с весами Гаусса по полю «альфа» или «тот же материал» (как TGL_FLOW_FS)
+    const NX = new Float32Array(n), NY = new Float32Array(n), CO = new Float32Array(n), TY = new Uint8Array(n);
+    for (let y = 4; y < w - 4; y++) for (let x = 4; x < w - 4; x++) {
+      const i = y * w + x, l0 = LB[i];
+      let amin = 1, amax = 0, lch = false;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = i + dy * w + dx, av = A[j]; if (av < amin) amin = av; if (av > amax) amax = av; if (LB[j] !== l0) lch = true; }
+      const ae = amax - amin >= 0.25; if (!ae && !lch) continue;
+      for (let j = 0; j < 7; j++) for (let k = 0; k < 7; k++) { const q = (y + j - 3) * w + x + k - 3; IND[j * 7 + k] = ae ? A[q] : LB[q] === l0 ? 1 : 0; }
       let a = 0, b = 0, c = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = (y + dy) * w + x + dx; a += Jxx[j]; b += Jxy[j]; c += Jyy[j]; }
-      const i = y * w + x, sum = a + c; if (sum < 0.004) continue;
+      for (let j = 1; j <= 5; j++) for (let k = 1; k <= 5; k++) {
+        const q = j * 7 + k;
+        const gx = IND[q - 6] + 2 * IND[q + 1] + IND[q + 8] - IND[q - 8] - 2 * IND[q - 1] - IND[q + 6];
+        const gy = IND[q + 6] + 2 * IND[q + 7] + IND[q + 8] - IND[q - 8] - 2 * IND[q - 7] - IND[q - 6];
+        const wg = WG[(j - 1) * 5 + k - 1]; a += wg * gx * gx; b += wg * gx * gy; c += wg * gy * gy;
+      }
+      const sum = a + c; if (sum < 0.05) continue;
       const dif = Math.sqrt((a - c) * (a - c) + 4 * b * b), th = 0.5 * Math.atan2(2 * b, a - c);
-      // только контур (рядом есть прозрачность): фактуру породы не трогаем, иначе она «плывёт» как масло
-      let amin = 1, amax = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const av = A[(y + dy) * w + x + dx]; if (av < amin) amin = av; if (av > amax) amax = av; }
-      let mch = false; if (MK) { const m0 = MK[i]; for (let dy = -1; dy <= 1 && !mch; dy++) for (let dx = -1; dx <= 1; dx++) if (MK[(y + dy) * w + x + dx] !== m0) { mch = true; break; } }
-      if (amax - amin < 0.25 && !mch) continue;
-      NX[i] = Math.cos(th); NY[i] = Math.sin(th); CO[i] = Math.min(1, (dif / sum) * Math.min(1, sum / 0.03));
+      NX[i] = Math.cos(th); NY[i] = Math.sin(th); CO[i] = Math.min(1, (dif / sum) * Math.min(1, sum)); TY[i] = ae ? 2 : 1;
     }
     const bil = (arr, u, v) => {
       if (u < 0) u = 0; else if (u > w - 1.001) u = w - 1.001; if (v < 0) v = 0; else if (v > w - 1.001) v = w - 1.001;
       const xi = u | 0, yi = v | 0, fx = u - xi, fy = v - yi, i = yi * w + xi;
       return (arr[i] * (1 - fx) + arr[i + 1] * fx) * (1 - fy) + (arr[i + w] * (1 - fx) + arr[i + w + 1] * fx) * fy;
     };
+    const labelAt = (x, y) => x < 0 || y < 0 || x >= w || y >= w ? 0 : LB[y * w + x];
     // Catmull-Rom внутри непрозрачного материала: интерполяция исходных цветов, без усиления шума
     const CI = new Int16Array(N), CW = new Float32Array(N * 4), CRGB = new Float64Array(3);
     for (let q = 0; q < N; q++) {
@@ -230,8 +241,7 @@ function hiresWorkerMain() {
       // локальный диапазон не допускает светлых/тёмных ореолов вокруг контрастных камней
       CRGB[0] = Math.max(r0, Math.min(r1, r)); CRGB[1] = Math.max(g0, Math.min(g1, g)); CRGB[2] = Math.max(b0, Math.min(b1, b)); return true;
     };
-    const TK = [0, 0.55, -0.55, 1.15, -1.15], WK = [1, 0.8, 0.8, 0.5, 0.5], WS = 3.6;
-    const REF = m.ref, TAB = m.tab, out = new Uint8ClampedArray(N * N * 4);
+    const TAB = m.tab, out = new Uint8ClampedArray(N * N * 4);
     // карта деталей: тексель k покрывает [k, k+1) в координатах детали; 128 = 1.0
     const hiAt = (h, cx, cy) => {
       const W2 = h.w, H2 = h.h, d = h.d; cx -= 0.5; cy -= 0.5;
@@ -247,70 +257,119 @@ function hiresWorkerMain() {
       const a = (ya * W2 + xa) * 3 + channel, b = (ya * W2 + xb) * 3 + channel, c = (yb * W2 + xa) * 3 + channel, e = (yb * W2 + xb) * 3 + channel;
       return ((d[a] * (1 - fx) + d[b] * fx) * (1 - fy) + (d[c] * (1 - fx) + d[e] * fx) * fy) / 128;
     };
-    // освещение карты в точке окна: билинейно по соседям того же материала (на границе материалов не смешивается)
-    const LF = m.LF, LRGB = new Float64Array(3), NRGB = new Float64Array(3);
-    const lightAt = (u, v, rid) => {
+    /** запись материала с родным цветом (или null) */
+    const natOf = (L) => { const rid = L > 256 ? L - 257 : L - 1, e = rid > 0 ? TAB[rid] : null; return e && e.crop ? e : null; };
+    /** родной цвет материала e в точке карты wx, wy → NRGB (с фото-порами мельче текселя) */
+    const NRGB = new Float64Array(3);
+    const natRGB = (e, wx, wy) => {
+      const cr = e.crop, hx = (wx + e.dx) * e.nk - 0.5 - cr.x0, hy = (wy + e.dy) * e.nk - 0.5 - cr.y0;
+      const xi = Math.floor(hx), yi = Math.floor(hy), fx = hx - xi, fy = hy - yi, cd = cr.d, cw = cr.w;
+      const p00 = (yi * cw + xi) * 3, p01 = p00 + 3, p10 = p00 + cw * 3, p11 = p10 + 3;
+      for (let c = 0; c < 3; c++) NRGB[c] = ((cd[p00 + c] * (1 - fx) + cd[p01 + c] * fx) * (1 - fy) + (cd[p10 + c] * (1 - fx) + cd[p11 + c] * fx) * fy) / 255;
+      const fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;
+      if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; NRGB[0] *= fineAt(f, cx, cy, 0); NRGB[1] *= fineAt(f, cx, cy, 1); NRGB[2] *= fineAt(f, cx, cy, 2); }
+    };
+    // освещение карты (LF — с родным цветом) или нарисованный цвет: билинейно по соседям того же материала L
+    // (на границе материалов стороны не смешиваются); 0 — соседей этого материала нет
+    const LF = m.LF, LRGB = new Float64Array(3);
+    const sameAt = (u, v, L, lf) => {
       const xi = Math.floor(u), yi = Math.floor(v), fx = u - xi, fy = v - yi;
       let s = 0; LRGB[0] = LRGB[1] = LRGB[2] = 0;
       for (let dy = 0; dy <= 1; dy++) for (let dx = 0; dx <= 1; dx++) {
-        const xx = xi + dx, yy = yi + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= w) continue;
-        const i = yy * w + xx; if (REF[i] !== rid) continue;
-        const k = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy); LRGB[0] += LF[i * 3] * k; LRGB[1] += LF[i * 3 + 1] * k; LRGB[2] += LF[i * 3 + 2] * k; s += k;
+        const xx = xi + dx, yy = yi + dy; if (labelAt(xx, yy) !== L) continue;
+        const i = yy * w + xx, k = (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy) + 1e-3;
+        if (lf) { LRGB[0] += LF[i * 3] * k; LRGB[1] += LF[i * 3 + 1] * k; LRGB[2] += LF[i * 3 + 2] * k; }
+        else { const ia = 1 / Math.max(A[i], 1e-4); LRGB[0] += R[i] * ia * k; LRGB[1] += G[i] * ia * k; LRGB[2] += B[i] * ia * k; }
+        s += k;
       }
-      if (s > 1e-4) { LRGB[0] /= s; LRGB[1] /= s; LRGB[2] /= s; return s; }
-      const i = Math.round(v) * w + Math.round(u); LRGB[0] = LF[i * 3]; LRGB[1] = LF[i * 3 + 1]; LRGB[2] = LF[i * 3 + 2];
-      return 0;
+      if (s > 0) { LRGB[0] /= s; LRGB[1] /= s; LRGB[2] /= s; }
+      return s;
     };
+    /** цвет материала L в точке (u, v окна; wx, wy карты) → CRGB: родной × освещение карты или нарисованный цвет */
+    const colOf = (L, u, v, wx, wy) => {
+      const e = natOf(L) && LF ? natOf(L) : null;
+      let s = sameAt(u, v, L, !!e);
+      if (s === 0) {   // плавная граница прошла за пиксель: ближайшие пиксели того же материала
+        const xi = Math.floor(u), yi = Math.floor(v); LRGB[0] = LRGB[1] = LRGB[2] = 0;
+        for (let dy = -1; dy <= 2; dy++) for (let dx = -1; dx <= 2; dx++) {
+          const xx = xi + dx, yy = yi + dy; if (labelAt(xx, yy) !== L) continue;
+          const i = yy * w + xx, k = 1 / (0.1 + (xx - u) * (xx - u) + (yy - v) * (yy - v));
+          if (e) { LRGB[0] += LF[i * 3] * k; LRGB[1] += LF[i * 3 + 1] * k; LRGB[2] += LF[i * 3 + 2] * k; }
+          else { const ia = 1 / Math.max(A[i], 1e-4); LRGB[0] += R[i] * ia * k; LRGB[1] += G[i] * ia * k; LRGB[2] += B[i] * ia * k; }
+          s += k;
+        }
+        if (s > 0) { LRGB[0] /= s; LRGB[1] /= s; LRGB[2] /= s; }
+      }
+      if (e) { natRGB(e, wx, wy); CRGB[0] = NRGB[0] * LRGB[0]; CRGB[1] = NRGB[1] * LRGB[1]; CRGB[2] = NRGB[2] * LRGB[2]; }
+      else { CRGB[0] = LRGB[0]; CRGB[1] = LRGB[1]; CRGB[2] = LRGB[2]; }
+    };
+    const ka = Math.max(1.7, S * 0.9), kl = Math.max(1, S), CA = new Float64Array(3);
     for (let Y = 0; Y < N; Y++) {
       const v = P - pad + (Y + 0.5) / S - 0.5, vi = Math.round(v), wy = ty * T - pad + (Y + 0.5) / S;
       for (let X = 0; X < N; X++) {
-        const u = P - pad + (X + 0.5) / S - 0.5, li = vi * w + Math.round(u), o = (Y * N + X) * 4, co = CO[li];
-        let sr, sg, sb, sa;
-        if (co > 0.12) {
-          // вдоль края — усреднение (ступеньки пропадают), поперёк — резкость
-          const nx = NX[li], ny = NY[li], tx_ = -ny * co, ty_ = nx * co;
-          sr = 0; sg = 0; sb = 0; sa = 0;
-          for (let k = 0; k < 5; k++) {
-            const uu = u + TK[k] * tx_, vv = v + TK[k] * ty_, wk = WK[k];
-            sr += bil(R, uu, vv) * wk; sg += bil(G, uu, vv) * wk; sb += bil(B, uu, vv) * wk; sa += bil(A, uu, vv) * wk;
+        const u = P - pad + (X + 0.5) / S - 0.5, li = vi * w + Math.round(u), o = (Y * N + X) * 4, co = CO[li], typ = co > 0.12 ? TY[li] : 0;
+        const wx = tx * T - pad + (X + 0.5) / S;
+        let r, g, b, a;
+        if (typ === 2) {
+          // контур на фоне воздуха: вдоль края — до ±3 пикселей карты (ступеньки пропадают), поперёк — резкость; переход —
+          // около пикселя экрана; внутри — родная фактура материала до самого края
+          const nx = NX[li], ny = NY[li], tx_ = -ny * 3 * co, ty_ = nx * 3 * co;
+          let L0 = 0, best = 1e9;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = Math.round(u) + dx, yy = vi + dy, j = yy * w + xx; if (xx < 0 || yy < 0 || xx >= w || yy >= w || A[j] < 0.5) continue; const dd = (xx - u) * (xx - u) + (yy - v) * (yy - v); if (dd < best) { best = dd; L0 = LB[j]; } }
+          const e = L0 && LF ? natOf(L0) : null;
+          let sr = 0, sg = 0, sb = 0, sa = 0, pr = 0, pg = 0, pb = 0, pa = 0, gs = 0, lr = 0, lg = 0, lb = 0, la = 0;
+          for (let k = -4; k <= 4; k++) {
+            const f = k / 4, gk = 1 - 0.6 * f * f, uu = u + f * tx_, vv = v + f * ty_, ca = bil(A, uu, vv);
+            sr += gk * bil(R, uu, vv); sg += gk * bil(G, uu, vv); sb += gk * bil(B, uu, vv); sa += gk * ca;
+            const up = uu + nx * 0.55, vp = vv + ny * 0.55, um = uu - nx * 0.55, vm = vv - ny * 0.55;
+            pr += gk * (bil(R, up, vp) + bil(R, um, vm)); pg += gk * (bil(G, up, vp) + bil(G, um, vm)); pb += gk * (bil(B, up, vp) + bil(B, um, vm)); pa += gk * (bil(A, up, vp) + bil(A, um, vm));
+            if (e && ca > 0.02 && sameAt(uu, vv, L0, true) > 0) { lr += gk * ca * LRGB[0]; lg += gk * ca * LRGB[1]; lb += gk * ca * LRGB[2]; la += gk * ca; }
+            gs += gk;
           }
-          sr /= WS; sg /= WS; sb /= WS; sa /= WS;
-          const q = 0.55, up = u + nx * q, vp = v + ny * q, um = u - nx * q, vm = v - ny * q, ks = 0.7 * co;
-          sr += ks * (sr - (bil(R, up, vp) + bil(R, um, vm)) / 2); sg += ks * (sg - (bil(G, up, vp) + bil(G, um, vm)) / 2);
-          sb += ks * (sb - (bil(B, up, vp) + bil(B, um, vm)) / 2); sa += ks * (sa - (bil(A, up, vp) + bil(A, um, vm)) / 2);
+          sr /= gs; sg /= gs; sb /= gs; sa /= gs; const ks = 0.7 * co, h = 0.5 / gs;
+          sr += ks * (sr - pr * h); sg += ks * (sg - pg * h); sb += ks * (sb - pb * h); sa += ks * (sa - pa * h);
+          a = sa < 0 ? 0 : sa > 1 ? 1 : sa; if (a <= 0.003) continue;
+          r = sr / a; g = sg / a; b = sb / a;
+          a = Math.max(0, Math.min(1, (a - 0.5) * ka + 0.5));
+          if (e && la > 1e-3) { natRGB(e, wx, wy); r = NRGB[0] * lr / la; g = NRGB[1] * lg / la; b = NRGB[2] * lb / la; }
+        } else if (typ === 1) {
+          // граница материалов внутри ландшафта: плавная кривая по доле материала вдоль края, цвет сторон не смешивается
+          const nx = NX[li], ny = NY[li], tx_ = -ny * 3 * co, ty_ = nx * 3 * co, LA = LB[li];
+          let LBo = 0, cA = 0, gs = 0;
+          for (let k = -4; k <= 4; k++) {
+            const f = k / 4, gk = 1 - 0.6 * f * f, uu = u + f * tx_, vv = v + f * ty_, xi = Math.floor(uu), yi = Math.floor(vv), fx = uu - xi, fy = vv - yi;
+            for (let j = 0; j < 4; j++) {
+              const L = labelAt(xi + (j & 1), yi + (j >> 1));
+              if (L === LA) cA += gk * ((j & 1) ? fx : 1 - fx) * ((j >> 1) ? fy : 1 - fy); else if (!LBo && L) LBo = L;
+            }
+            gs += gk;
+          }
+          a = bil(A, u, v); a = a < 0 ? 0 : a > 1 ? 1 : a; if (a <= 0.003) continue;
+          const tA = LBo ? Math.max(0, Math.min(1, 0.5 + (cA / gs - 0.5) * kl)) : 1;
+          colOf(LA, u, v, wx, wy); r = CRGB[0]; g = CRGB[1]; b = CRGB[2];
+          if (tA < 0.999) { CA[0] = r; CA[1] = g; CA[2] = b; colOf(LBo, u, v, wx, wy); r = CRGB[0] + (CA[0] - CRGB[0]) * tA; g = CRGB[1] + (CA[1] - CRGB[1]) * tA; b = CRGB[2] + (CA[2] - CRGB[2]) * tA; }
         } else {
-          sa = bil(A, u, v);
+          let sr, sg, sb, sa = bil(A, u, v);
           if (sa >= 0.999 && cubicRGB(X, Y)) { sr = CRGB[0]; sg = CRGB[1]; sb = CRGB[2]; }
           else { sr = bil(R, u, v); sg = bil(G, u, v); sb = bil(B, u, v); }
-        }
-        let a = sa < 0 ? 0 : sa > 1 ? 1 : sa; if (a <= 0.003) continue;
-        let r = sr / a, g = sg / a, b = sb / a;
-        if (co > 0.12) a = Math.max(0, Math.min(1, (a - 0.5) * 1.7 + 0.5));   // чёткий контур на фоне неба
-        const rid = REF[li];
-        if (rid) {
-          const e = TAB[rid], wx = tx * T - pad + (X + 0.5) / S;
-          if (e.crop) {
-            // родной цвет высокого разрешения × освещение карты; на кромке на фоне неба — прежний путь (сглаженный контур)
-            if (co <= 0.12 && a >= 0.999) {
-              const cr = e.crop, hx = (wx + e.dx) * e.nk - 0.5 - cr.x0, hy = (wy + e.dy) * e.nk - 0.5 - cr.y0;
-              const xi = Math.floor(hx), yi = Math.floor(hy), fx = hx - xi, fy = hy - yi, cd = cr.d, cw = cr.w;
-              const p00 = (yi * cw + xi) * 3, p01 = p00 + 3, p10 = p00 + cw * 3, p11 = p10 + 3;
-              const same = lightAt(u, v, rid);
-              for (let c = 0; c < 3; c++) {
-                const nv = ((cd[p00 + c] * (1 - fx) + cd[p01 + c] * fx) * (1 - fy) + (cd[p10 + c] * (1 - fx) + cd[p11 + c] * fx) * fy) / 255;
-                NRGB[c] = nv * LRGB[c];
+          a = sa < 0 ? 0 : sa > 1 ? 1 : sa; if (a <= 0.003) continue;
+          r = sr / a; g = sg / a; b = sb / a;
+          const L = LB[li], rid = L > 256 ? L - 257 : L - 1, e = rid > 0 ? TAB[rid] : null;
+          if (e) {
+            if (e.crop) {
+              // родной цвет высокого разрешения × освещение карты; у границы с другим материалом родной цвет плавно переходит
+              // в гладкое увеличение (без этого граница шла ступеньками по пикселям карты)
+              if (a >= 0.999 && LF) {
+                const same = sameAt(u, v, L, true);
+                natRGB(e, wx, wy);
+                const kb = same >= 0.999 ? 1 : Math.max(0, Math.min(1, (same - 0.5) * 2));
+                if (same > 0) { r += (NRGB[0] * LRGB[0] - r) * kb; g += (NRGB[1] * LRGB[1] - g) * kb; b += (NRGB[2] * LRGB[2] - b) * kb; }
               }
-              const fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;   // фото-поры мельче текселя родной текстуры
-              if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; NRGB[0] *= fineAt(f, cx, cy, 0); NRGB[1] *= fineAt(f, cx, cy, 1); NRGB[2] *= fineAt(f, cx, cy, 2); }
-              // у границы с другим материалом (грунт/пещера, порода/кладка) родной цвет плавно переходит в гладкое увеличение:
-              // без этого граница шла ступеньками по пикселям карты
-              const kb = same >= 0.999 ? 1 : Math.max(0, Math.min(1, (same - 0.5) * 2));
-              r += (NRGB[0] - r) * kb; g += (NRGB[1] - g) * kb; b += (NRGB[2] - b) * kb;
+            } else {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
+              const h = HI[e.name], fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;
+              if (h) { const q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
+              if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; r *= fineAt(f, cx, cy, 0); g *= fineAt(f, cx, cy, 1); b *= fineAt(f, cx, cy, 2); }
             }
-          } else {   // настоящие детали текстуры мельче пикселя карты (рендер Blender в двойном разрешении)
-            const h = HI[e.name], fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;
-            if (h) { const q = hiAt(h, (wx + e.dx) * e.k, (wy + e.dy) * e.k); r *= q; g *= q; b *= q; }
-            if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; r *= fineAt(f, cx, cy, 0); g *= fineAt(f, cx, cy, 1); b *= fineAt(f, cx, cy, 2); }
           }
         }
         out[o] = r * 255; out[o + 1] = g * 255; out[o + 2] = b * 255; out[o + 3] = a * 255;

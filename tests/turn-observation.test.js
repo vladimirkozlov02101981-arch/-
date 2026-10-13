@@ -159,14 +159,16 @@ test('AI shows moving target selection and a settled aim before all world-point 
   }
 });
 
-test('Alternating spectator camera follows live target smoothly before firing, while continuous camera ignores it', () => {
+test('Alternating spectator camera follows live target smoothly before firing (the shooter stays in frame), while continuous camera ignores it', () => {
   const f = fixture(false), { g, Camera } = f;
   g.endTurn(); g.nextTurn(); const cam = new Camera(), fx = { focus: null, shake: 0 };
   cam.observeAim = true; cam.update(1 / 60, g, fx, 1280, 720, null);
   const home = cam.x; g.turn.weapon = 'nuke';
   let maxStep = 0, before = cam.x;
   for (let i = 0; i < 240; i++) { g.turn.preview = { x: g.active().x + (900 - g.active().x) * Math.min(1, i / 180), y: 80 }; cam.update(1 / 60, g, fx, 1280, 720, null); maxStep = Math.max(maxStep, Math.abs(cam.x - before)); before = cam.x; }
-  assert(cam.x < home - 1200); assert(maxStep < 100, 'no teleport to the target while aiming'); assert.equal(g.entities.length, 0);
+  // далёкая цель: обзор смещён к ней, но стреляющий остаётся в кадре (не меньше десятой части экрана от края)
+  const vw = 1280 / cam.z; assert(cam.x < home - vw * 0.3, 'camera turns toward the live target'); assert(Math.abs(g.active().x - cam.x) <= vw * 0.4 + 1, 'the shooter stays in frame');
+  assert(maxStep < 100, 'no teleport to the target while aiming'); assert.equal(g.entities.length, 0);
   const continuous = fixture(true), other = new Camera(); other.observeAim = true; other.update(1 / 60, continuous.g, fx, 1280, 720, null);
   const start = other.x; continuous.g.turn.preview = { x: 6200, y: 40 };
   for (let i = 0; i < 240; i++) other.update(1 / 60, continuous.g, fx, 1280, 720, null);

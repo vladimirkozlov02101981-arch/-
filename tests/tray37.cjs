@@ -15,7 +15,7 @@ const { chromium } = require('playwright'), fs = require('node:fs'), assert = re
     await page.waitForTimeout(800);
     out.r = await page.evaluate(async () => {
       const wait = ms => new Promise(r => setTimeout(r, ms)), cv = App.cv, move = (dx, dy) => cv.dispatchEvent(new MouseEvent('mousemove', { movementX: dx, movementY: dy, bubbles: true }));
-      Input.locked = true; const game0 = { x: Input.mouse.x, y: Input.mouse.y };
+      Input.locked = true; const game0 = { x: Input.mouse.x, y: Input.mouse.y }, aim0 = App.ctl.aim;
       UI.setTray(true); for (let i = 0; i < 40 && document.querySelectorAll('.tray-group').length < 6; i++) await wait(50); await wait(150);
       const te = document.getElementById('tray'), t = { left: te.offsetLeft, top: te.offsetTop, right: te.offsetLeft + te.offsetWidth, bottom: te.offsetTop + te.offsetHeight }, cur = document.getElementById('tray-cursor');
       const r = { groups: document.querySelectorAll('.tray-group').length, scroll: document.getElementById('tray').scrollHeight > document.getElementById('tray').clientHeight + 1,
@@ -28,6 +28,8 @@ const { chromium } = require('playwright'), fs = require('node:fs'), assert = re
       const shots = App.sc.turn.shots;
       cv.dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true })); window.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true })); await wait(300);
       r.weapon = App.sc.turn.weapon; r.closed = !UI.trayOpen; r.fired = App.sc.turn.shots !== shots || App.sc.turn.phase !== 'aim'; r.game = { x: Input.mouse.x, y: Input.mouse.y }; r.game0 = game0;
+      r.aim0 = aim0; r.aim = App.ctl.aim;   // версия 44: при смене оружия ствол сохраняет направление, скрытый курсор встаёт на его линию
+      { const s = App.sc.soldiers.find(o => o.id === App.sc.turn.sid), [gx, gy] = App.cam.toScreen(s.x, s.y - GUN_Y, App.ren.sw, App.ren.sh); r.cursorAngle = Math.atan2(Input.mouse.y - gy, Input.mouse.x - gx); }
       r.cursorHidden = cur.classList.contains('hidden'); Input.locked = false;
       return r;
     });
@@ -37,7 +39,9 @@ const { chromium } = require('playwright'), fs = require('node:fs'), assert = re
     assert(r.corner.x <= r.rect.r && r.corner.x >= r.rect.r - 6 && r.corner.y >= r.rect.t && r.corner.y <= r.rect.t + 6, 'cursor stays inside the tray ' + JSON.stringify(r));
     assert(r.hover && /Узи/.test(r.info), 'hover under the tray cursor ' + JSON.stringify(r));
     assert(r.weapon === 'uzi' && r.closed && !r.fired && r.cursorHidden, 'click picks the weapon without firing ' + JSON.stringify(r));
-    assert(r.game.x === r.game0.x && r.game.y === r.game0.y, 'game cursor untouched while the tray is open ' + JSON.stringify(r));
+    // прицел игры панелью не сдвигается: направление ствола прежнее, скрытый курсор — на его линии (версия 44)
+    assert(Math.abs(r.aim - r.aim0) < 1e-6, 'game aim untouched by the tray ' + JSON.stringify(r));
+    assert(Math.abs(Math.atan2(Math.sin(r.cursorAngle - r.aim), Math.cos(r.cursorAngle - r.aim))) < 0.02, 'hidden game cursor lies on the barrel line ' + JSON.stringify(r));
     assert.deepEqual(out.errors, []); out.pass = true;
   } finally {
     await browser.close(); fs.mkdirSync('test-results/tray37', { recursive: true }); fs.writeFileSync('test-results/tray37/report.json', JSON.stringify(out, null, 2)); console.log(JSON.stringify(out));

@@ -114,7 +114,7 @@
         </div>
       </div>
     </div>
-    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.13-43</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
+    <footer class="menu-footer"><span id="game-version">ВЕРСИЯ 2026.10.13-44</span><span>ПЛАНИРУЙ ХОД. МЕНЯЙ ЛАНДШАФТ.</span><span class="footer-status"><i></i> ГОТОВ К БОЮ</span></footer>
   </section>
 
   <!-- Онлайн -->
@@ -237,6 +237,7 @@
       <div class="help-grid">
         <div>
           <h3 class="section-title"><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg>Управление</h3>
+          <p class="muted small help-keys-cfg" id="help-keys-cfg"></p><p class="small help-keys-note" id="help-keys-note" aria-live="polite"></p>
           <table class="keys" id="help-keys">
             <tr><td><kbd>A</kbd> <kbd>D</kbd></td><td>Ходьба (запас шагов ограничен)</td></tr>
             <tr><td><kbd>Пробел</kbd></td><td>Прыжок</td></tr>
@@ -304,6 +305,13 @@
 
   <!-- Диалог -->
   <div id="dialog" class="dialog hidden"><div class="panel narrow center"><div id="dialog-text"></div><div class="row center"><button class="btn" id="dialog-ok"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>OK</button></div></div></div>
+  <div id="confirm" class="dialog confirm hidden" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+    <div class="confirm-box">
+      <span class="confirm-icon" aria-hidden="true"><svg class="ico"><use href="#i-trash"/></svg></span>
+      <div class="confirm-body"><div class="confirm-title" id="confirm-title"></div><div class="confirm-text" id="confirm-text"></div></div>
+      <div class="confirm-actions"><button type="button" class="btn secondary small" id="confirm-cancel">Отмена</button><button type="button" class="btn danger small" id="confirm-ok"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span id="confirm-ok-label">ОК</span></button></div>
+    </div>
+  </div>
 
   <!-- В игре -->
   <div id="hud-btns" class="hud-btns hidden">

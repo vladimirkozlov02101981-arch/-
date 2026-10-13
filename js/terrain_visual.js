@@ -198,6 +198,27 @@ function texAt(T, x, y, o) {
 }
 
 /** арктическая скала (пласты из Blender): только мягкий потолок для снега на уступах, тёмное и средние тона не трогаем */
+/** сглаженная глубина у шапки (снег, дёрн, песок): среднее с весами Гаусса (σ = 3 столбца) глубины соседних столбцов той же
+    строки; над поверхностью соседа глубина отрицательная (до его поверхности ниже). Нижняя граница и тон шапки идут по склону
+    ровной линией — без «террас» и «лесенки» при любом увеличении (прежнее среднее 7 столбцов без соседей над поверхностью
+    оставляло ступеньки у верха шапки) */
+const CAP_GW = new Float32Array(17).map((_, k) => Math.exp(-((k - 8) * (k - 8)) / 18));
+function capDepth(TD, m, i, x, y, t, W, H) {
+  let s2 = 0, n2 = 0;
+  for (let k = -8; k <= 8; k++) {
+    const xx = x + k; if (xx < 0 || xx >= W) continue;
+    const lim = 3 + (k < 0 ? -k : k); let tj;
+    if (m[i + k]) { tj = TD[i + k]; if (tj > t + lim || tj + lim < t) continue; }
+    else {
+      let q = 1; const j = i + k;
+      while (q <= lim && y + q < H && !m[j + q * W]) q++;
+      if (q > lim || y + q >= H) continue;
+      tj = -q; if (tj + lim < t) continue;
+    }
+    const wk = CAP_GW[k + 8]; s2 += tj * wk; n2 += wk;
+  }
+  return n2 > 0 ? s2 / n2 : t;
+}
 const SNOW_ROCK_L = [[0, 0], [190, 190], [255, 236]];
 function snowRockL(L) {
   for (let i = 1; i < SNOW_ROCK_L.length; i++) { const a = SNOW_ROCK_L[i - 1], b = SNOW_ROCK_L[i]; if (L <= b[0]) return a[1] + (b[1] - a[1]) * (L - a[0]) / (b[0] - a[0]); }
@@ -256,8 +277,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       // снег как в эталоне: лицо шапки #eef4ff → #c3d1ec → #8fa3d0, губа 2–3 px #6f86b8 (скруглённый низ наплыва),
       // комья 10–20 px (±14 %), зерно, редкие искры; без вертикальных «стеблей» и горизонтальных полос
       const kk = Math.min(1, k);
-      if (kk < 0.6) { const q = kk / 0.6; r = 238 + (195 - 238) * q; g = 244 + (209 - 244) * q; bl = 255 + (236 - 255) * q; }
-      else { const q = (kk - 0.6) / 0.4; r = 195 + (143 - 195) * q; g = 209 + (163 - 209) * q; bl = 236 + (208 - 236) * q; }
+      if (kk < 0.6) { const q = kk / 0.6; r = 226 + (190 - 226) * q; g = 234 + (204 - 234) * q; bl = 248 + (232 - 248) * q; }   /* v44: верх не выгорает в 255 — комья видны */
+      else { const q = (kk - 0.6) / 0.4; r = 190 + (143 - 190) * q; g = 204 + (163 - 204) * q; bl = 232 + (208 - 232) * q; }
       const lip = capT - t; if (lip < 3) { const q = (1 - lip / 3) * 0.8; r += (111 - r) * q; g += (134 - g) * q; bl += (184 - bl) * q; }
       f = 1 + (tileAt(tl.t2, x * 0.9, y * 1.3, 3, 93) - 0.5) * 0.28 + (n1 - 0.5) * 0.1 + (n2 - 0.5) * 0.08;
       if (t < 1.8) f *= 1.05;
@@ -269,7 +290,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (k > 0.8) f *= 1 - (k - 0.8) * 1.4;
     }
     r *= f; g *= f; bl *= f;
-    if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = S.snowy ? 1 + ((o.r + o.g + o.b) / S.capMean - 1) * 0.4 : (o.r + o.g + o.b) / S.capMean; r *= q; g *= q; bl *= q; }   // зерно снега/песка/пепла из Blender
+    if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = (o.r + o.g + o.b) / S.capMean; r *= q; g *= q; bl *= q; }   // комья снега, зерно песка и пепла из Blender (v44: снег тоже в полную силу — как у родной ×4)
   } else if (mt === 1 && S.tx.dirt) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
     const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
@@ -906,6 +927,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const o = { r: 0, g: 0, b: 0, n1: 0, ga: 0, gr: 0, gg: 0, gb: 0, cap: false, spec: 0 };
   const t2 = S.tiles.t2;
   const LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z, KN = 1 / 26;
+  /* тон света у поверхности: закатное солнце — тёплый; лунная ночь Арктики — холодный (v44: тёплый тон давал «бурые пятна» на снегу) */
+  const cold = !!S.snowy, LWR = cold ? 8 : 24, LWG = cold ? 12 : 12, LWB = cold ? 16 : -6, SWR = cold ? -0.02 : 0.08, SWG = cold ? 0.005 : 0.025, SWB = cold ? 0.035 : -0.08, CAPSH = cold ? 0.16 : 0.42;
   const hl0 = Math.hypot(LX, LY, LZ + 1), HX = LX / hl0, HY = LY / hl0, HZ = (LZ + 1) / hl0;
   for (let y = 0; y < H; y++) {
     const ty2 = ((y >> 1) & 255) << 8;
@@ -936,10 +959,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         const mt0 = mat[i] || 1, mt = mt0 === 1 && S.rockDirt ? 2 : mt0; const dd = D[i], d = dd / 3, t = TD[i];
         const capT = !capMat[mt] ? 0 : snowLip ? T.snowCapT[x]
           : capThick * (S.grassy ? 0.78 + 0.44 * capN[x] : 0.5 + capN[x] * capN[x] * 1.3) + capS[x] * 2.6 + (t2[ty2 | ((x >> 1) & 255)] - 0.5) * 4 + fringe[x];
-        /* у шапки — сглаженная глубина: среднее TD соседних столбцов той же строки; нижняя граница дёрна/снега/песка идёт по склону
-           ровной линией, а не ступеньками пикселей поверхности (при приближении была «лесенка») */
-        let tc = t;
-        if (capT > 0 && t < capT + 12) { let s2 = 0, n2 = 0; for (let k = -3; k <= 3; k++) { const xx = x + k; if (xx < 0 || xx >= W || !m[i + k]) continue; const tj = TD[i + k]; if (tj > t + 5 || tj + 5 < t) continue; s2 += tj; n2++; } tc = s2 / n2; }
+        /* у шапки — сглаженная глубина (capDepth): нижняя граница и тон дёрна/снега/песка идут по склону ровной линией */
+        const tc = capT > 0 && t < capT + 12 ? capDepth(TD, m, i, x, y, t, W, H) : t;
         shadeMaterial(S, mt === 9 && S.rockDirt ? 2 : mt, x, y, tc, capT, d, infos[sid[i]] || infos[0], o, false);   /* базальт вулкана — те же пласты с лавовыми трещинами, что и порода (эталон), а не «столбы-доски» */
         if (capT > 0 && tc < capT && capT - tc < 1) {
           // граница шапки (снег, дёрн, песок) со сглаживанием: доля шапки в пикселе = дробная часть толщины (без «лесенки»)
@@ -962,13 +983,13 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (d > 14) f *= 1 - Math.min(1, (d - 14) / 260) * (mt === 1 ? 0.26 : mt >= 3 && mt <= 6 ? 0.12 : 0.4);                 // глубина массива заметно темнее — объём как в CGI
         if (BD[i] < 10 && mt !== 8) f *= 0.7 + BD[i] * 0.03;                  // низ навесов темнее
         const shd = dd <= 30 ? shadowAt(x, y) : 0;                              // отброшенная тень
-        if (shd > 0.02) f *= 1 - shd * (mt === 3 ? 0.18 : 0.42);
+        if (shd > 0.02) f *= 1 - shd * (mt === 3 ? 0.18 : o.cap ? CAPSH : 0.42);   /* на снегу тень мягче: рассеянный лунный свет и отражение снега (без «грязных пятен») */
         // блик на гладких материалах
         if (o.spec > 0) { const sp = nx * HX + ny * HY + nz * HZ, base = HZ; if (sp > base) { const k = Math.min(1, (sp - base) / (1 - base)); const s = k * k * 120 * o.spec; r += s; g += s; bl += s; } }
         if (o.tex) f = 1 + (f - 1) * 0.55;                                     // в текстуре из Blender свет уже есть — наш только поддерживает форму
         // тёплый свет — холодная тень
         const w = f - 1;
-        if (w > 0) { r = r * f + w * 24; g = g * f + w * 12; bl = bl * f - w * 6; }
+        if (w > 0) { r = r * f + w * LWR; g = g * f + w * LWG; bl = bl * f + w * LWB; }
         else { r = r * f + w * 8; g = g * f + w * 6; bl = bl * f - w * 5; }
         if (shd > 0.02) { r -= shd * 6; g -= shd * 3; bl += shd * 5; }     // тень холоднее: отражённый свет неба
         // контур и контровой ободок
@@ -994,8 +1015,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         // отражённый свет неба: поверхность получает оттенок горизонта — передний план в тон картине
         if (dd < 60 && ny < 0 && !(o.cap && S.grassy)) { const kb = (1 - dd / 60) * Math.min(1, -ny * 2.5) * 0.16; r += (bounce[0] - r) * kb; g += (bounce[1] - g) * kb; bl += (bounce[2] - bl) * kb; }
         if (!o.tex) r += (r - 118) * 0.12, g += (g - 118) * 0.12, bl += (bl - 118) * 0.12;   // S-кривая: глубже тени, ярче свет
-        // солнечный тёплый тон у освещённой поверхности
-        if (dd < 50) { const kw = (1 - dd / 50) * (1 - shd) * 0.9; r *= 1 + kw * 0.08; g *= 1 + kw * 0.025; bl *= 1 - kw * 0.08; }
+        // тон света у освещённой поверхности (тёплый закатный или холодный лунный)
+        if (dd < 50) { const kw = (1 - dd / 50) * (1 - shd) * 0.9; r *= 1 + kw * SWR; g *= 1 + kw * SWG; bl *= 1 + kw * SWB; }
         if (o.emit) { r = o.r * 1.05; g = o.g * 1.02; bl = o.b; }                    // светящиеся окна не темнеют от теней и глубины
         if (S.hasWaterline && !o.emit) {
           const dyw = y - S.waterY;
@@ -1073,11 +1094,24 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
 
 /** сосулька: конус от ширины w к острию длиной L (tip — смещение острия), полупрозрачный лёд, тень на породе, блик 1 px */
 function icicle(c, x, y, w, L, tip) {
-  const p = () => { c.beginPath(); c.moveTo(x - w / 2, y); c.lineTo(x + w / 2, y); c.quadraticCurveTo(x + w * 0.16, y + L * 0.5, x + tip, y + L); c.quadraticCurveTo(x - w * 0.22, y + L * 0.48, x - w / 2, y); c.closePath(); };
-  c.save(); c.translate(1, 1.2); p(); c.fillStyle = 'rgba(8,14,30,0.22)'; c.fill(); c.restore();
-  const g = c.createLinearGradient(x - w / 2, 0, x + w / 2, 0); g.addColorStop(0, 'rgba(232,244,255,0.74)'); g.addColorStop(0.45, 'rgba(196,222,248,0.66)'); g.addColorStop(1, 'rgba(127,166,214,0.62)');
+  // лёд: округлое утолщение у основания, волнистое сужение, острый кончик; прозрачное голубое тело, блик по освещённой
+  // стороне, капля на кончике (r24: «сосульки-штрихи» — теперь объёмные)
+  const p = () => {
+    c.beginPath(); c.moveTo(x - w / 2, y);
+    c.quadraticCurveTo(x - w * 0.6, y + L * 0.1, x - w * 0.32, y + L * 0.3); c.quadraticCurveTo(x - w * 0.14, y + L * 0.68, x + tip, y + L);
+    c.quadraticCurveTo(x + w * 0.18, y + L * 0.6, x + w * 0.34, y + L * 0.27); c.quadraticCurveTo(x + w * 0.58, y + L * 0.09, x + w / 2, y); c.closePath();
+  };
+  c.save(); c.translate(0.9, 1.1); p(); c.fillStyle = 'rgba(8,14,30,0.26)'; c.fill(); c.restore();
+  const g = c.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+  g.addColorStop(0, 'rgba(244,250,255,0.86)'); g.addColorStop(0.3, 'rgba(206,230,252,0.64)'); g.addColorStop(0.68, 'rgba(150,192,236,0.56)'); g.addColorStop(1, 'rgba(104,146,204,0.74)');
   p(); c.fillStyle = g; c.fill();
-  c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 0.5; c.beginPath(); c.moveTo(x - w * 0.24, y + 0.6); c.quadraticCurveTo(x - w * 0.14, y + L * 0.4, x + tip * 0.6, y + L * 0.72); c.stroke();
+  const v = c.createLinearGradient(0, y, 0, y + L); v.addColorStop(0, 'rgba(255,255,255,0.32)'); v.addColorStop(0.35, 'rgba(255,255,255,0)'); v.addColorStop(1, 'rgba(180,215,255,0.18)');
+  p(); c.fillStyle = v; c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.88)'; c.lineWidth = Math.max(0.45, w * 0.14); c.lineCap = 'round';
+  c.beginPath(); c.moveTo(x - w * 0.26, y + 0.8); c.quadraticCurveTo(x - w * 0.16, y + L * 0.42, x + tip * 0.55, y + L * 0.74); c.stroke();
+  c.strokeStyle = 'rgba(70,110,170,0.35)'; c.lineWidth = Math.max(0.3, w * 0.08);
+  c.beginPath(); c.moveTo(x + w * 0.3, y + 1); c.quadraticCurveTo(x + w * 0.16, y + L * 0.5, x + tip * 0.8, y + L * 0.85); c.stroke();
+  if (L > 7) { c.fillStyle = 'rgba(235,246,255,0.85)'; c.beginPath(); c.arc(x + tip, y + L - 0.2, Math.max(0.35, w * 0.12), 0, TAU); c.fill(); }
 }
 
 function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
@@ -1386,8 +1420,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         let ok = true; for (let q = 2; q < T.snowCapT[x] - 1; q += 3) if (!T.isSolid(x, y + q)) { ok = false; break; }
         if (!ok || !T.isSolid(x, yb - 1)) continue;
         done.add(x + ',' + yb);
-        const h1 = hash3(x, 1, seed + 83), long = hash3(x, 2, seed + 83) > 0.95;
-        const L = long ? 18 + hash3(x, 3, seed + 83) * 7 : 3 + 15 * Math.pow(h1, 2.2), w = Math.min(2 + hash3(x, 4, seed + 83) * 3, 1.3 + L * 0.35), tip = (hash3(x, 5, seed + 83) - 0.5) * w * 0.5;
+        const h1 = hash3(x, 1, seed + 83), long = hash3(x, 2, seed + 83) > 0.9;
+        const L = long ? 20 + hash3(x, 3, seed + 83) * 12 : 4 + 16 * Math.pow(h1, 1.6), w = Math.min(2.4 + hash3(x, 4, seed + 83) * 3.6, 1.6 + L * 0.34), tip = (hash3(x, 5, seed + 83) - 0.5) * w * 0.5;   /* длиннее и толще (r24) */
         if (surface) anchor(x, yb - 1);
         icicle(cs, x, yb - 1.2, w, L, tip);
       }

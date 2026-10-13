@@ -75,6 +75,13 @@ class Particles {
 }
 
 /* ---------- погода в пределах экрана ---------- */
+/** хлопок снега: белое ядро, мягкий край (рисуется один раз) */
+function snowFlakeSprite() {
+  if (snowFlakeSprite.c) return snowFlakeSprite.c;
+  const c = makeCanvas(32, 32), x = c.getContext('2d'), g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.28, 'rgba(250,253,255,0.95)'); g.addColorStop(0.5, 'rgba(236,244,255,0.5)'); g.addColorStop(1, 'rgba(220,232,255,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 32, 32); return (snowFlakeSprite.c = c);
+}
 class Weather {
   constructor(kind) { this.kind = kind; this.p = []; this.t = 0; }
   density() { return { snow: 1 / 3200, rain: 1 / 1800, leaves: 1 / 60000, dust: 1 / 14000, embers: 1 / 9000, spores: 1 / 11000, fireflies: 1 / 26000 }[this.kind] || 0; }
@@ -82,7 +89,8 @@ class Weather {
     const x = rand(v.x0, v.x1), y = anywhere ? rand(v.y0, v.y1) : (this.kind === 'embers' || this.kind === 'spores' ? v.y1 + 10 : v.y0 - 10);
     const p = { x, y, ph: rand(0, TAU), s: 1 };
     switch (this.kind) {
-      case 'snow': p.vy = rand(28, 70); p.vx = rand(-8, 8); p.s = rand(1, 2.6); break;
+      // снег — на разной глубине: дальние хлопья мелкие и чёткие, ближние крупнее, мягче и прозрачнее, падают быстрее
+      case 'snow': { const d = Math.random(); p.d = d; p.vy = 24 + d * 60 + rand(-6, 6); p.vx = rand(-8, 8); p.s = 0.7 + d * d * 2.1; p.a = 0.95 - d * 0.45; break; }
       case 'rain': p.vy = rand(700, 900); p.vx = 0; p.s = rand(10, 18); break;
       case 'leaves': p.vy = rand(18, 40); p.vx = rand(-10, 10); p.s = rand(2.5, 4); p.col = pick(['#7fbf3a', '#c9a23a', '#d9772a', '#5f9a2e']); p.rot = rand(0, TAU); break;
       case 'dust': p.vy = rand(-4, 4); p.vx = rand(10, 30); p.s = rand(0.8, 1.8); break;
@@ -116,7 +124,11 @@ class Weather {
   draw(c, t) {
     if (!this.kind || !this.p.length) return;
     switch (this.kind) {
-      case 'snow': c.fillStyle = 'rgba(255,255,255,0.85)'; for (const p of this.p) { c.beginPath(); c.arc(p.x, p.y, p.s, 0, TAU); c.fill(); } break;
+      case 'snow': {   // мягкие хлопья: светлое ядро и размытый край (картинка-пятно), а не плоские диски
+        const sp = snowFlakeSprite(); const a0 = c.globalAlpha;
+        for (const p of this.p) { const r = p.s * 1.7; c.globalAlpha = a0 * (p.a === undefined ? 0.85 : p.a); c.drawImage(sp, p.x - r, p.y - r, r * 2, r * 2); }
+        c.globalAlpha = a0; break;
+      }
       case 'rain': c.strokeStyle = 'rgba(170,190,255,0.35)'; c.lineWidth = 1; c.beginPath(); for (const p of this.p) { c.moveTo(p.x, p.y); c.lineTo(p.x - 1.2, p.y - p.s); } c.stroke(); break;
       case 'leaves': for (const p of this.p) { c.fillStyle = p.col; c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.scale(1, Math.abs(Math.sin(p.rot * 1.3)) * 0.8 + 0.2); c.beginPath(); c.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, TAU); c.fill(); c.restore(); } break;
       case 'dust': c.fillStyle = 'rgba(255,230,190,0.35)'; for (const p of this.p) c.fillRect(p.x, p.y, p.s, p.s); break;

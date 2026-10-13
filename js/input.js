@@ -507,6 +507,19 @@ class LocalController {
     }
     return '';
   }
+  /** оптика по стволу у края экрана: самая дальняя точка линии ствола, при которой вся линза ещё в кадре (v кадр камеры:
+      x, y, z и тряска sx, sy). Боец у самого края стволом наружу — линза рядом с ним */
+  scopeAtEdge(s, sc, v, sw, sh) {
+    const z = v.z || 1, pad = Math.round(Math.min(sw, sh) * 0.16) + 16, top = Math.min(sh / 2, pad + 40);   // сверху ещё панель хода
+    const gx = (s.x - v.x) * z + sw / 2 + (v.sx || 0), gy = (s.y - GUN_Y - v.y) * z + sh / 2 + (v.sy || 0);
+    const dx = Math.cos(this.base), dy = Math.sin(this.base);
+    let t = Infinity;
+    if (dx > 1e-6) t = Math.min(t, (sw - pad - gx) / dx); else if (dx < -1e-6) t = Math.min(t, (pad - gx) / dx);
+    if (dy > 1e-6) t = Math.min(t, (sh - pad - gy) / dy); else if (dy < -1e-6) t = Math.min(t, (top - gy) / dy);
+    t = Math.max(Number.isFinite(t) ? t : 0, 70);
+    this.scopePoint = { x: s.x + dx * t / z, y: s.y - GUN_Y + dy * t / z }; this.clampScope(sc);
+    this.scopeRange = Math.max(1, Math.hypot(this.scopePoint.x - s.x, this.scopePoint.y - (s.y - GUN_Y)));
+  }
   /** точка оптики хранится в мире: движение обзора и масштаб не меняют выбранную цель */
   clampScope(sc) {
     if (!this.scopePoint) return;
@@ -609,8 +622,10 @@ class LocalController {
     const canMove = phase === 'aim' || phase === 'retreat' || jet;
     // клавиши — по таблице Keys (настраиваются; по физической клавише, раскладка не важна)
     const left = Keys.down('left'), right = Keys.down('right');
-    // W/S — лестница/тяга; I/K — наклон ствола. Стрелки зарезервированы для камеры.
-    const up = Keys.down('up'), down = Keys.down('down'), aimUp = Keys.down('aimUp'), aimDown = Keys.down('aimDown'), precise = Keys.down('precise');
+    // W/S — лестница/тяга; I/K — наклон ствола. Стрелки — камера; пока оружие стреляет (очередь, струя, залп), обзор стрелками
+    // не ведётся — тогда ↑/↓ тоже ведут ствол
+    const arrowSteer = steerFire && !(typeof UI !== 'undefined' && (UI.cur || UI.chatOpen));
+    const up = Keys.down('up'), down = Keys.down('down'), aimUp = Keys.down('aimUp') || (arrowSteer && !!Input.keys.ArrowUp), aimDown = Keys.down('aimDown') || (arrowSteer && !!Input.keys.ArrowDown), precise = Keys.down('precise');
     // мышь также выбирает точку для авиаудара, молнии и т. п.
     const pickPoint = W.mode === 'target' || W.mode === 'place' || (W.mode === 'tcharge' && !T.target);
     // цель дальнобойного оружия может быть за экраном: курсор у края экрана сам ведёт обзор (render.js, Camera.edgeDir)
@@ -618,12 +633,12 @@ class LocalController {
     // Прежняя оптика ×3 появляется при выборе снайперки; Ctrl скрывает/показывает, Q/E всегда листают оружие.
     const sniperScope = T.weapon === 'sniper' && canAct;
     const scopeStart = sniperScope && this.scopeWeapon !== 'sniper';
-    // начало хода: оптика в исходной позиции — у бойца по направлению ствола. Точка под мышью сюда не годится: в первом кадре
-    // нового хода камера ещё смотрит туда, где был прошлый ход (за километр от бойца). Выбор снайперки в ходе — к мыши
+    // оптика появляется ровно по стволу (куда смотрело прежнее оружие) у края экрана: вся линза в кадре — камера при выборе
+    // снайперки не сдвигается. В первом кадре нового хода камера ещё смотрит туда, где был прошлый ход, — край считается
+    // по кадру у бойца, который камера сейчас покажет
     if (scopeStart) {
       this.scopeOn = true; this.aimMode = 'mouse';
-      if (newTurn) { const d = Math.min(sw, sh) * 0.24 / (cam.tz || cam.z || 1); this.scopePoint = { x: s.x + Math.cos(this.base) * d, y: s.y - GUN_Y + Math.sin(this.base) * d }; this.clampScope(sc); }
-      else this.scopePoint = { x: w[0], y: w[1] };
+      this.scopeAtEdge(s, sc, newTurn ? { x: s.x, y: s.y - 20, z: cam.tz || cam.z || 1, sx: 0, sy: 0 } : cam, sw, sh);
       this.scopeIdle = 1; this.swayAmp = this.scopeSway = 0;
     }
     if (!sniperScope) { this.scopeOn = false; this.scopePoint = null; this.swayAmp = this.scopeSway = 0; }
@@ -650,7 +665,7 @@ class LocalController {
     const mouseAim = (canAct || steerFire) && this.aimMode === 'mouse';
     if (sniperScope && !this.binoc) {
       if (mouseAim) {
-        if ((scopeStart && !newTurn) || (Input.mouse.clicked[0] && previousAimMode === 'keys')) {
+        if (!scopeStart && Input.mouse.clicked[0] && previousAimMode === 'keys') {
           this.scopePoint.x = w[0]; this.scopePoint.y = w[1];
         } else {
           // Сдвиг мыши ведёт прежнюю мировую точку и без захвата: движение камеры не переопределяет цель.
@@ -662,7 +677,21 @@ class LocalController {
     }
     // экранный курсор при масштабе меняет мировые координаты; направление оружия меняет только новое наведение
     if (mouseAim && !sniperScope && !pickPoint && !this.binoc) {
-      if (!this.aimPoint || this.aimWeapon !== T.weapon || Input.mouse.moved) this.aimPoint = { x: w[0], y: w[1] };
+      if (!this.aimPoint || Input.mouse.moved) this.aimPoint = { x: w[0], y: w[1] };
+      else if (this.aimWeapon !== T.weapon) {
+        // смена оружия: ствол смотрит туда же, куда смотрело прежнее; скрытый курсор встаёт на линию ствола в пределах экрана
+        // (на прежнем расстоянии от бойца, если оно помещается) — следующее движение мыши ведёт ствол от этого направления
+        const z = cam.z || 1, dx = Math.cos(this.base), dy = Math.sin(this.base), gx = s.x, gy = s.y - GUN_Y;
+        let d = Math.max(60, Math.hypot(w[0] - gx, w[1] - gy));
+        if (cam.toScreen) {
+          const [px, py] = cam.toScreen(gx, gy, sw, sh), m = 4; let t = Infinity;
+          if (dx > 1e-6) t = Math.min(t, (sw - m - px) / dx); else if (dx < -1e-6) t = Math.min(t, (m - px) / dx);
+          if (dy > 1e-6) t = Math.min(t, (sh - m - py) / dy); else if (dy < -1e-6) t = Math.min(t, (m - py) / dy);
+          if (Number.isFinite(t) && t > 8) d = Math.min(d, t / z);
+        }
+        this.aimPoint = { x: gx + dx * d, y: gy + dy * d };
+        if (Input.locked && cam.toScreen) { const [mx, my] = cam.toScreen(this.aimPoint.x, this.aimPoint.y, sw, sh); Input.mouse.x = clamp(mx, 0, sw - 1); Input.mouse.y = clamp(my, 0, sh - 1); }
+      }
       this.mouseW.x = this.aimPoint.x; this.mouseW.y = this.aimPoint.y;
     }
     this.aimWeapon = canAct || steerFire ? T.weapon : null;
