@@ -19,7 +19,7 @@ function cameraAttack(e) { return !e.dead && CAM_ATTACK.has(e.k) && e.busy !== f
    Скорость ручного обзора приходит из личного контроллера текущего игрока. */
 class Camera {
   constructor() { this.x = 1600; this.y = 900; this.z = 1; this.tz = 1; this.sx = 0; this.sy = 0; this.free = 0; this.userZ = null; this.inited = false; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = 0; this.ly = 0; this.leadE = null; this.vx = 0; this.vy = 0; this.track = false;
-    this.turnKey = ''; this.lastT = null; this.aKey = ''; this.ay = 0; this.tKey = ''; this.glide = null; this.foe = false; this.fN = 0; this.scopeFocus = null; this.ownHold = 0; this.foeFocus = null; this.foeHold = 0; this.panFactor = 1; this.mapW = 6400; this.mapH = 1800; this.mapZoom = null; this.manual = null; this.manualKey = ''; this.offsetX = this.offsetY = 0; this.manualActive = false; this.observeAim = false; this.zoomV = 0; this.zoomAnchor = null; this.wasBinoc = false; }
+    this.turnKey = ''; this.lastT = null; this.aKey = ''; this.ay = 0; this.tKey = ''; this.glide = null; this.foe = false; this.fN = 0; this.scopeFocus = null; this.ownHold = 0; this.foeFocus = null; this.foeHold = 0; this.panFactor = 1; this.mapW = 6400; this.mapH = 1800; this.mapZoom = null; this.manual = null; this.manualKey = ''; this.offsetX = this.offsetY = 0; this.manualActive = false; this.observeAim = false; this.zoomV = 0; this.zoomAnchor = null; this.zoomPark = null; this.wasBinoc = false; }
   toScreen(wx, wy, sw, sh) { return [(wx - this.x) * this.z + sw / 2 + this.sx, (wy - this.y) * this.z + sh / 2 + this.sy]; }
   toWorld(px, py, sw, sh) { return [(px - sw / 2 - this.sx) / this.z + this.x, (py - sh / 2 - this.sy) / this.z + this.y]; }
   view(sw, sh, m = 0) { const hw = sw / 2 / this.z, hh = sh / 2 / this.z; return { x0: this.x - hw - m, y0: this.y - hh - m, x1: this.x + hw + m, y1: this.y + hh + m }; }
@@ -27,17 +27,17 @@ class Camera {
   baseZoom(sh, sw = 0) { return Math.max(clamp(sh / 560, 0.9, 2.4), sw / 1500); }   // меньше увеличение — текстуры ближе к 1:1, резче
   zoomLimits(sh, sw = 0) { const b = this.baseZoom(sh, sw); return [Math.min((sw || sh * 16 / 9) / this.mapW, sh / this.mapH), b * ZOOM_MAX_K]; }   // до полного вида карты; приближение — до разумного (боец ~1/6 высоты экрана), не до отдельных пикселей
   reset() { this.inited = false; this.free = 0; this.userZ = null; this.binoc = false; this.binocK = 0; this.edge = false; this.hold = false; this.shot = null; this.lookId = 0; this.lx = this.ly = 0; this.leadE = null; this.vx = this.vy = 0; this.track = false;
-    this.turnKey = ''; this.lastT = null; this.aKey = ''; this.ay = 0; this.tKey = ''; this.glide = null; this.ptx = undefined; this.scopeFocus = null; this.ownHold = 0; this.foeFocus = null; this.foeHold = 0; this.panFactor = 1; this.mapW = 6400; this.mapH = 1800; this.mapZoom = null; this.manual = null; this.manualKey = ''; this.offsetX = this.offsetY = 0; this.manualActive = false; this.observeAim = false; this.zoomV = 0; this.zoomAnchor = null; this.wasBinoc = false; this.postHold = null; }
+    this.turnKey = ''; this.lastT = null; this.aKey = ''; this.ay = 0; this.tKey = ''; this.glide = null; this.ptx = undefined; this.scopeFocus = null; this.ownHold = 0; this.foeFocus = null; this.foeHold = 0; this.panFactor = 1; this.mapW = 6400; this.mapH = 1800; this.mapZoom = null; this.manual = null; this.manualKey = ''; this.offsetX = this.offsetY = 0; this.manualActive = false; this.observeAim = false; this.zoomV = 0; this.zoomAnchor = null; this.zoomPark = null; this.wasBinoc = false; this.postHold = null; }
   /** мгновенная смена кадра (новый ход): обзор сразу у бойца — без перелёта через карту и без накопленной скорости */
   cut(sc, fx, a, sw, sh) {
-    this.mapZoom = null; this.zoomV = 0; this.zoomAnchor = null; this.shot = null; this.hold = false; this.postHold = null; this.free = 0; this.lx = this.ly = 0; this.leadE = null; this.glide = null; this.lastT = null; this.aKey = '';
+    this.mapZoom = null; this.zoomPark = null; this.zoomV = 0; this.zoomAnchor = null; this.shot = null; this.hold = false; this.postHold = null; this.free = 0; this.lx = this.ly = 0; this.leadE = null; this.glide = null; this.lastT = null; this.aKey = '';
     this.vx = this.vy = this.tvx = this.tvy = 0; if (fx) { fx.focus = null; if (fx.firstHit) this.hitN = fx.firstHit.n; }   // попадания прошлого хода не в счёт
     const t = this.soldierTarget(a, sh); this.x = t.x; this.y = t.y; this.tKey = t.k; this.ptx = t.x; this.pty = t.y; this.z = this.tz;
     this.clampTo(sc, sw, sh);
   }
   /** смена эпизода атаки: готовый кадр без перелёта и остаточной скорости */
   frameCut(target, sc, sw, sh) {
-    this.mapZoom = null; this.x = target.x; this.y = target.y; this.vx = this.vy = this.tvx = this.tvy = 0;
+    this.mapZoom = null; this.zoomPark = null; this.x = target.x; this.y = target.y; this.vx = this.vy = this.tvx = this.tvy = 0;
     this.lx = this.ly = 0; this.leadE = null; this.glide = null; this.tKey = target.k || ''; this.ptx = target.x; this.pty = target.y;
     this.clampTo(sc, sw, sh);
   }
@@ -117,7 +117,7 @@ class Camera {
     const previousZoom = this.z;
     if (this.wasBinoc && !this.binoc) {
       this.free = 0; this.hold = false; this.manualActive = false; this.offsetX = this.offsetY = 0;
-      this.mapZoom = null; this.zoomAnchor = null; this.vx = this.vy = 0; this.ptx = undefined;
+      this.mapZoom = null; this.zoomPark = null; this.zoomAnchor = null; this.vx = this.vy = 0; this.ptx = undefined;
       this.glide = null; this.aKey = ''; this.leadE = null; this.lx = this.ly = 0; this.lookId = 0;
     }
     this.wasBinoc = this.binoc;
@@ -133,28 +133,20 @@ class Camera {
     if (this.mapZoom) {
       const M = this.mapZoom, turnKey = T ? T.team + ':' + T.sid + ':' + T.round : '';
       if (M.sw !== sw || M.sh !== sh) {
-        // F11/поворот окна меняют реальные пределы масштаба: продолжаем из текущего кадра.
+        // F11/поворот окна меняют реальные пределы масштаба: путь продолжается из текущего кадра.
         const bounded = clamp(this.z, zmin, zmax);
         if (bounded !== this.z) { this.z = bounded; this.zoomV = 0; }
         M.z1 = M.full ? zmin : clamp(M.z1, zmin, zmax); M.full = M.z1 <= zmin * (1 + 1e-8);
         this.userZ = this.tz = M.z1;
         if (this.z <= zmin * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; }
-        if (M.mode === 'anchor' && this.zoomAnchor) {
-          this.zoomAnchor.x *= sw / M.sw; this.zoomAnchor.y *= sh / M.sh;
-        }
-        M.q0 = 1 / this.z; M.z0 = this.z; M.x0 = this.x; M.y0 = this.y;
-        M.x1 = this.x; M.y1 = this.y;
-        if (M.full || M.mode === 'map') {
-          const k = M.full ? 1 : clamp((1 / M.z1 - M.q0) / (1 / zmin - M.q0 || 1), 0, 1);
-          M.x1 += (sc.W / 2 - this.x) * k; M.y1 += (sc.H / 2 - this.y) * k;
-        } else if (M.mode === 'anchor' && this.zoomAnchor) {
-          const dq = M.q0 - 1 / M.z1; M.x1 += this.zoomAnchor.x * dq; M.y1 += this.zoomAnchor.y * dq;
-        }
+        if (this.zoomAnchor) { this.zoomAnchor.x *= sw / M.sw; this.zoomAnchor.y *= sh / M.sh; }
+        if (M.mode === 'center') { M.x0 = this.x; M.y0 = this.y; M.q0 = 1 / this.z; M.q1 = 1 / M.z1; }
+        else { M.hx = this.x; M.hy = this.y; M.qh = 1 / this.z; M.sx *= sw / M.sw; M.sy *= sh / M.sh; }
         M.sw = sw; M.sh = sh;
       }
       const actor = T && sc.soldiers.find(s => s.id === T.sid);
       const interrupted = !T || (actor && ['walk', 'climb', 'air', 'fly', 'jet'].includes(actor.st)) || (fx.focus && (fx.focus.L === undefined || fx.focus.L === T.team || this.foe)) || T.phase !== 'aim' || T.shots > 0 || turnKey !== M.key || this.binoc !== M.binoc || this.shot || this.foeFocus ||
-        (this.manual && (this.manual.x || this.manual.y)) || (mouse && mouse.moved) || (this.scopeFocus && this.scopeFocus.moving) ||
+        (this.manual && (this.manual.x || this.manual.y)) || (mouse && mouse.moved && (M.kind !== 'track' || this.free > 0 || (this.edge && mouse.inside && !!this.edgeDir(mouse, sw, sh)))) || (this.scopeFocus && this.scopeFocus.moving) ||   /* наведение обычного оружия мышью кадр масштаба не сбивает; курсор у края (обзор к цели) и палец — ведут обзор */
         (this.observeAim && T && T.preview) ||   // соперник наводит удар: масштаб меняется, а обзор продолжает следить за его прицелом
         sc.entities.some(e => cameraAttack(e) && (e.team === T.team || this.foe));
       if (interrupted) {
@@ -163,23 +155,25 @@ class Camera {
           const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y;
         }
         if (M.full && this.manual && (this.manual.x || this.manual.y)) this.zoomV = 0;
-        this.mapZoom = null;
+        this.mapZoom = null; this.zoomPark = null;
       }
       else {
         const q = this.smoothZoom(dt, M.z1, M.w);
         this.z = clamp(1 / q, zmin, zmax); this.tz = M.z1;
         if (q > 1 / zmin || q < 1 / zmax) this.zoomV = 0;
-        const k = (1 / this.z - M.q0) / (1 / M.z1 - M.q0 || 1);
-        this.x = M.x0 + (M.x1 - M.x0) * k; this.y = M.y0 + (M.y1 - M.y0) * k;
+        [this.x, this.y] = this.zoomPathAt(M, 1 / this.z, 1 / zmin, sc);
         if (this.z <= zmin * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; }
         if (this.manualActive && actor && !this.binoc && !(this.edge && !this.scopeFocus)) this.fitBody(actor, sw, sh);   // обзор сдвинут стрелками: боец целиком в кадре и во время перехода
         if (this.manualActive && actor) { const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y; }
         this.vx = this.vy = 0; this.sx = this.sy = 0; this.glide = null;
         // масштаб дошёл до нужного: приближение отпускает камеру к обычному слежению (без паузы до следующего действия)
-        // (и вокруг точки — у цели, после стрелок): камера остаётся там, где масштаб её оставил, и дальше слушается как обычно
-        if ((M.mode === 'center' || M.mode === 'anchor') && Math.abs(this.z - M.z1) <= M.z1 * 1e-5 && Math.abs(this.zoomV || 0) < 1e-6) {
+        // (и вокруг точки — у цели, после стрелок): камера остаётся там, где масштаб её оставил, и дальше слушается как обычно.
+        // Отдаление дальше исходного кадра держит обзор, как и раньше. Путь запоминается: следующий поворот колеса,
+        // пока обзор никто не сдвигал, идёт по нему же — туда-сюда без ухода в сторону
+        if (Math.abs(this.z - M.z1) <= M.z1 * 1e-5 && Math.abs(this.zoomV || 0) < 1e-6 && !M.full && !(M.mode !== 'anchor' && 1 / this.z > (M.mode === 'center' ? M.q0 : M.qh) * (1 + 1e-9))) {
           this.mapZoom = null; this.ptx = undefined;
           if (M.mode === 'anchor' && this.manualActive && actor) { const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y; }
+          this.zoomPark = M.mode === 'anchor' ? null : { ...M, px: this.x, py: this.y };
         }
         return;
       }
@@ -469,6 +463,15 @@ class Camera {
     if (Math.abs(next - end) < Math.max(1e-9, end * 1e-6) && Math.abs(this.zoomV) < 1e-4) { next = end; this.zoomV = 0; }
     return next;
   }
+  /** центр кадра на пути масштаба при q = 1/z: 'path' — от исходного кадра (hx, hy при 1/qh) отдаление равномерно раскрывает
+      оба края до полного вида карты, приближение — вокруг точки (sx, sy от середины экрана); 'anchor' — вокруг точки в обе
+      стороны (боец после стрелок); 'center' — переход к тому, за кем камера следила (x0 → x1 по ходу масштаба) */
+  zoomPathAt(M, q, qmin, sc) {
+    const hx = M.mode === 'center' ? M.x0 : M.hx, hy = M.mode === 'center' ? M.y0 : M.hy, qh = M.mode === 'center' ? M.q0 : M.qh;
+    if (M.mode !== 'anchor' && q >= qh) { const t = clamp((q - qh) / (qmin - qh || 1), 0, 1); return [hx + (sc.W / 2 - hx) * t, hy + (sc.H / 2 - hy) * t]; }
+    if (M.mode === 'center') { const k = clamp((q - M.q0) / (M.q1 - M.q0 || 1), 0, 1); return [M.x0 + (M.x1 - M.x0) * k, M.y0 + (M.y1 - M.y0) * k]; }
+    return [M.hx + M.sx * (M.qh - q), M.hy + M.sy * (M.qh - q)];
+  }
   zoomAt(f, px, py, sw, sh) {
     if (!(f > 0) || !Number.isFinite(f)) return;
     const [zmin, zmax] = this.zoomLimits(sh, sw), z = clamp((this.userZ ?? this.baseZoom(sh, sw)) * f, zmin, zmax);
@@ -477,22 +480,34 @@ class Camera {
     if (this.scopeFocus) [px, py] = this.toScreen(this.scopeFocus.point.x, this.scopeFocus.point.y, sw, sh);
     // обзор сдвинут стрелками (боец в кадре): масштаб вокруг бойца — его место на экране не меняется
     else if (this.manualActive && this.manualHome) [px, py] = this.toScreen(this.manualHome.x, this.manualHome.y, sw, sh);
-    const free = this.binoc || this.hold || this.free > 0 || this.scopeFocus || this.manualActive;
-    let x1 = this.x, y1 = this.y, mode = 'center';
-    if (f > 1 && !free) {
+    const free = this.binoc || this.hold || this.free > 0 || this.scopeFocus || this.manualActive, full = z <= zmin * (1 + 1e-8);
+    // вокруг чего приближать: оптика, боец после стрелок, курсор свободного обзора; при слежении — середина экрана
+    const kind = this.scopeFocus ? 'scope' : this.manualActive && this.manualHome ? 'manual' : free ? 'free' : 'track';
+    const sx = kind === 'track' ? 0 : px - sw / 2, sy = kind === 'track' ? 0 : py - sh / 2;
+    const w = Math.max(z / this.z, this.z / z) > 2 ? 8 : 14;
+    if (this.manual && (this.manual.x || this.manual.y)) {
+      // стрелки зажаты: обзор ведут они, масштаб идёт следом вокруг той же точки
+      this.mapZoom = null; this.zoomPark = null; this.zoomAnchor = kind === 'track' ? null : { x: sx, y: sy }; return;
+    }
+    // Колесо туда-сюда — по одному пути, пока обзор ничто другое не сдвигало: отдаление и обратное приближение
+    // возвращают ровно прежний кадр, камера не уходит от бойца или прицела всё дальше
+    const P = this.mapZoom || (this.zoomPark && Math.abs(this.zoomPark.px - this.x) < 0.01 && Math.abs(this.zoomPark.py - this.y) < 0.01 ? this.zoomPark : null);
+    const pivotSame = P && (kind === 'track' || (kind === 'scope' ? Math.abs(P.hx + P.sx * P.qh - this.scopeFocus.point.x) < 0.01 && Math.abs(P.hy + P.sy * P.qh - this.scopeFocus.point.y) < 0.01 : Math.abs(P.sx - sx) < 0.5 && Math.abs(P.sy - sy) < 0.5));
+    if (P && (P.mode === 'path' || P.mode === 'center') && kind !== 'manual' && P.kind === kind && P.key === this.turnKey && P.binoc === this.binoc && P.sw === sw && P.sh === sh && pivotSame) {
+      this.mapZoom = P; P.z1 = z; P.full = full; P.w = w; this.zoomPark = null;
+      this.zoomAnchor = P.mode === 'path' && 1 / z < P.qh && kind !== 'track' ? { x: P.sx, y: P.sy } : null;
+      return;
+    }
+    const M = { key: this.turnKey, full, binoc: this.binoc, sw, sh, w, z1: z, kind, mode: 'path', hx: this.x, hy: this.y, qh: 1 / this.z, sx, sy };
+    if (kind === 'manual' && !full) { M.mode = 'anchor'; this.zoomAnchor = { x: sx, y: sy }; }
+    else if (kind === 'track' && f > 1) {
       // приближение: путь масштаба ведёт обзор обратно к тому, за кем камера следила до отдаления (обычно к бойцу) —
       // кадр не остаётся сдвинутым к середине карты там, где бойца не видно
-      const home = this.lastT; if (home && Number.isFinite(home.x) && Number.isFinite(home.y)) { x1 = home.x; y1 = home.y; }
+      const home = this.lastT, ok = home && Number.isFinite(home.x) && Number.isFinite(home.y);
+      Object.assign(M, { mode: 'center', x0: this.x, y0: this.y, q0: 1 / this.z, q1: 1 / z, x1: ok ? home.x : this.x, y1: ok ? home.y : this.y });
       this.zoomAnchor = null;
-    } else if ((f < 1 || (this.mapZoom && z <= this.baseZoom(sh, sw) * 0.8)) && !(this.manualActive && this.manualHome && !this.scopeFocus && z > zmin * (1 + 1e-8))) {
-      mode = 'map'; const k = clamp((1 / z - 1 / this.z) / (1 / zmin - 1 / this.z || 1), 0, 1);
-      x1 += (this.mapW / 2 - this.x) * k; y1 += (this.mapH / 2 - this.y) * k;
-      this.zoomAnchor = null;
-    } else if (free) {
-      mode = 'anchor'; this.zoomAnchor = { x: px - sw / 2, y: py - sh / 2 };
-      const dq = 1 / this.z - 1 / z; x1 += this.zoomAnchor.x * dq; y1 += this.zoomAnchor.y * dq;
-    } else this.zoomAnchor = null;
-    this.mapZoom = this.manual && (this.manual.x || this.manual.y) ? null : { key: this.turnKey, full: z <= zmin * (1 + 1e-8), binoc: this.binoc, mode, sw, sh, w: Math.max(z / this.z, this.z / z) > 2 ? 8 : 14, q0: 1 / this.z, x0: this.x, y0: this.y, z0: this.z, z1: z, x1, y1 };
+    } else this.zoomAnchor = z > this.z && kind !== 'track' ? { x: sx, y: sy } : null;
+    this.mapZoom = M; this.zoomPark = null;
   }
 }
 
@@ -572,6 +587,19 @@ class Renderer {
     d.globalCompositeOperation = 'destination-out'; this.blit(d, sc.terrain.canvas, v, sc); d.globalCompositeOperation = 'source-over';
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(this.spriteCv, 0, 0); c.restore();
   }
+  /** ландшафт на видеокарте (js/terrain_gl.js); null — нет WebGL2 */
+  terrainGL() {
+    if (this.tgl === undefined) {
+      this.tgl = typeof TerrainGL !== 'undefined' ? TerrainGL.create() : null;
+      if (this.tgl && typeof TexLib !== 'undefined') {
+        TexLib.onNative = (nat) => { if (this.tgl) this.tgl.nativeTexture(nat); };
+        for (const n in TexLib.native) if (TexLib.native[n]) this.tgl.nativeTexture(TexLib.native[n]);   // уже загруженные (экран настроек)
+      }
+    }
+    return this.tgl;
+  }
+  /** перед первым кадром боя (виден экран загрузки): данные карты уже на видеокарте */
+  prepareTerrain(sc) { if (this.terrainGL()) this.tgl.prepare(sc); }
   blit(c, img, v, sc) {
     const x0 = Math.max(0, Math.floor(v.x0)), y0 = Math.max(0, Math.floor(v.y0)), x1 = Math.min(sc.W, Math.ceil(v.x1)), y1 = Math.min(sc.H, Math.ceil(v.y1));
     if (x1 > x0 && y1 > y0) c.drawImage(img, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
@@ -728,7 +756,8 @@ class Renderer {
     const v = cam.view(sw, sh, 30);
     this.drawLiquid(c, sc, v, t, true);
     if (!this.hires) this.hires = new HiResTerrain();
-    if (!this.hires.draw(c, sc, v, z * dpr)) { this.blit(c, sc.terrain.decor, v, sc); this.blit(c, sc.terrain.canvas, v, sc); }
+    // ландшафт при приближении: на видеокарте (сразу чёткий), иначе — плитки в фоновых потоках, иначе — как есть
+    if (!(this.terrainGL() && this.tgl.draw(c, sc, v, z * dpr)) && !this.hires.draw(c, sc, v, z * dpr)) { this.blit(c, sc.terrain.decor, v, sc); this.blit(c, sc.terrain.canvas, v, sc); }
     if (sc.terrain.spriteLayer && z * dpr > 1) this.drawSpriteLayer(c, sc, v, z * dpr);
     if (sc.terrain.drawSurfaceNative) sc.terrain.drawSurfaceNative(c, v, z * dpr);
     drawTacticalRoutes(c, sc.map, sc.terrain);

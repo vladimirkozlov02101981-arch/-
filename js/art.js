@@ -87,28 +87,67 @@ const TexLib = {
     // родные ×4 — до 50 МБ памяти на материал: на телефонах и слабых устройствах обходимся малой текстурой
     const mem = typeof navigator !== 'undefined' && navigator.deviceMemory, touch = typeof Input !== 'undefined' && Input.isTouch;
     if ((mem && mem < 4) || (touch && !(mem >= 8))) return null;
-    const im = new Image();
-    im.onload = () => {
-      try {
-        const low = this.data[n];
-        if (!low || im.naturalWidth !== low.w * k || im.naturalHeight !== low.h * k) return;   // не та пара — обычная отрисовка
-        const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
-        x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(c.width * c.height * 3);
-        for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) { rgb[i] = d[j]; rgb[i + 1] = d[j + 1]; rgb[i + 2] = d[j + 2]; }
-        c.width = c.height = 1;   // холст декодирования больше не нужен
-        this.native[n] = { name: n, w: im.naturalWidth, h: im.naturalHeight, k, d: rgb };
-        this.nativeUse.set(n, performance.now()); this.trimNative();
-      } catch (e) { /* без родного цвета */ }
+    let done; this.nativeWait.set(n, new Promise(r => { done = r; }));
+    const ready = (img, w, h) => {
+      const fin = () => {
+        try {
+          const low = this.data[n];
+          if (!low || w !== low.w * k || h !== low.h * k) { if (img.close) img.close(); return; }   // не та пара — обычная отрисовка
+          // видеокарта берёт саму картинку (js/terrain_gl.js); цвет RGB для плиток (запасной путь, js/hires.js) — только когда понадобится
+          const nat = { name: n, w, h, k, img, rgb: null };
+          Object.defineProperty(nat, 'd', { get() { if (!this.rgb) this.rgb = TexLib.nativeRGB(this.img, this.w, this.h); return this.rgb; } });
+          this.native[n] = nat; this.nativeUse.set(n, performance.now()); this.trimNative();
+          if (this.onNative) this.onNative(nat);   // сразу на видеокарту (js/terrain_gl.js) — к началу боя она уже там
+        } catch (e) { /* без родного цвета */ } finally { done(); }
+      };
+      // малая текстура (по ней проверяется пара) может ещё грузиться — родную грузим одновременно с ней
+      const lowWait = !this.data[n] && this.pending.get(n); if (lowWait) lowWait.then(fin, fin); else fin();
     };
-    im.onerror = () => {};
-    im.src = `assets/tex/native/${n}.webp`;
+    const src = `assets/tex/native/${n}.webp`;
+    const viaImage = () => {
+      const im = new Image(); im.decoding = 'async';
+      im.onload = () => { const go = () => ready(im, im.naturalWidth, im.naturalHeight); if (im.decode) im.decode().then(go, go); else go(); };
+      im.onerror = () => done(); im.src = src;
+    };
+    // раскодирование — в фоне браузера (ImageBitmap): основной поток игры не ждёт, а на видеокарту такая картинка уходит за миллисекунды
+    if (typeof createImageBitmap === 'function' && typeof fetch === 'function' && (/^data:/.test(src) || location.protocol !== 'file:')) {
+      fetch(src).then(r => r.ok ? r.blob() : Promise.reject(new Error(r.status))).then(b => createImageBitmap(b)).then(bmp => ready(bmp, bmp.width, bmp.height), viaImage);
+    } else viaImage();
     return null;
+  },
+  /** RGB родной текстуры для плиток в фоновых потоках */
+  nativeRGB(img, w, h) {
+    const c = makeCanvas(w, h), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, w, h).data, rgb = new Uint8Array(w * h * 3);
+    for (let i = 0, j = 0; i < rgb.length; i += 3, j += 4) { rgb[i] = d[j]; rgb[i + 1] = d[j + 1]; rgb[i + 2] = d[j + 2]; }
+    c.width = c.height = 1;   // холст декодирования больше не нужен
+    return rgb;
+  },
+  nativeWait: new Map(),
+  /** родные текстуры материалов карты — заранее, пока виден экран загрузки боя: первый кадр сразу чёткий.
+      Не дольше ms: медленный диск или сеть не задерживают начало боя (догрузятся по ходу) */
+  preloadNatives(names, ms = 6000) {
+    const jobs = [];
+    // стены пещер рисуются без ссылок на текстуру (T.texRef) — их родные ×4 при приближении не нужны
+    for (const n of names || []) if (this.nativeAvail.has(n) && !/^cave_/.test(n)) { this.loadNative(n); const w = this.nativeWait.get(n); if (w && !this.native[n]) jobs.push(w); }
+    for (const n of names || []) if (this.fineAvail.has(n)) { this.loadFine(n); const w = this.fineWait.get(n); if (w && !this.fine[n]) jobs.push(w); }   // фото-поры грунта
+    if (!jobs.length) return null;   // ждать нечего — бой начинается без лишней паузы
+    return Promise.race([Promise.all(jobs), new Promise(r => setTimeout(r, ms))]);
+  },
+  /** карта выбрана на экране настроек: её материалы и родные текстуры грузятся в фоне, пока игрок настраивает бой —
+      по «В бой!» ждать почти нечего */
+  prefetchMap(id) {
+    if (!id || this.prefetchId === id) return;
+    let a; try { a = this.mapAssets(id); } catch (e) { return; }
+    this.prefetchId = id;
+    for (const n of a.names) this.loadOne(n, 'low');
+    this.preloadNatives(a.names);
   },
   /** выгрузка: только то, что не использовалось 30 с (материалы прежней карты), и не больше восьми в памяти —
       материалы текущей карты используются каждую секунду и не вытесняют друг друга */
   trimNative(keep = 8, idleMs = 30000) {
     const now = performance.now(), live = [...this.nativeUse.entries()].filter(([n]) => this.native[n]).sort((a, b) => b[1] - a[1]);
-    live.forEach(([n, t], i) => { if (now - t > idleMs || i >= keep) { delete this.native[n]; this.nativeUse.delete(n); } });
+    live.forEach(([n, t], i) => { if (now - t > idleMs || i >= keep) { const img = this.native[n].img; if (img && img.close) img.close(); delete this.native[n]; this.nativeUse.delete(n); } });
   },
   surfaceHi: {},
   fine: {},
@@ -117,29 +156,45 @@ const TexLib = {
   loadFine(n) {
     if (this.fine[n] !== undefined) return this.fine[n];
     this.fine[n] = null; if (!this.fineAvail.has(n)) return null;
-    const im = new Image();
-    im.onload = () => {
+    let done; this.fineWait.set(n, new Promise(r => { done = r; }));
+    const ready = (img, w, h) => {
       try {
-        const c = makeCanvas(im.naturalWidth, im.naturalHeight), x = c.getContext('2d', { willReadFrequently: true });
-        x.drawImage(im, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data, rgb = new Uint8Array(c.width * c.height * 3);
-        for (let i = 0; i < c.width * c.height; i++) {
-          const lum = Math.round(d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114);
-          rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = lum;
-        }
-        const mw = Math.floor(c.width / 2), mh = Math.floor(c.height / 2), md = new Uint8Array(mw * mh * 3);
-        for (let y = 0; y < mh; y++) for (let xx = 0; xx < mw; xx++) {
-          const a = (y * 2 * c.width + xx * 2) * 3, b = a + c.width * 3;
-          const avg = (rgb[a] + rgb[a + 3] + rgb[b] + rgb[b + 3]) / 4;
-          const val = Math.max(0, Math.min(255, Math.round(128 + (avg - 128) * 1.18)));
-          const idx = (y * mw + xx) * 3;
-          md[idx] = md[idx + 1] = md[idx + 2] = val;
-        }
-        this.fine[n] = { name: n, w: c.width, h: c.height, scale: 8, d: rgb, mip: { w: mw, h: mh, scale: 4, d: md } };
-      } catch (e) { /* без мелких фотодеталей */ }
+        // видеокарта берёт саму картинку (яркость считает шейдер); яркость для плиток (js/hires.js) — только когда понадобится
+        const f = { name: n, w, h, scale: 8, img }, data = () => f.lum || (f.lum = TexLib.fineLum(img, w, h));
+        Object.defineProperty(f, 'd', { get: () => data().d }); Object.defineProperty(f, 'mip', { get: () => data().mip });
+        this.fine[n] = f;
+      } catch (e) { /* без мелких фотодеталей */ } finally { done(); }
     };
-    im.onerror = () => {};
-    im.src = `assets/tex/fine/${n}.webp`;
+    const src = `assets/tex/fine/${n}.webp`;
+    // раскодирование — в фоне браузера, как у родных текстур
+    if (typeof createImageBitmap === 'function' && typeof fetch === 'function' && (/^data:/.test(src) || location.protocol !== 'file:')) {
+      fetch(src).then(r => r.ok ? r.blob() : Promise.reject(new Error(r.status))).then(b => createImageBitmap(b)).then(bmp => ready(bmp, bmp.width, bmp.height), () => done());
+    } else {
+      const im = new Image(); im.decoding = 'async';
+      im.onload = () => { const go = () => ready(im, im.naturalWidth, im.naturalHeight); if (im.decode) im.decode().then(go, go); else go(); };
+      im.onerror = () => done(); im.src = src;
+    }
     return null;
+  },
+  fineWait: new Map(),
+  /** яркость фотодеталей (128 = исходный цвет) и её уменьшенная копия с чуть большим контрастом — для плиток */
+  fineLum(img, w, h) {
+    const c = makeCanvas(w, h), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, w, h).data, rgb = new Uint8Array(w * h * 3);
+    for (let i = 0; i < w * h; i++) {
+      const lum = Math.round(d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114);
+      rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = lum;
+    }
+    c.width = c.height = 1;
+    const mw = Math.floor(w / 2), mh = Math.floor(h / 2), md = new Uint8Array(mw * mh * 3);
+    for (let y = 0; y < mh; y++) for (let xx = 0; xx < mw; xx++) {
+      const a = (y * 2 * w + xx * 2) * 3, b = a + w * 3;
+      const avg = (rgb[a] + rgb[a + 3] + rgb[b] + rgb[b + 3]) / 4;
+      const val = Math.max(0, Math.min(255, Math.round(128 + (avg - 128) * 1.18)));
+      const idx = (y * mw + xx) * 3;
+      md[idx] = md[idx + 1] = md[idx + 2] = val;
+    }
+    return { d: rgb, mip: { w: mw, h: mh, scale: 4, d: md } };
   },
   /** A shared in-flight request can be promoted from menu/demo to battle priority. */
   loadOne(n, priority = 'high') {

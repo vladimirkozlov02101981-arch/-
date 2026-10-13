@@ -84,7 +84,7 @@ class HiResTerrain {
           tab[id] = { name: e.name, dx: e.dx, dy: e.dy, k: hi ? hi.w / e.w : 0, nk: low ? nat.k : 0 };
           if (low) { const crop = nativeCrop(nat, tx, ty, e.dx, e.dy); tab[id].crop = crop; transfer.push(crop.d.buffer); }
           if (hi && !wk.hiSent.has(e.name)) { wk.postMessage({ hi }); wk.hiSent.add(e.name); }
-          if (fine && !wk.fineSent.has(e.name)) { wk.postMessage({ fine }); wk.fineSent.add(e.name); }
+          if (fine && !wk.fineSent.has(e.name)) { wk.postMessage({ fine: { name: fine.name, w: fine.w, h: fine.h, scale: fine.scale, d: fine.d, mip: fine.mip } }); wk.fineSent.add(e.name); }
         }
         if (low) {
           // освещение карты в этом пикселе: нарисованный цвет / цвет малой текстуры (то же место, тот же сдвиг)

@@ -390,6 +390,7 @@ const UI = {
   },
   markMap() {
     const id = this.settings ? this.settings.mapId : 'valley';
+    if (MAP_BY_ID[id] && TexLib.prefetchMap) TexLib.prefetchMap(id);   // материалы выбранной карты — заранее, в фоне
     document.querySelectorAll('.map-card').forEach(c => c.classList.toggle('on', c.dataset.map === id));
     const m = MAP_BY_ID[id]; if ($('map-desc')) $('map-desc').textContent = id === 'random' ? 'Одна из восьми карт выбирается при старте боя. Хост и друг получают одно и то же поле.' : m ? `${m.W} × ${m.H} · ${m.desc}` : ''; 
   },

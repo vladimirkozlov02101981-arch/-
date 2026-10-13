@@ -129,16 +129,25 @@ const App = {
     UI.hideScreens(); UI.loading(true, 'Готовим поле боя…');
     this.clearGame(); this.demo = false; Sfx.setSilent(false);
     const epoch = this.sceneEpoch;
+    let natives = null;
     const go = () => {
       if (epoch !== this.sceneEpoch || this.demo) return;
       let g;
       try { g = build(); } catch (e) { console.error(e); UI.loading(false); UI.dialog('Ошибка при создании карты: ' + e.message, () => this.toMenu()); return; }
-      UI.loading(false); done(g); UI.showHud(true);
-      this.foeCam = false;
-      document.getElementById('chat').classList.toggle('hidden', !(this.mode === 'host' || this.mode === 'guest'));
+      const show = () => {
+        if (epoch !== this.sceneEpoch || this.demo) return;
+        if (this.ren && this.ren.prepareTerrain) this.ren.prepareTerrain(g);   // ландшафт и родные текстуры — на видеокарту, пока виден экран загрузки
+        UI.loading(false); done(g); UI.showHud(true);
+        this.foeCam = false;
+        document.getElementById('chat').classList.toggle('hidden', !(this.mode === 'host' || this.mode === 'guest'));
+      };
+      if (natives) natives.then(show); else show();
     };
-    // Строим поле только после его материалов; остальные карты не задерживают запуск.
-    TexLib.loadForMap(mapId, 'high').then(() => setTimeout(go, 40)).catch(e => {
+    // Строим поле только после его материалов; остальные карты не задерживают запуск. Родные текстуры (×4) грузятся
+    // в фоне, пока строится поле: при приближении всё сразу чёткое, без подгрузки
+    const loading = TexLib.loadForMap(mapId, 'high');
+    if (TexLib.preloadNatives) { try { natives = TexLib.preloadNatives(TexLib.mapAssets(mapId).names); } catch (e) { natives = null; } }
+    loading.then(() => setTimeout(go, 40)).catch(e => {
       if (epoch !== this.sceneEpoch) return;
       UI.loading(false); UI.dialog('Не удалось загрузить поле боя: ' + e.message, () => this.toMenu());
     });
@@ -366,7 +375,7 @@ const App = {
     if (!this.sc || this.demo) return;
     if (Keys.hit('binoc')) { this.cam.binoc = !this.cam.binoc; if (this.cam.binoc) UI.setTray(false); else this.cam.free = 0; }
     if (Keys.hit('camera')) {
-      this.cam.binoc = false; this.cam.free = 0; this.cam.mapZoom = null; this.cam.userZ = null; this.cam.hold = false; this.cam.offsetX = this.cam.offsetY = 0; this.cam.manualActive = false;
+      this.cam.binoc = false; this.cam.free = 0; this.cam.mapZoom = null; this.cam.zoomPark = null; this.cam.userZ = null; this.cam.hold = false; this.cam.offsetX = this.cam.offsetY = 0; this.cam.manualActive = false;
       if (this.ctl && this.ctl.scopePoint) {
         const s = this.sc.soldiers.find(o => o.id === this.sc.turn.sid);
         this.cam.scopeFocus = null; if (s) this.cam.cut(this.sc, this.fx, s, this.ren.sw, this.ren.sh);
