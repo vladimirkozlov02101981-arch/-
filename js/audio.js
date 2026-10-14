@@ -168,11 +168,13 @@ const Sfx = (() => {
   /* ---------- настоящие записи (CC0, assets/sfx) поверх той же пространственной цепочки ---------- */
   const R4 = (p) => [0, 1, 2, 3].map(i => p + i);
   const REAL = {
-    shot: { f: ['shot1', 'shot2', 'shot3'], v: 0.8, r: [0.94, 1.08] },
-    revolver: { f: ['revolver1', 'revolver2'], v: 0.9, r: [0.96, 1.04] },
-    sniper: { f: ['sniper1', 'sniper2'], v: 1, r: [0.88, 0.96] },
-    shotgun: { f: ['shotgun1', 'shotgun2'], v: 1, r: [0.95, 1.03] },
-    autocannon: { f: ['cannon1', 'cannon2'], v: 0.9, r: [1.08, 1.2] },
+    // настоящее оружие (Sonniss: M3, HK416; S&W M29 .44, Colt Python .357; СВД, Barrett .338, Lynx .50; Saiga-12, Remington 870,
+    // 12 калибр; автопушка MK44) — высота почти без подстройки, разброс дублей и тембра — как у живых выстрелов
+    shot: { f: ['shot1', 'shot2', 'shot3', 'shot4'], v: 0.8, r: [0.97, 1.03] },
+    revolver: { f: ['revolver1', 'revolver2', 'revolver3'], v: 0.9, r: [0.97, 1.03] },
+    sniper: { f: ['sniper1', 'sniper2', 'sniper3'], v: 1, r: [0.97, 1.02] },
+    shotgun: { f: ['shotgun1', 'shotgun2', 'shotgun3'], v: 1, r: [0.97, 1.03] },
+    autocannon: { f: ['cannon1', 'cannon2'], v: 0.9, r: [0.97, 1.04] },
     launch: { f: ['launch1', 'launch2'], v: 0.75, r: [0.95, 1.05] },
     small: { f: ['small1', 'boom1', 'boom2'], v: 0.5, r: [1.15, 1.3] },
     bounce: { f: ['bounce1', 'bounce2'], v: 0.14, r: [0.9, 1.1], o: 0.1 },
@@ -202,7 +204,7 @@ const Sfx = (() => {
     return fetch(`assets/sfx/${n}.ogg`).then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => ac.decodeAudioData(b)).then(buf => { let pk = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i += 2) pk = Math.max(pk, Math.abs(d[i])); } return (buffers[n] = { buf, norm: clamp(0.9 / (pk || 1), 0.4, 6) }); });
   }
   /* настоящие разрывы (Sonniss GDC 2026, фейерверочные заряды вблизи) вперемешку с прежними записями; крупные — ниже и с хвостом */
-  const BOOM_S = ['boom1', 'boom2', 'boom4', 'boom5', 'boom6', 'boom7'], BOOM_L = ['boom3', 'boom4', 'boom8', 'boom9'];
+  const BOOM_S = ['boom10', 'boom5', 'boom6', 'boom7', 'boom10', 'boom2'], BOOM_L = ['boom11', 'boom12', 'boom8', 'boom9', 'boom3'];   // настоящие взрывы чаще
   let lastNuke = -9;
   function sample(n, pos, vol, rate = 1, offset = 0) {
     const e = buffers[n]; if (!e) return false; const b = e.buf;   // громкость выровнена по пику записи

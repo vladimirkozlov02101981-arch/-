@@ -30,7 +30,26 @@
 | amb_city | City, Madrid, Soft Traffic and Human Activity | Sonik Sound Library — Urban Life |
 | amb_space | Roomtone Space Ship Interior Muted | Cinematic Sound Design — Sci-Fi Drones |
 | boom5–9 | Fireworks, powerful explosions, near | Ivo Vicic — Fireworks FX |
-| nukeboom | Effective Trailer Booms Vol. 2 — 011 | Federico Soler |
 | ice0–1 | ice block snapping, surface cracking | Alexander Kopeikin — 100 kHz Designed Ice |
 
 В игре записи проходят через пространственную обработку `js/audio.js`: стереопанораму, затухание с расстоянием, приглушение препятствиями и реверберацию. К взрывам добавляется синтезированный низкочастотный удар. Если запись не загрузилась, используется процедурный синтез.
+
+## Прошлые наборы Sonniss GDC (2016, 2020, 2024) — оружие и взрывы
+
+Те же условия лицензии (без указания авторства, не распространять записи отдельно). Нарезка — `dev/tools/guns_make.py`.
+
+| Файлы | Запись | Автор |
+|---|---|---|
+| shot1–3 | M3 Grease Gun, single shots | Super Thump — M3 Grease Gun Recorded Source (2020) |
+| shot4 | H&K 416 5.56, single shot | Audiobeast — The London Warehouse Firearms Library (2016) |
+| revolver1–2 | Smith & Wesson M29 .44 Magnum | Pole Position Production (2016) |
+| revolver3 | Colt Python .357 Magnum | Pole Position Production (2024) |
+| sniper1 | SVD Dragunov 7.62×54R | Dramatic Cat (2024) |
+| sniper2 | Barrett M98B .338 Lapua | Pole Position Production (2016) |
+| sniper3, cannon2 | Lynx .50 Cal | Pole Position Production (2024) |
+| shotgun1 | Saiga-12 | Dramatic Cat (2024) |
+| shotgun2 | Remington 870 12g | Audiobeast (2016) |
+| shotgun3 | 12 Gauge Shotgun, slug | TS Sound (2016) |
+| cannon1 | Automatic Cannon MK44 | Fascinated Sound — The Gun Locker (2016) |
+| boom10, nukeboom | Medium Realistic Explosion 15, Nuclear Explosion 07 | David Dumais — Explosion SFX Pack (2024) |
+| boom11–12 | BigExplosion02, DeepExplosion02 | Stefano Cremona — Explosions (2020) |
