@@ -1483,8 +1483,16 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     if (!(cm === 1 || cm === 2 || cm === 9 || cm === 7)) continue;
     if (T.back && T.back[Math.min(T.H - 1, y + 2) * W + x] >= 3) continue;   // под перекрытиями построек — без корней, лиан и сталактитов
     if (kind === 'roots' && cm === 1 && rng() < 0.035) {
-      const len = 6 + rng() * 18; c.strokeStyle = rng() < 0.5 ? '#5a3a22' : '#6e4a2c'; c.lineWidth = 1.2 + rng() * 0.9; c.lineCap = 'round';
-      c.beginPath(); c.moveTo(x, y); c.bezierCurveTo(x + (rng() - 0.5) * 8, y + len * 0.4, x + (rng() - 0.5) * 8, y + len * 0.7, x + (rng() - 0.5) * 6, y + len); c.stroke();
+      const len = 6 + rng() * 18, RT = ['roots1', 'roots2', 'roots3'].map((n) => TexLib.data[n]).filter(Boolean);
+      if (RT.length) {   // корни из Blender (сужающиеся плети с отростками) — чёткие при приближении; случайных чисел столько же
+        const i2 = (rng() * RT.length) | 0, flip = rng() < 0.5, D = (len + 8) * 1.15; rng(); rng(); rng(); rng(); rng();
+        const R = RT[i2]; if (surface) { surface.sprite(R.canvas, ['roots1', 'roots2', 'roots3'].find((n) => TexLib.data[n] === R)); anchor(x, y - 1); }
+        cs.save(); cs.translate(x, y - 1); if (flip) cs.scale(-1, 1); cs.drawImage(R.canvas, -D / 2, 0, D, D); cs.restore();
+        if (surface) anchor(null);
+      } else {
+        c.strokeStyle = rng() < 0.5 ? '#5a3a22' : '#6e4a2c'; c.lineWidth = 1.2 + rng() * 0.9; c.lineCap = 'round';
+        c.beginPath(); c.moveTo(x, y); c.bezierCurveTo(x + (rng() - 0.5) * 8, y + len * 0.4, x + (rng() - 0.5) * 8, y + len * 0.7, x + (rng() - 0.5) * 6, y + len); c.stroke();
+      }
     } else if (kind === 'vines' && TexLib.data.ivy) {
       // лианы — плети плюща из Blender (тот же лист, что на кладке), с промежутками
       if (x - lastX < 16 || rng() > 0.05) continue;

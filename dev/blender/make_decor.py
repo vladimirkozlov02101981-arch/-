@@ -775,6 +775,103 @@ def leaf(name, seed, col, lobes, serr):
     o = obj(name, me, m, sc); o.rotation_euler = (0, rng.uniform(-0.5, 0.5), 0)
     return sc
 
+
+def roots(name, seed):
+    """корни, свисающие со свода пещеры: 4–8 сужающихся плетей с изгибами и тонкими отростками, кора с землёй;
+    верх — у верхнего края кадра (там свод)"""
+    sc, rng = scene(32, ((1.0, 0.95, 0.88), 4.0), seed)
+    cu = bpy.data.curves.new(name, 'CURVE'); cu.dimensions = '3D'; cu.bevel_depth = 0.55 * U; cu.bevel_resolution = 3; cu.use_fill_caps = True
+    top = 29.6
+    def strand(x, z, L, r0, depth):
+        sp = cu.splines.new('NURBS'); n = 10; sp.points.add(n - 1); px, py, pz = x, rng.uniform(-1, 1), z; dx = rng.uniform(-0.3, 0.3)
+        pts = []
+        for k in range(n):
+            t = k / (n - 1); sp.points[k].co = (px * U, py * U, pz * U, 1); sp.points[k].radius = r0 * (1 - 0.85 * t) + 0.05
+            pts.append((px, pz, t)); dx = max(-0.7, min(0.7, dx + rng.uniform(-0.35, 0.35)))
+            px += dx * L / n; pz -= L / n * rng.uniform(0.8, 1.0); py += rng.uniform(-0.3, 0.3)
+        sp.use_endpoint_u = True; sp.order_u = 4
+        if depth < 2:
+            for (qx, qz, t) in pts[2:-2]:
+                if rng.random() < 0.35: strand(qx, qz, L * rng.uniform(0.2, 0.45) * (1 - t), r0 * 0.4, depth + 1)
+    for _ in range(rng.randint(4, 8)): strand(rng.gauss(0, 3.5), top, rng.uniform(12, 28), rng.uniform(0.6, 1.2), 0)
+    m, nt, b = mt.principled('root', 0.8, 0.2); N, Lk = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 160; nz.inputs['Detail'].default_value = 8; Lk.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements; E[0].color = (*mt.lin((0.20, 0.13, 0.08)), 1); E[1].color = (*mt.lin((0.46, 0.32, 0.20)), 1)
+    Lk.new(nz.outputs['Fac'], ramp.inputs['Fac']); Lk.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.5; Lk.new(nz.outputs['Fac'], bu.inputs['Height']); Lk.new(bu.outputs['Normal'], b.inputs['Normal'])
+    cu.materials.append(m); o = bpy.data.objects.new(name, cu); o['tone'] = 0.0; sc.collection.objects.link(o)
+    return sc
+
+
+def cottage(name, seed):
+    """домик долины: фахверк (белёная штукатурка, тёмные балки с раскосами), каменный цоколь, двускатная черепичная крыша
+    фронтоном к зрителю, дощатая дверь, окно с тёплым светом, каменная труба"""
+    sc, rng = scene(100, ((1.0, 0.93, 0.82), 4.8), seed)
+    def box(bm, x0, x1, y0, y1, z0, z1):
+        bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation(Vector(((x0 + x1) / 2 * U, (y0 + y1) / 2 * U, (z0 + z1) / 2 * U))) @ Matrix.Diagonal(Vector(((x1 - x0) * U, (y1 - y0) * U, (z1 - z0) * U, 1))))
+    def part(nm, bm, mat):
+        me = bpy.data.meshes.new(name + nm); bm.to_mesh(me); bm.free(); o = obj(name + nm, me, mat, sc)
+        for p in me.polygons: p.use_smooth = False
+        return o
+    # материалы
+    plaster, nt, b = mt.principled('plaster', 0.85, 0.2); N, L = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 22; nz.inputs['Detail'].default_value = 12; nz.inputs['Roughness'].default_value = 0.65; L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    rp = N.new('ShaderNodeValToRGB'); rp.color_ramp.elements[0].position = 0.35; rp.color_ramp.elements[0].color = (*mt.lin((0.62, 0.56, 0.46)), 1); rp.color_ramp.elements[1].color = (*mt.lin((0.90, 0.85, 0.75)), 1)
+    L.new(nz.outputs['Fac'], rp.inputs['Fac']); L.new(rp.outputs['Color'], b.inputs['Base Color'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.35; L.new(nz.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    timber = mat_col('timber', (0.24, 0.15, 0.08), 0.75, 0.2, 0.5, 120)
+    stone = mat_col('stone', (0.50, 0.47, 0.42), 0.9, 0.15, 0.9, 25)
+    door = mat_col('door', (0.36, 0.22, 0.11), 0.7, 0.2, 0.6, 40)
+    roof, nt, b = mt.principled('roof', 0.8, 0.2); N, L = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); wv = N.new('ShaderNodeTexWave'); wv.inputs['Scale'].default_value = 28; wv.inputs['Distortion'].default_value = 0.6; L.new(tc.outputs['Object'], wv.inputs['Vector'])
+    br = N.new('ShaderNodeTexBrick'); br.inputs['Scale'].default_value = 26; br.inputs['Mortar Size'].default_value = 0.03; L.new(tc.outputs['Object'], br.inputs['Vector'])
+    br.inputs['Color1'].default_value = (*mt.lin((0.50, 0.24, 0.13)), 1); br.inputs['Color2'].default_value = (*mt.lin((0.38, 0.19, 0.11)), 1); br.inputs['Mortar'].default_value = (*mt.lin((0.15, 0.09, 0.06)), 1)
+    L.new(br.outputs['Color'], b.inputs['Base Color'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.6; L.new(br.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    glass, nt, b = mt.principled('glass', 0.3, 0.5); b.inputs['Base Color'].default_value = (*mt.lin((1.0, 0.75, 0.40)), 1)
+    for key in ('Emission Color', 'Emission'):
+        if key in b.inputs: b.inputs[key].default_value = (*mt.lin((1.0, 0.72, 0.35)), 1); break
+    if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = 2.5
+    # стены, цоколь, фронтон
+    bm = bmesh.new(); box(bm, -38, 38, -18, 18, 4, 40)
+    vs = [bm.verts.new((x * U, y * U, z * U)) for (x, y, z) in ((-38, -18, 40), (38, -18, 40), (0, -18, 64), (-38, 18, 40), (38, 18, 40), (0, 18, 64))]
+    bm.faces.new((vs[0], vs[1], vs[2])); bm.faces.new((vs[5], vs[4], vs[3]))
+    part('_w', bm, plaster)
+    bm = bmesh.new(); box(bm, -40, 40, -20, 20, -3, 4)
+    for (x0, x1, y0, z0, z1) in ((24, 31, -4, 48, 76),): box(bm, x0, x1, y0, y0 + 7, z0, z1)
+    part('_s', bm, stone)
+    # балки фахверка на фасаде (и на фронтоне)
+    bm = bmesh.new(); f0, f1 = -19.2, -18.0
+    for z in (4, 21, 39): box(bm, -38.5, 38.5, f0, f1, z, z + 2)
+    for x in (-38, -27.5, -10, 2, 24, 37): box(bm, x - 0.9, x + 0.9, f0, f1, 4, 41)
+    def beam(xa, za, xb, zb, w=0.9):
+        d = Vector((xb - xa, 0, zb - za)); l = d.length; a = math.atan2(d.z, d.x)
+        bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation(Vector(((xa + xb) / 2 * U, (f0 + f1) / 2 * U, (za + zb) / 2 * U))) @ Matrix.Rotation(-a, 4, 'Y') @ Matrix.Diagonal(Vector((l * U, (f1 - f0) * U, w * 2 * U, 1))))
+    beam(-10, 21, 2, 39); beam(24, 21, 37, 39); beam(-38, 41, 0, 63.5, 1.1); beam(38, 41, 0, 63.5, 1.1); beam(0, 41, 0, 63); beam(-19, 41, 0, 52); beam(19, 41, 0, 52)
+    part('_t', bm, timber)
+    # крыша: два ската с вылетом, толщина 2
+    bm = bmesh.new()
+    for sgn in (-1, 1):
+        p = [(0, 67), (sgn * 47, 35)]; th = 2.2
+        q = [bm.verts.new((x * U, y * U, z * U)) for y in (-24, 24) for (x, z) in (p[0], p[1], (p[1][0], p[1][1] - th), (p[0][0], p[0][1] - th))]
+        for f in ((0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)):
+            bm.faces.new([q[i] for i in (f if sgn > 0 else f[::-1])])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    part('_r', bm, roof)
+    bm = bmesh.new(); box(bm, -27, -13, -19.6, -18, 4, 27); part('_d', bm, door)
+    bm = bmesh.new(); box(bm, 7, 21, -18.6, -18, 15, 27); part('_g', bm, glass)
+    bm = bmesh.new(); box(bm, 6, 22, -19.8, -18.4, 14, 15.2); box(bm, 6, 22, -19.8, -18.4, 26.8, 28); box(bm, 6, 7.2, -19.8, -18.4, 14, 28); box(bm, 20.8, 22, -19.8, -18.4, 14, 28); box(bm, 13.4, 14.6, -19.8, -18.4, 14, 28); box(bm, 5, 23, -21, -18.4, 13, 14.2)
+    part('_f', bm, timber)
+    # вид на три четверти сверху: сначала поворот вокруг вертикали, потом наклон к зрителю — вертикали остаются вертикальными;
+    # дом ставится в кадр по габаритам (основание — на земле, по центру)
+    parts = [o for o in sc.collection.objects if o.name.startswith(name)]
+    for o in parts: o.rotation_mode = 'ZXY'; o.rotation_euler = (math.radians(9), 0, math.radians(-30)); o.scale = (0.86, 0.86, 0.86)
+    bpy.context.view_layer.update()
+    pts = [o.matrix_world @ Vector(c) for o in parts for c in o.bound_box]
+    x0, x1, z0 = min(p.x for p in pts), max(p.x for p in pts), min(p.z for p in pts)
+    for o in parts: o.location = (-(x0 + x1) / 2, 0, -z0 - 0.5 * U)
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -798,6 +895,8 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'flower3': (lambda n, s: wildflowers(n, s, 'daisy'), 153, 28), 'flower4': (lambda n, s: wildflowers(n, s, 'cornflower'), 154, 28),
     'leaf1': (lambda n, s: leaf(n, s, (0.33, 0.55, 0.15), 3.5, False), 161, 8), 'leaf2': (lambda n, s: leaf(n, s, (0.88, 0.70, 0.16), 0, True), 162, 8),
     'leaf3': (lambda n, s: leaf(n, s, (0.86, 0.40, 0.11), 2.5, False), 163, 8), 'leaf4': (lambda n, s: leaf(n, s, (0.55, 0.47, 0.22), 0, True), 164, 8),
+    'roots1': (roots, 171, 32), 'roots2': (roots, 172, 32), 'roots3': (roots, 173, 32),
+    'cottage1': (cottage, 181, 100),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
 

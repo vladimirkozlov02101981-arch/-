@@ -254,7 +254,8 @@ const DECOR = {
     c.fillStyle = '#e8b04a'; circ(c, x + 4 * s, y - 13 * s, 1.2 * s);
     for (const wx of [x - 38 * s, x + 26 * s]) { c.fillStyle = '#ffdb8a'; c.fillRect(wx, y - 38 * s, 13 * s, 12 * s); c.strokeStyle = '#6b4226'; c.lineWidth = 1.5 * s; c.strokeRect(wx, y - 38 * s, 13 * s, 12 * s); c.beginPath(); c.moveTo(wx + 6.5 * s, y - 38 * s); c.lineTo(wx + 6.5 * s, y - 26 * s); c.stroke(); }
   },
-  cottage(c, g, x, y, s) {
+  cottage(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['cottage1'], x, y, s, r, 100)) return;   // фахверковый домик из Blender (вид на три четверти) — чёткий при приближении
     const w = 76 * s, wh = 38 * s, rh = 28 * s;
     c.fillStyle = hgrad(c, x - w / 2, x + w / 2, ['#d9c7a8', '#c4ae8a', '#9a8464']); c.fillRect(x - w / 2, y - wh, w, wh + 5);
     c.fillStyle = '#7a6a5a'; c.fillRect(x + 17 * s, y - 62 * s, 10 * s, 24 * s);
