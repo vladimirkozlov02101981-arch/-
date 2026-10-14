@@ -95,7 +95,7 @@ class AISearch {
       if (avail('lightning') && !own(ex, 80)) this.consider({ w: 'lightning', aim: s.aim, pw: 1, tx: ex - g.turn.wind * 1.0, ty: ey, score: 30 + kb(38) - 12 });
       if (avail('orbital') && !own(ex, 90)) this.consider({ w: 'orbital', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 38 + kb(45) - 12 });
       if (avail('homing') && dist > 250) this.consider({ w: 'homing', aim: -Math.PI / 2 + (ex > s.x ? 0.5 : -0.5), pw: 0.65, tx: ex, ty: ey, score: 36 + kb(45) - 10 });
-      if (avail('nuke')) { const n = this.enemies.filter(o => Math.hypot(o.x - ex, o.y - e.y) < 140).length; if (n >= 2 && !own(ex, 230)) this.consider({ w: 'nuke', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 60 * n }); }
+      if (avail('nuke')) { const n = this.enemies.filter(o => Math.hypot(o.x - ex, o.y - e.y) < 260).length; if (n >= 2 && !own(ex, 400)) this.consider({ w: 'nuke', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 60 * n }); }
     }
   }
 }

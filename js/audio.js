@@ -9,6 +9,7 @@ const Sfx = (() => {
   let enabled = true;
   try { enabled = localStorage.getItem('tw_sound') !== '0'; } catch (e) { /* нет доступа */ }
   const listener = { x: 0, y: 0, z: 1, w: 1600 };
+  const SOUND_PX = 5700;   // скорость звука в пикселях карты в секунду (343 м/с при ~6 см на пиксель)
   const last = {};
   const minGap = { footstep: .09, metalImpact: .02, stoneImpact: .02, woodImpact: .02, bounce: 0.05, shot: 0.03, flame: 0.12, jet: 0.09, tick: 0.2, hurt: 0.08, land: 0.08, beep: 0.1, dig: 0.07, explosion: 0.02 };
   let charge = null, ambient = null;
@@ -51,8 +52,8 @@ const Sfx = (() => {
       v*=Math.pow(.9,blocked);
     }
     g.gain.value=v;
-    const filter=ac.createBiquadFilter();filter.type='lowpass';filter.frequency.value=clamp(16000/(1+distance/1000+blocked*1.8),600,16000);
-    const delay=ac.createDelay(.5);delay.delayTime.value=Math.min(.38,distance/12000);
+    const filter=ac.createBiquadFilter();filter.type='lowpass';filter.frequency.value=clamp(16000/(1+distance/700+blocked*1.8),500,16000);   // воздух гасит высокие частоты вдали
+    const delay=ac.createDelay(1);delay.delayTime.value=Math.min(.6,distance/SOUND_PX);   // звук идёт со скоростью звука: дальний взрыв слышен позже вспышки
     const panNode=ac.createStereoPanner();panNode.pan.value=pan;
     g.connect(filter);filter.connect(delay);delay.connect(panNode);panNode.connect(master);
     const wet=ac.createGain();wet.gain.value=pos ? .16+Math.min(.12,distance/12000) : .025;
@@ -210,8 +211,9 @@ const Sfx = (() => {
       const size = clamp(arg || 1, 0.6, 3), n = pick(size > 1.6 ? ['boom3', 'boom4', 'boom1'] : ['boom1', 'boom2', 'boom4']);
       if (!sample(n, pos, 1.5 + size * 0.45, rr([0.84, 0.98]) / Math.sqrt(Math.max(1, size * 0.8)), n === 'boom3' ? 0.45 : 0)) return false;
       const t = ac.currentTime, d = out(pos, 1.0 + size * 0.3); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.9 }); noise(d, t, 0.9 + size * 0.5, { f0: 700, f1: 60, gain: 0.55 });   // удар и рокот — взрыв заметно громче любого стука
-      // эхо от рельефа: приглушённый повтор через четверть-полсекунды
-      setTimeout(() => { if (ac) sample(n, pos ? { x: pos.x, y: pos.y - 200 } : null, 0.22 + size * 0.06, 0.8); }, 250 + Math.random() * 200);
+      // эхо — от настоящих стен рельефа вокруг взрыва (скалы, стены зданий, своды пещер): задержка — путь до стены и обратно
+      // со скоростью звука, дальние отражения тише и глуше; в открытом поле — одно далёкое отражение от горизонта
+      for (const e of echoes(pos, size)) setTimeout(() => { if (ac) sample(n, e.p, e.v, e.r); }, e.ms);
       // осыпание: мелкие камешки падают ещё около секунды
       if (pos) for (let i = 0, k = 3 + Math.round(size * 2); i < k; i++) setTimeout(() => { if (ac) sample(pick(R4('stone')), { x: pos.x + (Math.random() - 0.5) * 120, y: pos.y }, 0.08 + Math.random() * 0.06, rr([1.3, 1.8])); }, 450 + i * 160 + Math.random() * 150);
       return true;
@@ -230,6 +232,85 @@ const Sfx = (() => {
     return ok;
   }
   let lastStep = '';
+  /** отражения взрыва: ближайшая стена слева, справа и над взрывом (в пещере), не дальше 1600 px */
+  function echoes(pos, size) {
+    const out = [];
+    if (!pos || !scene || !scene.terrain) return [{ p: null, v: 0.2 + size * 0.05, r: 0.8, ms: 280 + Math.random() * 160 }];
+    const T = scene.terrain, y = pos.y - 40;
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1]]) {
+      let d = 60; for (; d < 1600; d += 20) if (T.isSolid(pos.x + dx * d, y + dy * d)) break;
+      if (d >= 1600) continue;
+      const ms = 2 * d / SOUND_PX * 1000;
+      if (ms < 40) continue;   // стена вплотную — отражение сливается со взрывом
+      out.push({ p: { x: pos.x + dx * d, y: y + dy * d }, v: (0.34 + size * 0.07) / (1 + d / 520), r: 0.82 - Math.min(0.12, d / 9000), ms });
+    }
+    if (!out.length) out.push({ p: { x: pos.x, y: pos.y - 300 }, v: 0.12 + size * 0.04, r: 0.78, ms: 420 + Math.random() * 260 });
+    return out;
+  }
+  /* ---------- непрерывные звуки в полёте: гул двигателя ракеты, свист мины и бомбы, самолёт; высота — эффект Доплера ---------- */
+  const LOOPS = {
+    rocket: { band: [900, 0.8], rum: 220, g: 0.16 }, homing: { band: [1100, 0.9], rum: 240, g: 0.14 }, drill: { band: [700, 0.7], rum: 180, g: 0.14 },
+    mini: { band: [1300, 1], rum: 260, g: 0.08 }, nukem: { band: [520, 0.6], rum: 120, g: 0.3 }, jet: { band: [700, 0.5], rum: 140, g: 0.32, wide: true },
+    plasma: { hum: 180, g: 0.07 }, mortar: { whistle: [2400, 900], g: 0.05 }, bomb: { whistle: [1900, 700], g: 0.05 },
+  };
+  const voices = new Map(), whizzed = new Set();
+  function voice(L) {
+    const g = ac.createGain(); g.gain.value = 0.0001;
+    const pan = ac.createStereoPanner(); const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 12000;
+    g.connect(lp); lp.connect(pan); pan.connect(master);
+    const wet = ac.createGain(); wet.gain.value = 0.12; pan.connect(wet); wet.connect(reverb);
+    const v = { g, pan, lp, wet, nodes: [] };
+    if (L.band || L.rum) {
+      const src = ac.createBufferSource(); src.buffer = noiseBuf; src.loop = true; src.start(0, Math.random() * 1.5);
+      if (L.band) { const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = L.band[0]; bp.Q.value = L.band[1]; src.connect(bp); bp.connect(g); v.bp = bp; v.bp0 = L.band[0]; v.nodes.push(bp); }
+      if (L.rum) { const lo = ac.createBiquadFilter(); lo.type = 'lowpass'; lo.frequency.value = L.rum; const lg = ac.createGain(); lg.gain.value = 1.6; src.connect(lo); lo.connect(lg); lg.connect(g); v.lo = lo; v.lo0 = L.rum; v.nodes.push(lo, lg); }
+      v.nodes.push(src); v.src = src;
+    }
+    if (L.hum) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = L.hum; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = L.hum * 3; o.connect(f); f.connect(g); o.start(); v.osc = o; v.osc0 = L.hum; v.nodes.push(o, f); }
+    if (L.whistle) { const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = L.whistle[0]; o.connect(g); o.start(); v.osc = o; v.whistle = L.whistle; v.nodes.push(o); }
+    return v;
+  }
+  function stopVoice(v) {
+    try { v.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.04); } catch (e) { /* */ }
+    setTimeout(() => { for (const n of v.nodes) { try { if (n.stop) n.stop(); } catch (e) { /* */ } try { n.disconnect(); } catch (e) { /* */ } } for (const n of [v.g, v.lp, v.pan, v.wet]) try { n.disconnect(); } catch (e) { /* */ } }, 300);
+  }
+  /** каждый кадр: летящие снаряды звучат там, где они сейчас; приближаясь — выше, удаляясь — ниже (Доплер);
+      пуля, пролетевшая рядом с камерой, — короткий свист */
+  function track(list, dt) {
+    if (!ac || ac.state !== 'running' || silent || !enabled) { if (voices.size) { for (const v of voices.values()) stopVoice(v); voices.clear(); } return; }
+    const now = ac.currentTime, seen = new Set();
+    for (const e of list || []) {
+      if (!e || e.dead) continue;
+      if (e.k === 'bullet') {
+        if (!whizzed.has(e.id)) { const d = Math.hypot(e.x - listener.x, (e.y - listener.y) * 0.65), lim = 240 / Math.max(0.4, listener.z); if (d < lim && d > 60) { whizzed.add(e.id); whizz({ x: e.x, y: e.y }, d / lim); } }
+        continue;
+      }
+      const L = LOOPS[e.k]; if (!L) continue;
+      seen.add(e.id); let v = voices.get(e.id);
+      if (!v) { v = voice(L); v.px = e.x; v.py = e.y; voices.set(e.id, v); }
+      const vx = Number.isFinite(e.vx) ? e.vx : dt > 0 ? (e.x - v.px) / dt : 0, vy = Number.isFinite(e.vy) ? e.vy : dt > 0 ? (e.y - v.py) / dt : 0; v.px = e.x; v.py = e.y;
+      const dx = e.x - listener.x, dy = e.y - listener.y, dist = Math.hypot(dx, dy * 0.65) || 1;
+      const vr = (vx * dx + vy * dy) / dist, dop = clamp(SOUND_PX / (SOUND_PX + vr), 0.55, 1.8);
+      const att = 1 / Math.sqrt(1 + (dist / (L.wide ? 1400 : 650)) ** 2);
+      v.g.gain.setTargetAtTime(Math.max(0.0001, L.g * att), now, 0.05);
+      v.pan.pan.setTargetAtTime(clamp(dx / (listener.w / Math.max(0.4, listener.z) * 0.7), -0.92, 0.92), now, 0.05);
+      v.lp.frequency.setTargetAtTime(clamp(16000 / (1 + dist / 700), 500, 16000), now, 0.05);
+      if (v.bp) v.bp.frequency.setTargetAtTime(v.bp0 * dop, now, 0.04);
+      if (v.lo) v.lo.frequency.setTargetAtTime(v.lo0 * dop, now, 0.04);
+      if (v.whistle) {   // свист падающей мины/бомбы: чем ниже и быстрее падает, тем ниже тон
+        const fall = clamp(vy / 700, 0, 1); v.osc.frequency.setTargetAtTime((v.whistle[0] + (v.whistle[1] - v.whistle[0]) * fall) * dop, now, 0.05);
+        v.g.gain.setTargetAtTime(Math.max(0.0001, L.g * att * (0.3 + 0.7 * fall)), now, 0.08);
+      } else if (v.osc) v.osc.frequency.setTargetAtTime(v.osc0 * dop, now, 0.04);
+    }
+    for (const [id, v] of voices) if (!seen.has(id)) { stopVoice(v); voices.delete(id); }
+    if (whizzed.size > 400) whizzed.clear();
+  }
+  /** свист пули рядом: короткая полоса шума, сползающая вниз (сверхзвуковой хлопок у быстрых пуль) */
+  function whizz(pos, k) {
+    const t = ac.currentTime, out1 = out(pos, 0.35 * Math.max(0.1, 1 - k));   // k — доля расстояния до границы слышимого свиста
+    noise(out1, t, 0.11, { type: 'bandpass', f0: 4200, f1: 1600, q: 2.2, gain: 0.5, attack: 0.004 });
+    noise(out1, t, 0.012, { type: 'highpass', f0: 5000, gain: 0.3, attack: 0.0008 });
+  }
   const CASINGS = new Set(['shot', 'revolver', 'sniper', 'shotgun', 'autocannon']);
   let silent = false;
   function setSilent(v) { silent = !!v; if (silent) chargeStop(); }
@@ -252,24 +333,82 @@ const Sfx = (() => {
     if (!charge) return; const c = charge; charge = null;
     try { c.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.02); c.osc.stop(ac.currentTime + 0.1); } catch (e) { /* */ }
   }
-  /* фоновая атмосфера карты */
+  /* фоновая атмосфера карты: несколько живых слоёв, огибающие меняются случайно (порывы, волны), а не по кругу */
   function setAmbient(kind) {
     stopAmbient();
     if (!ac || !kind) return;
-    const src = ac.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
-    const f = ac.createBiquadFilter(); f.type = 'lowpass';
-    const g = ac.createGain(); g.gain.value = 0.0001;
-    const conf = { wind: [380, 0.05], lava: [160, 0.1], snow: [650, 0.06], space: [250, 0.04], sea: [500, 0.06] }[kind] || [400, 0.04];
-    f.frequency.value = conf[0];
-    const lfo = ac.createOscillator(); lfo.frequency.value = 0.13; const lg = ac.createGain(); lg.gain.value = conf[0] * 0.5;
-    lfo.connect(lg); lg.connect(f.frequency); lfo.start();
-    src.connect(f); f.connect(g); g.connect(master); src.start();
-    g.gain.exponentialRampToValueAtTime(conf[1], ac.currentTime + 2);
-    ambient = { src, g, lfo };
+    const bus = ac.createGain(); bus.gain.value = 0.0001; bus.connect(master);
+    const A = { g: bus, nodes: [], timers: [], alive: true }; ambient = A;
+    const R = (a, b) => a + Math.random() * (b - a);
+    const src = () => { const n = ac.createBufferSource(); n.buffer = noiseBuf; n.loop = true; n.start(0, Math.random() * 1.9); A.nodes.push(n); return n; };
+    const filt = (type, f, q = 0.7) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; A.nodes.push(b); return b; };
+    const gain = (v) => { const g = ac.createGain(); g.gain.value = v; A.nodes.push(g); return g; };
+    const later = (ms, fn) => { const id = setTimeout(() => { if (A.alive && ambient === A) fn(); }, ms); A.timers.push(id); };
+    /** параметр бродит к случайным значениям: каждые tmin–tmax с — новое значение, плавно */
+    const wander = (param, lo, hi, tmin, tmax) => { const step = () => { const d = R(tmin, tmax); param.setTargetAtTime(R(lo, hi), ac.currentTime, d * 0.45); later(d * 1000, step); }; step(); };
+    const layer = (type, f, q, g0, to = bus) => { const n = src(), b = filt(type, f, q), g = gain(g0); n.connect(b); b.connect(g); g.connect(to); return { b, g }; };
+    switch (kind) {
+      case 'wind': {   // долина, каньон, замки, город: низкий гул ветра и свист в порывах
+        const lo = layer('lowpass', 320, 0.6, 0.04); wander(lo.g.gain, 0.015, 0.075, 1.2, 3.5); wander(lo.b.frequency, 220, 520, 2, 5);
+        const hi = layer('bandpass', 900, 2.5, 0.006); wander(hi.g.gain, 0.0005, 0.012, 1, 3); wander(hi.b.frequency, 600, 1500, 1.5, 4);
+        const leaves = layer('highpass', 3500, 0.5, 0.004); wander(leaves.g.gain, 0.0005, 0.007, 0.6, 2);
+        break;
+      }
+      case 'snow': {   // арктика: вой метели — узкая полоса, плывущая по высоте, и плотный низкий ветер
+        const lo = layer('lowpass', 400, 0.6, 0.05); wander(lo.g.gain, 0.025, 0.09, 1.5, 4);
+        const howl = layer('bandpass', 520, 7, 0.02); wander(howl.b.frequency, 330, 880, 2.5, 6); wander(howl.g.gain, 0.004, 0.035, 2, 5);
+        const hiss = layer('highpass', 4200, 0.6, 0.006); wander(hiss.g.gain, 0.001, 0.01, 0.8, 2.5);
+        break;
+      }
+      case 'sea': {   // пиратская бухта: накат волн (подъём-спад 5–9 с) и шипение пены на гребне
+        const surf = layer('lowpass', 650, 0.5, 0.0001), foam = layer('highpass', 2800, 0.6, 0.0001);
+        const wave = () => { const T = R(5, 9), t = ac.currentTime, peak = R(0.05, 0.1);
+          surf.g.gain.setTargetAtTime(peak, t, T * 0.18); surf.g.gain.setTargetAtTime(0.012, t + T * 0.45, T * 0.2);
+          foam.g.gain.setTargetAtTime(peak * 0.25, t + T * 0.3, T * 0.06); foam.g.gain.setTargetAtTime(0.0008, t + T * 0.5, T * 0.15);
+          surf.b.frequency.setTargetAtTime(R(500, 900), t, T * 0.3); later(T * 1000, wave); };
+        wave();
+        const wind = layer('lowpass', 280, 0.6, 0.02); wander(wind.g.gain, 0.008, 0.03, 2, 5);
+        break;
+      }
+      case 'lava': {   // вулкан: низкий рокот, шипение и редкие «бульки» и треск остывающей корки
+        const rum = layer('lowpass', 110, 0.8, 0.09); wander(rum.g.gain, 0.05, 0.12, 2, 5);
+        const hiss = layer('bandpass', 2600, 0.8, 0.01); wander(hiss.g.gain, 0.003, 0.016, 1, 3);
+        const blub = () => { const t = ac.currentTime, f = R(70, 190), o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
+          o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.18);
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(R(0.02, 0.06), t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+          o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.25); later(R(250, 1600), blub); };
+        later(600, blub);
+        const crack = () => { noise(bus, ac.currentTime, R(0.02, 0.06), { type: 'highpass', f0: R(2500, 5000), gain: R(0.01, 0.035), attack: 0.001 }); later(R(400, 3000), crack); };
+        later(900, crack);
+        break;
+      }
+      case 'space': {   // Alien: гул станции (два близких тона дают биения) и плывущий шорох
+        for (const [f, v] of [[55, 0.03], [55.6, 0.03], [110.4, 0.008]]) { const o = ac.createOscillator(), g = gain(v); o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(bus); o.start(); A.nodes.push(o); }
+        const air = layer('bandpass', 420, 1.2, 0.01); wander(air.b.frequency, 250, 900, 3, 7); wander(air.g.gain, 0.003, 0.016, 2, 5);
+        break;
+      }
+      default: { const w = layer('lowpass', 400, 0.6, 0.04); wander(w.g.gain, 0.015, 0.06, 1.5, 4); }
+    }
+    // птицы (долина, замки, бухта): редкие короткие трели с вибрато, далеко и в разных сторонах
+    if (scene && scene.theme && scene.theme.birds) {
+      const bird = () => {
+        const t0 = ac.currentTime, pan = ac.createStereoPanner(), g = gain(1); pan.pan.value = R(-0.8, 0.8); g.connect(pan); pan.connect(bus); A.nodes.push(pan);
+        const n = 2 + Math.floor(Math.random() * 4), base = R(2400, 4200), v = R(0.004, 0.012);
+        for (let i = 0; i < n; i++) { const t = t0 + i * R(0.09, 0.16), o = ac.createOscillator(), e = ac.createGain(); o.type = 'sine';
+          o.frequency.setValueAtTime(base * R(0.9, 1.1), t); o.frequency.exponentialRampToValueAtTime(base * R(1.15, 1.5), t + 0.05); o.frequency.exponentialRampToValueAtTime(base * R(0.8, 1), t + 0.09);
+          e.gain.setValueAtTime(0.0001, t); e.gain.exponentialRampToValueAtTime(v, t + 0.012); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+          o.connect(e); e.connect(g); o.start(t); o.stop(t + 0.12); }
+        later(R(2500, 9000), bird);
+      };
+      later(R(1500, 4000), bird);
+    }
+    bus.gain.setTargetAtTime(1, ac.currentTime, 0.8);
   }
   function stopAmbient() {
-    if (!ambient) return; const a = ambient; ambient = null;
-    try { a.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.3); a.src.stop(ac.currentTime + 1.5); a.lfo.stop(ac.currentTime + 1.5); } catch (e) { /* */ }
+    if (!ambient) return; const a = ambient; ambient = null; a.alive = false;
+    for (const id of a.timers) clearTimeout(id);
+    try { a.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.3); } catch (e) { /* */ }
+    setTimeout(() => { for (const n of a.nodes) { try { if (n.stop) n.stop(); } catch (e) { /* */ } try { n.disconnect(); } catch (e) { /* */ } } try { a.g.disconnect(); } catch (e) { /* */ } }, 1600);
   }
   function toggle(v) {
     enabled = v === undefined ? !enabled : !!v;
@@ -288,5 +427,5 @@ const Sfx = (() => {
     if (master && ac) master.gain.setTargetAtTime(enabled ? volume : 0, ac.currentTime, 0.05);
     if (!enabled) chargeStop();
   }
-  return { init, resume, play, chargeStart, chargeSet, chargeStop, setAmbient, stopAmbient, toggle, setListener, setSilent, setScene, setVolume, apply, get volume() { return volume; }, get enabled() { return enabled; } };
+  return { get voiceCount() { return voices.size; }, get ambientOn() { return !!ambient; }, init, resume, play, track, chargeStart, chargeSet, chargeStop, setAmbient, stopAmbient, toggle, setListener, setSilent, setScene, setVolume, apply, get volume() { return volume; }, get enabled() { return enabled; } };
 })();

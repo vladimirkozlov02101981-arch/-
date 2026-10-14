@@ -296,14 +296,16 @@ const DECOR = {
     c.fillStyle = '#3a3a3a'; c.fillRect(x - tw / 2 - 1, ty + 8 * s, tw + 2, 3 * s); c.fillRect(x - tw / 2 - 1, ty + th - 11 * s, tw + 2, 3 * s);
     c.fillStyle = '#7a4a2a'; c.beginPath(); c.moveTo(x - tw / 2 - 5 * s, ty); c.lineTo(x, ty - 20 * s); c.lineTo(x + tw / 2 + 5 * s, ty); c.closePath(); c.fill();
   },
-  column(c, g, x, y, s) {
+  column(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['column1', 'column2'], x, y, s, r, 96)) return;   // мраморная колонна из Blender (каннелюры, излом)
     const w = 18 * s, h = 70 * s;
     c.fillStyle = hgrad(c, x - w / 2, x + w / 2, ['#f4d6a6', '#dcb07a', '#a87a4a']); c.fillRect(x - w / 2, y - h, w, h + 4);
     c.strokeStyle = 'rgba(120,80,40,0.4)'; c.lineWidth = 1; for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(x + i * w / 6, y - h + 2); c.lineTo(x + i * w / 6, y); c.stroke(); }
     c.fillStyle = '#dcb07a'; c.fillRect(x - w * 0.75, y - 6 * s, w * 1.5, 7 * s);
     c.fillStyle = '#f4d6a6'; c.beginPath(); c.moveTo(x - w / 2, y - h); c.lineTo(x - w * 0.2, y - h - 7 * s); c.lineTo(x + w * 0.1, y - h - 2 * s); c.lineTo(x + w / 2, y - h - 9 * s); c.lineTo(x + w / 2, y - h); c.closePath(); c.fill();
   },
-  pot(c, g, x, y, s) {
+  pot(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['pot1', 'pot2'], x, y, s, r, 36)) return;   // глиняный кувшин из Blender
     c.fillStyle = hgrad(c, x - 9 * s, x + 9 * s, ['#d9824a', '#b0582a', '#6a3014']);
     c.beginPath(); c.moveTo(x - 4 * s, y + 2); c.quadraticCurveTo(x - 12 * s, y - 10 * s, x - 5 * s, y - 20 * s); c.lineTo(x - 4 * s, y - 25 * s); c.lineTo(x + 4 * s, y - 25 * s); c.lineTo(x + 5 * s, y - 20 * s); c.quadraticCurveTo(x + 12 * s, y - 10 * s, x + 4 * s, y + 2); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(40,15,5,0.5)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 8 * s, y - 12 * s); c.lineTo(x + 8 * s, y - 12 * s); c.stroke();
@@ -418,6 +420,7 @@ const DECOR = {
     c.restore();
   },
   drygrass(c, g, x, y, s, r) {
+    if (treeSprite(c, ['drygrass1', 'drygrass2', 'drygrass3', 'drygrass4'], x, y, s, r, 36)) return;   // пучок сухой травы из Blender — чёткий при приближении
     // пучок сухой травы: много тонких изогнутых стеблей разного тона, у корня — щебень
     const n = r.int(14, 24);
     for (let i = 0; i < n; i++) {
@@ -714,14 +717,18 @@ function drawDecorItem(fn, c, g, x, y, s, r, flip, o) {
 }
 
 /** общий свет для всех объектов карты: края силуэта, обращённые к солнцу, светлеют, противоположные уходят в тень */
-function lightDecorLayer(cv) {
+function lightDecorLayer(cv, T = null) {
   const W = cv.width, H = cv.height, x = cv.getContext('2d', { willReadFrequently: true }), S = 192, P = 4;
+  // под непрозрачным декором (колонны, кувшины, ящики, растения) нет материала задней стены: иначе при приближении на декор
+  // ложилась фактура камня стены (колонны каньона «как сыр»)
+  const RB = T && T.texRef && T.texRef.B, MK = T && T.mask;
   const ll = Math.hypot(LIGHT.x, LIGHT.y), lx = LIGHT.x / ll, ly = LIGHT.y / ll;
   for (let y0 = 0; y0 < H; y0 += S) {
     const ya = Math.max(0, y0 - P), yb = Math.min(H, y0 + S + P), h = yb - ya;
     const img = x.getImageData(0, ya, W, h), d = img.data;
     let any = false; for (let i = 3; i < d.length; i += 64) if (d[i]) { any = true; break; }
     if (!any) continue;
+    if (RB) for (let yy = y0; yy < Math.min(H, y0 + S); yy++) { const row = (yy - ya) * W, gr = yy * W; for (let xx = 0; xx < W; xx++) if (d[(row + xx) * 4 + 3] >= 128 && !MK[gr + xx]) RB[gr + xx] = 0; }
     const A = new Float32Array(W * h); for (let i = 0; i < W * h; i++) A[i] = d[i * 4 + 3] / 255;
     boxBlurF32(A, W, h, 2);
     const r0 = Math.max(1, y0 - ya), r1 = Math.min(h - 1, y0 - ya + S);
@@ -743,7 +750,7 @@ function placeDecor(T, theme, map, waterY, tops, mat) {
   const sl = typeof TerrainSurface !== 'undefined' ? new TerrainSurface(T, c) : null;
   DECOR_LAYER = sl ? { layer: sl, rec: sl.recorder(), ctx: c } : null;
   try { placeDecorOn(T, theme, map, waterY, tops, mat, c); } finally { DECOR_LAYER = null; }
-  lightDecorLayer(layer); T.dctx.drawImage(layer, 0, 0);
+  lightDecorLayer(layer, T); T.dctx.drawImage(layer, 0, 0);
   T.spriteLayer = sl && sl.commands.length ? sl : null;
   if (sl) { sl.canvas = null; sl.ctx = null; }   // 1× уже в слое декора; временный холст не держим
 }

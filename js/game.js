@@ -153,7 +153,7 @@ class Game {
     // Sample cover BEFORE carving, so a wall absorbs this blast even if it breaks.
     const exposure = new Map();
     for (const s of this.soldiers) {
-      if (!s.gone && Math.hypot(s.x-x,s.y-13-y)<Math.max((R+12)*1.6,(o.frag&&FRAGS[o.frag]?FRAGS[o.frag].L:0)+20)) {
+      if (!s.gone && Math.hypot(s.x-x,s.y-13-y)<Math.max((R+12)*1.6,(o.frag&&FRAGS[o.frag]?FRAGS[o.frag].L:0)+20,o.rd||0)) {
         exposure.set(s, (this.blastTransmission(x,y,s.x,s.y-25)+this.blastTransmission(x,y,s.x,s.y-13)+this.blastTransmission(x,y,s.x,s.y-3))/3);
       }
     }
@@ -161,17 +161,17 @@ class Game {
     const craterScale = 1;   // прочность учитывается попиксельно в terrain.carve
     this.carve(x, y, Math.max(3,R*craterScale), true);
     // радиус поражения: ударная волна дотягивается до места, где падают осколки
-    const FR = o.frag && FRAGS[o.frag], RD = Math.max((R + 12) * 1.6, FR ? FR.L : 0);
+    const FR = o.frag && FRAGS[o.frag], RD = Math.max((R + 12) * 1.6, FR ? FR.L : 0, o.rd || 0);
     this.emit({ t: 'boom', x, y, r: R, k: o.k || 0, w: Math.round(RD) });
     const knock = o.knock ?? R * 8;
     for (const s of this.soldiers) {
       if (s.gone) continue;
       // ударная волна: радиус RW; расстояние считается до ближайшей точки тела бойца (попадание в упор — полный урон)
-      const cx = s.x, cy = s.y - 17, by = clamp(y, s.y - 33, s.y - 4); const d = Math.max(0, Math.hypot(s.x - x, by - y) - 6); const RR = R + 12, RW = RR * 1.6;
+      const cx = s.x, cy = s.y - 17, by = clamp(y, s.y - 33, s.y - 4); const d = Math.max(0, Math.hypot(s.x - x, by - y) - 6); const RR = R + 12, RW = Math.max(RR * 1.6, (o.rd || 0) * 0.8);
       if (d >= RD) continue;
       const fw = Math.max(0, 1 - d / RW), fd = 1 - d / RD;
       let dx = cx - x, dy = cy - y - 8; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-      const shielding = exposure.get(s) ?? 1;
+      const shielding = o.pierce ? o.pierce + (1 - o.pierce) * (exposure.get(s) ?? 1) : exposure.get(s) ?? 1;
       // взрывная волна отбрасывает сильно — бойцы разлетаются, как в классических артиллерийских играх
       // тело весит ~80 кг: вблизи его подбрасывает и крутит, на среднем расстоянии сбивает с ног, вдали — лишь толкает
       const imp = Math.min(760, knock * 1.35) * Math.pow(fw, 1.35) * shielding;
@@ -273,7 +273,9 @@ class Game {
       if(this.terrain.isSolid(px,py)){const m=this.terrain.materialAt(px,py);thickness+=3*({4:.5,5:1.5,6:2.3,7:.7}[m]||1);}}
     return Math.max(.025,Math.exp(-thickness/15));
   }
-  nuke(x, y, owner) { this.emit({ t: 'nuke', x: R1(x), y: R1(y) }); this.explode(x, y, 135, 82, { owner, knock: 760, k: 2 }); }
+  /** ядерный удар (v45 — реалистичный): воронка шире; в эпицентре и рядом (~250) гибнет любой боец, ударная волна ранит и
+      валит с ног до ~430; укрытие ослабляет урон лишь наполовину — волна огибает стены */
+  nuke(x, y, owner) { this.emit({ t: 'nuke', x: R1(x), y: R1(y) }); this.explode(x, y, 165, 280, { owner, knock: 900, k: 2, rd: 430, pierce: 0.5 }); }
   /** hx, hy — точка попадания (для ранений); без неё урон идёт в торс */
   damage(s, v, owner, hx, hy, heavy) {
     if (!s.alive || v <= 0) return;

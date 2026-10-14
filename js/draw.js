@@ -125,6 +125,14 @@ function drawJetpackSprite(c, x, y, face) {
   return true;
 }
 /** боец из 3D-кадров: кадр по состоянию, фазе шага и углу прицела; оружие — у плеча модели */
+/** отдача по видам оружия: [насколько оружие уходит назад, px; подброс ствола, рад] */
+const RECOIL = { sniper: [3.4, 0.075], shotgun: [3.8, 0.09], revolver: [2.2, 0.05], assault: [1.5, 0.026], shot: [1.4, 0.022], minigun: [0.9, 0.012],
+  autocannon: [2.8, 0.045], railgun: [2.4, 0.03], rocket: [1.8, 0.024] };
+/** сила отдачи сейчас: резкий толчок (8 мс) и затухание (55 мс) */
+function recoilAt(s) {
+  if (!s.kick) return 0; const dt = performance.now() / 1000 - s.kick;
+  return dt < 0 || dt > 0.35 ? 0 : Math.exp(-dt / 0.055) * (1 - Math.exp(-dt / 0.008)) * 1.25;
+}
 function drawSoldierSprite(c, s, team, t, an) {
   const SA = SoldierArt, face = s.face || 1, dead = !s.alive, col = team ? team.color : '#888', K = SA.K, C = SA.CELL;
   c.save(); c.translate(s.x, s.y);
@@ -178,8 +186,8 @@ function drawSoldierSprite(c, s, team, t, an) {
   c.restore();
   if (holding) {
     const sx = (SA.SHOULDER[0] - SA.FOOT[0]) * K * face, sy = (SA.SHOULDER[1] - SA.FOOT[1]) * K;
-    const a = s.aim, dx = Math.cos(a), dy = Math.sin(a), g = 0.3 / SA.MPP * K;
-    c.save(); c.translate(sx + dx * g, sy + dy * g + 1.5); c.rotate(a); if (face < 0) c.scale(1, -1); drawHeld(c, s.wpn, t); c.restore();
+    const a = s.aim, dx = Math.cos(a), dy = Math.sin(a), rk = recoilAt(s), RC = RECOIL[s.kickW] || RECOIL.shot, g = 0.3 / SA.MPP * K - rk * RC[0];
+    c.save(); c.translate(sx + dx * g, sy + dy * g + 1.5); c.rotate(a - face * rk * RC[1]); if (face < 0) c.scale(1, -1); drawHeld(c, s.wpn, t); c.restore();
   }
   c.restore();
 }

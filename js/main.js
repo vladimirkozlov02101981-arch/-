@@ -457,6 +457,7 @@ const App = {
     if (this.cam.scopeFocus && !this.cam.foeFocus) this.ctl.syncScope(sc, this.cam, sw, sh);
     sc.bg.update(dt, sc.turn.wind, sw);
     Sfx.setListener(this.cam.x, this.cam.y, this.cam.z, sw);
+    if (Sfx.track) Sfx.track(this.paused ? null : sc.entities, dt);   // гул летящих ракет, свист мин и бомб, пули рядом
     this.timerTick(turn);
     this.ren.draw(sc, this.cam, this.fx, this.ctl, this.t, dt);
     if (!this.demo) {

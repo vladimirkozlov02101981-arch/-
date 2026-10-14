@@ -73,6 +73,14 @@ class FX {
       this.litter.some(o => relevant(o) && Math.abs(o.vy || 0) > 0);
   }
   /* ---------- события ---------- */
+  /** отдача: оружие в руках бойца, у чьего ствола вспышка, коротко уходит назад и вверх (только картинка — пули летят по
+      настоящему наведению) */
+  kick(sc, x, y, w) {
+    if (!sc || !sc.soldiers) return;
+    let best = null, bd = 46;
+    for (const s of sc.soldiers) { if (!s.alive || s.gone) continue; const d = Math.hypot(s.x - x, s.y - 24 - y); if (d < bd) { bd = d; best = s; } }
+    if (best) { best.kick = performance.now() / 1000; best.kickW = w || 'shot'; }
+  }
   handle(ev, sc, isHost) {
     const cosmetic = ['footstep', 'turn', 'msg', 'siren', 'crate', 'over', 'water', 'carve', 'tidy', 'cline'];
     const team = Number.isInteger(ev.L) ? ev.L : sc.turn && sc.turn.team;
@@ -142,6 +150,7 @@ class FX {
         this.lights.push({ x: ev.x, y: ev.y, r: big ? 120 : 70, life: 0.07, max: 0.07, col: '#ffcf7a' });
         Sfx.play(['shotgun','sniper','revolver','autocannon'].includes(ev.w) ? ev.w : ev.w === 'railgun' ? 'laser' : 'shot', ev);
         if (big) this.shake = Math.max(this.shake, ev.w === 'railgun' ? 7 : 3);
+        this.kick(sc, ev.x, ev.y, ev.w);
         break;
       }
       case 'trace': {
@@ -158,7 +167,7 @@ class FX {
         Sfx.play('zap', { x: e[0], y: e[1] }); this.shake = Math.max(this.shake, 8);
         break;
       }
-      case 'launch': Sfx.play(ev.w === 'throw' ? 'throw' : 'launch', ev); if (ev.w !== 'throw') for (let i = 0; i < 4; i++) P.smoke(ev.x, ev.y, rand(-30, 30), rand(-30, 10), rand(4, 7), rand(0.5, 0.9), '#d0d0d0', 2, 0.5); break;
+      case 'launch': if (ev.w !== 'throw') this.kick(sc, ev.x, ev.y, 'rocket'); Sfx.play(ev.w === 'throw' ? 'throw' : 'launch', ev); if (ev.w !== 'throw') for (let i = 0; i < 4; i++) P.smoke(ev.x, ev.y, rand(-30, 30), rand(-30, 10), rand(4, 7), rand(0.5, 0.9), '#d0d0d0', 2, 0.5); break;
       case 'bounce': Sfx.play('bounce', ev); break;
       case 'jump': Sfx.play('jump', ev); break;
       case 'land': if (ev.h) { Sfx.play('land', ev); for (let i = 0; i < 6; i++) P.smoke(ev.x + rand(-8, 8), ev.y - 2, rand(-40, 40), rand(-20, -5), rand(3, 5), rand(0.4, 0.8), '#b8a890', 1.8, 0.5); } break;

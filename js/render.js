@@ -39,7 +39,7 @@ class Camera {
   frameCut(target, sc, sw, sh) {
     this.mapZoom = null; this.zoomPark = null; this.x = target.x; this.y = target.y; this.vx = this.vy = this.tvx = this.tvy = 0;
     this.lx = this.ly = 0; this.leadE = null; this.glide = null; this.tKey = target.k || ''; this.ptx = target.x; this.pty = target.y;
-    this.clampTo(sc, sw, sh);
+    this.clampTo(sc, sw, sh, null, target);
   }
   /** обзор у бойца: прыжок не качает камеру вверх-вниз — по высоте держится место прыжка, пока боец не упал ниже него
       или не взлетел выше обычного прыжка; на земле, на лестнице, в полёте от взрыва — обычное слежение */
@@ -81,11 +81,12 @@ class Camera {
   /** куда смотреть при выстреле быстрыми пулями: свой боец и место попадания вместе, если помещаются в кадр, иначе — место
       попадания (чуть сдвинутое к стрелку, чтобы было видно, откуда летят пули) */
   shotFrame(sx, sy, px, py, sw, sh) {
-    // соперник и точка его прицела помещаются — середина между ними; далёкая точка — соперник остаётся в кадре (в десятой
-    // части экрана от края), обзор смещён к прицелу. Раньше кадр уходил к самой точке: компьютер ведёт её через полкарты —
-    // камера «улетала в сторону» и после бинокля к сопернику не возвращалась. Кадр меняется непрерывно — без скачков
-    const vw = sw / this.z, vh = sh / this.z;
-    return { x: sx + clamp((px - sx) / 2, -vw * 0.4, vw * 0.4), y: sy - 20 + clamp((py - sy) / 2, -vh * 0.36, vh * 0.36) };
+    // соперник и точка его прицела помещаются — середина между ними; далёкая точка (ядерный удар, авиаудар, снайперка через
+    // полкарты) — обзор идёт за ней до конца: точка у края кадра с отступом, кадр сдвинут к сопернику (видно, откуда удар).
+    // v44 держал соперника в кадре — обзор упирался и за дальним прицелом не шёл. Кадр меняется непрерывно — без скачков
+    const mx = sw / this.z * 0.38, my = sh / this.z * 0.34;
+    const fit = (s, p, m) => Math.abs(p - s) <= 2 * m ? (s + p) / 2 : p - Math.sign(p - s) * m;
+    return { x: fit(sx, px, mx), y: fit(sy - 20, py, my) };
   }
   /** кадр, оставленный на месте при выстреле (Controller.fireHere): держится до конца хода, пока боец стоит, а камере не
       нужно вести снаряд или показывать взрыв */
@@ -426,7 +427,7 @@ class Camera {
         this.fitBody(actor, sw, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y;
       }
     }
-    { const x0 = this.x, y0 = this.y; this.clampTo(sc, sw, sh, startFrame); if (this.x !== x0) this.vx = 0; if (this.y !== y0) this.vy = 0;   // у края карты инерция не копится
+    { const x0 = this.x, y0 = this.y; this.clampTo(sc, sw, sh, startFrame, target); if (this.x !== x0) this.vx = 0; if (this.y !== y0) this.vy = 0;   // у края карты инерция не копится
       // стрелки у края карты: сдвиг обзора — от того места, где камера реально стоит, иначе обратное нажатие сначала «отматывало»
       // накопленный за краем сдвиг и камера отзывалась с задержкой
       if (this.manualActive && T && (this.x !== x0 || this.y !== y0)) { const actor = sc.soldiers.find(s => s.id === T.sid); if (actor) { const home = this.soldierTarget(actor, sh); this.offsetX = this.x - home.x; this.offsetY = this.y - home.y; } } }
@@ -442,10 +443,13 @@ class Camera {
     const k = (v) => Math.sign(v) * Math.pow(Math.min(1, Math.abs(v)), 1.25) * 0.85 + Math.sign(v) * 0.15;   // плавный старт у границы полосы, быстрее у самого края
     return [ex ? k(ex) : 0, ey ? k(ey) : 0];
   }
-  clampTo(sc, sw, sh, from = null) {
+  clampTo(sc, sw, sh, from = null, reach = null) {
     if (this.z <= this.zoomLimits(sh, sw)[0] * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; return; }
     const hw = sw / 2 / this.z, hh = sh / 2 / this.z;
-    const minX = Math.min(sc.W / 2, hw - 250), maxX = Math.max(sc.W / 2, sc.W - hw + 250);
+    let minX = Math.min(sc.W / 2, hw - 250), maxX = Math.max(sc.W / 2, sc.W - hw + 250);
+    // удар по точке, попадание, снаряд, взрыв, прицел соперника — по центру кадра в любой точке карты, и у самого её края
+    // (за краем — фон); обычный кадр у бойца — в прежних пределах
+    if (reach && !(typeof reach.k === 'string' && reach.k[0] === 's') && Number.isFinite(reach.x)) { minX = Math.min(minX, Math.max(0, reach.x)); maxX = Math.max(maxX, Math.min(sc.W, reach.x)); }
     this.x = from ? this.panOffset(from.x, this.x - from.x, minX, maxX) : clamp(this.x, minX, maxX);
     const scopePad = this.scopeFocus ? (Math.round(Math.min(sw, sh) * 0.16) + 16) / this.z : 0;
     const top = -900, bottom = this.scopeFocus ? Math.max(sc.H, sc.waterY + 270) : sc.waterY + 270;

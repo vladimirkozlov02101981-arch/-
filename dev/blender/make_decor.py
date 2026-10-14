@@ -551,6 +551,137 @@ def boulder(name, seed, dark, light, snow=False, moss=0.0):
     return sc
 
 
+
+def mat_marble(name, seed):
+    """выветренный мрамор: тёплый кремовый с прожилками, пыль и копоть глубже (по высоте вниз), мелкие сколы — шероховатость"""
+    m, nt, b = mt.principled(name, 0.48, 0.38)
+    N, L = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord')
+    vein = N.new('ShaderNodeTexWave'); vein.wave_type = 'BANDS'; vein.inputs['Scale'].default_value = 14; vein.inputs['Distortion'].default_value = 9
+    vein.inputs['Detail'].default_value = 6; L.new(tc.outputs['Object'], vein.inputs['Vector'])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 40; nz.inputs['Detail'].default_value = 10; L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[0].color = (*mt.lin((0.80, 0.66, 0.48)), 1)
+    ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (*mt.lin((0.99, 0.90, 0.74)), 1)
+    mix = N.new('ShaderNodeMath'); mix.operation = 'MULTIPLY_ADD'; mix.inputs[1].default_value = 0.35; mix.inputs[2].default_value = 0.4
+    L.new(vein.outputs['Fac'], mix.inputs[0]); add = N.new('ShaderNodeMath'); add.operation = 'ADD'; L.new(mix.outputs['Value'], add.inputs[0]); L.new(nz.outputs['Fac'], add.inputs[1])
+    sc = N.new('ShaderNodeMath'); sc.operation = 'MULTIPLY'; sc.inputs[1].default_value = 0.62; L.new(add.outputs['Value'], sc.inputs[0])
+    L.new(sc.outputs['Value'], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    chips = N.new('ShaderNodeTexNoise'); chips.inputs['Scale'].default_value = 220; chips.inputs['Detail'].default_value = 12; L.new(tc.outputs['Object'], chips.inputs['Vector'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.28; bu.inputs['Distance'].default_value = 0.002
+    L.new(chips.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    return m
+
+
+def column(name, seed):
+    """мраморная колонна каньона (как в эталоне): 20 каннелюр, лёгкое сужение кверху, обломанный зубчатый верх с изломом,
+    база — тор и плинт, наполовину в земле; выветренный мрамор с прожилками и сколами"""
+    sc, rng = scene(96, ((1.0, 0.84, 0.62), 5.2), seed)
+    R, H, n, rings, flutes = 9.0, 66.0 + rng.uniform(-6, 4), 240, 48, 20
+    teeth = [rng.uniform(0.0, 1.0) ** 0.7 for _ in range(rng.randint(5, 8))]
+    def jag(t):
+        k = t * len(teeth); i = int(k) % len(teeth); f = k - int(k)
+        return teeth[i] * (1 - f) + teeth[(i + 1) % len(teeth)] * f
+    amp = rng.uniform(9, 12); tops = [H - jag(i / n) * amp for i in range(n)]
+    bm = bmesh.new(); rows = []
+    for j in range(rings + 1):
+        z = j / rings; row = []
+        for i in range(n):
+            th = i / n * math.tau; fl = (0.5 + 0.5 * math.cos(flutes * th)) ** 0.7
+            r = R * (1 - 0.06 * fl) * (1 - 0.05 * z)
+            zz = 4 + (tops[i] - 4) * z
+            row.append(bm.verts.new((math.cos(th) * r * U, math.sin(th) * r * U, zz * U)))
+        rows.append(row)
+    for j in range(rings):
+        for i in range(n):
+            a, b2, c2, d = rows[j][i], rows[j][(i + 1) % n], rows[j + 1][(i + 1) % n], rows[j + 1][i]
+            bm.faces.new((a, b2, c2, d))
+    # излом сверху: неровная поверхность скола, центр ниже кромки
+    ctr = bm.verts.new((rng.uniform(-2, 2) * U, rng.uniform(-2, 2) * U, (min(tops) + 1.5) * U))
+    for i in range(n): bm.faces.new((rows[-1][i], rows[-1][(i + 1) % n], ctr))
+    # база: тор и плинт, наполовину в земле
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=64, radius1=(R + 2.6) * U, radius2=(R + 2.6) * U, depth=4 * U, matrix=Matrix.Translation(Vector((0, 0, 2.5 * U))))
+    bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation(Vector((0, 0, -0.8 * U))) @ Matrix.Diagonal(Vector(((R + 4.5) * 2 * U, (R + 4.5) * 2 * U, 4.6 * U, 1))))
+    for v in bm.verts:   # мелкая неровность скола и выветривание кромок
+        p = Vector(v.co) / U; d = noise.noise(p * 0.12 + Vector((seed, seed * 2, 0))) * 0.12
+        v.co = Vector(v.co) + Vector((p.x, p.y, 0)).normalized() * d * U if (p.x * p.x + p.y * p.y) > 1 else v.co
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); obj(name, me, mat_marble('marble', seed), sc)
+    return sc
+
+
+def potjar(name, seed):
+    """глиняный кувшин каньона: тело вращения (широкое плечо, узкое горло, отогнутый венчик), терракота с потёртостями,
+    тёмный налёт пыли снизу; лежит или стоит — как в эталоне"""
+    sc, rng = scene(36, ((1.0, 0.84, 0.62), 5.2), seed)
+    prof = [(0.0, 0.0), (4.2, 0.2), (6.6, 2.5), (8.4, 7.5), (8.8, 11.0), (7.6, 15.5), (4.6, 19.5), (3.0, 21.5), (2.8, 23.2), (3.9, 24.6), (4.2, 25.4), (3.2, 25.6)]
+    k = rng.uniform(0.9, 1.1); prof = [(r * k, z * rng.uniform(0.96, 1.04) if z else 0.0) for r, z in prof]
+    def cr(p0, p1, p2, p3, t):   # Катмулл–Ром: гладкий профиль без граней
+        return tuple(0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t ** 3) for a, b, c, d in zip(p0, p1, p2, p3))
+    P = [prof[0]] + prof + [prof[-1]]; smooth = []
+    for i in range(1, len(P) - 2):
+        for k2 in range(6): smooth.append(cr(P[i - 1], P[i], P[i + 1], P[i + 2], k2 / 6))
+    smooth.append(prof[-1])
+    n = 128; bm = bmesh.new(); rows = []
+    for (r, z) in smooth:
+        row = []
+        for i in range(n):
+            th = i / n * math.tau; w = 1 + noise.noise(Vector((math.cos(th) * 0.8, math.sin(th) * 0.8, z * 0.08)) + Vector((seed, 0, 0))) * 0.035
+            row.append(bm.verts.new((math.cos(th) * r * w * U, math.sin(th) * r * w * U, z * U)))
+        rows.append(row)
+    for j in range(len(rows) - 1):
+        for i in range(n): bm.faces.new((rows[j][i], rows[j][(i + 1) % n], rows[j + 1][(i + 1) % n], rows[j + 1][i]))
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    m, nt, b = mt.principled('clay', 0.72, 0.25); N, L = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 30; nz.inputs['Detail'].default_value = 8
+    L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.25; ramp.color_ramp.elements[0].color = (*mt.lin((0.62, 0.33, 0.19)), 1)
+    ramp.color_ramp.elements[1].position = 0.8; ramp.color_ramp.elements[1].color = (*mt.lin((0.80, 0.50, 0.31)), 1)
+    L.new(nz.outputs['Fac'], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    ch = N.new('ShaderNodeTexNoise'); ch.inputs['Scale'].default_value = 180; ch.inputs['Detail'].default_value = 10; L.new(tc.outputs['Object'], ch.inputs['Vector'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.3; bu.inputs['Distance'].default_value = 0.002
+    L.new(ch.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    o = obj(name, me, m, sc)
+    o.rotation_euler = (0, 0, rng.uniform(0, math.tau))
+    return sc
+
+
+def drygrass(name, seed):
+    """пучок сухой травы каньона: 40–70 тонких изогнутых травинок (сужаются к концу, гнутся по ветру), соломенные тона от
+    тёмного у корня к светлому (по высоте), редкие колоски на концах; у корня — несколько камешков"""
+    sc, rng = scene(36, ((1.0, 0.84, 0.62), 5.2), seed)
+    bm = bmesh.new(); lean = rng.uniform(-0.35, 0.35)
+    for _ in range(rng.randint(40, 70)):
+        a = rng.uniform(-0.8, 0.8) + lean; L = rng.uniform(8, 20); w = rng.uniform(0.3, 0.6)
+        x0 = rng.gauss(0, 2.2); y0 = rng.uniform(-3, 3); bend = rng.uniform(0.3, 1.2) * (1 if a > 0 else -1) + lean
+        segs = 8; prev = None; px = pz = 0
+        for k in range(segs + 1):
+            t = k / segs; ang = a * (0.4 + 0.6 * t) + bend * t * t
+            px = x0 + math.sin(ang) * L * t; pz = math.cos(ang) * L * t - 0.5; ww = w * (1 - t) ** 0.8 + 0.04
+            v1 = bm.verts.new(((px - ww) * U, y0 * U, pz * U)); v2 = bm.verts.new(((px + ww) * U, y0 * U, pz * U))
+            if prev: bm.faces.new((prev[0], prev[1], v2, v1))
+            prev = (v1, v2)
+        if rng.random() < 0.3:   # колосок на конце травинки
+            bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.6 * U, matrix=Matrix.Translation(Vector((px * U, y0 * U, (pz + 0.8) * U))) @ Matrix.Diagonal(Vector((0.7, 0.7, 2.0, 1))))
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    m, nt, b = mt.principled('straw', 0.78, 0.22); N, Lk = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); sep = N.new('ShaderNodeSeparateXYZ'); Lk.new(tc.outputs['Object'], sep.inputs['Vector'])
+    mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.5 * U; mr.inputs['From Max'].default_value = 16 * U
+    Lk.new(sep.outputs['Z'], mr.inputs['Value'])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 25; Lk.new(tc.outputs['Object'], nz.inputs['Vector'])
+    mx = N.new('ShaderNodeMath'); mx.operation = 'MULTIPLY_ADD'; mx.inputs[1].default_value = 0.35; Lk.new(nz.outputs['Fac'], mx.inputs[0]); Lk.new(mr.outputs['Result'], mx.inputs[2])
+    ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+    E[0].position = 0.05; E[0].color = (*mt.lin((0.36, 0.27, 0.15)), 1); E[1].position = 0.75; E[1].color = (*mt.lin((0.86, 0.74, 0.50)), 1)
+    e = E.new(0.4); e.color = (*mt.lin((0.68, 0.53, 0.31)), 1)
+    Lk.new(mx.outputs['Value'], ramp.inputs['Fac']); Lk.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.2; break
+    obj(name, me, m, sc)
+    for p in me.polygons: p.use_smooth = False
+    bm = bmesh.new()
+    for _ in range(rng.randint(3, 6)):   # камешки у корня
+        bmesh.ops.create_icosphere(bm, subdivisions=2, radius=rng.uniform(0.7, 1.6) * U, matrix=Matrix.Translation(Vector((rng.gauss(0, 3.5) * U, rng.uniform(-3, 3) * U, -0.7 * U))) @ Matrix.Diagonal(Vector((1.2, 1, 0.75, 1))))
+    me = bpy.data.meshes.new(name + '_st'); bm.to_mesh(me); bm.free(); obj(name + '_st', me, mat_col('pebble', (0.56, 0.44, 0.33), 0.8, 0.2, 0.4, 120), sc)
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -559,6 +690,9 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'deadtree_char1': (lambda n, s: deadtree(n, s, True), 43, 130), 'deadtree_char2': (lambda n, s: deadtree(n, s, True), 44, 130),
     'igloo1': (igloo, 51, 90), 'icecrystal1': (icecrystal, 61, 48), 'icecrystal2': (icecrystal, 62, 48),
     'watertower1': (watertower, 71, 180),
+    'column1': (column, 121, 96), 'column2': (column, 122, 96),
+    'pot1': (potjar, 131, 36), 'pot2': (potjar, 132, 36),
+    'drygrass1': (drygrass, 141, 36), 'drygrass2': (drygrass, 142, 36), 'drygrass3': (drygrass, 143, 36), 'drygrass4': (drygrass, 144, 36),
     'crystal_c1': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 81, 56), 'crystal_c2': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 82, 56),
     'crystal_m1': (lambda n, s: crystals(n, s, (1.0, 0.43, 0.96)), 83, 56), 'crystal_m2': (lambda n, s: crystals(n, s, (1.0, 0.43, 0.96)), 84, 56),
     'obsidian1': (obsidian, 91, 36), 'obsidian2': (obsidian, 92, 36), 'lavarock1': (lavarock, 93, 34), 'lavarock2': (lavarock, 94, 34),
