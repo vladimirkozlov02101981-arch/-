@@ -682,6 +682,99 @@ def drygrass(name, seed):
     me = bpy.data.meshes.new(name + '_st'); bm.to_mesh(me); bm.free(); obj(name + '_st', me, mat_col('pebble', (0.56, 0.44, 0.33), 0.8, 0.2, 0.4, 120), sc)
     return sc
 
+
+FLOWER = {   # вид: (лепестков, длина, ширина, цвет, центр, радиус центра, шероховатость, изгиб чашей)
+    'poppy': (4, 3.0, 3.0, (0.78, 0.07, 0.04), (0.07, 0.05, 0.05), 0.75, 0.45, 0.45),
+    'buttercup': (5, 1.8, 1.6, (0.95, 0.76, 0.05), (0.78, 0.60, 0.10), 0.5, 0.22, 0.35),
+    'daisy': (17, 2.3, 0.55, (0.93, 0.93, 0.90), (0.95, 0.70, 0.08), 0.8, 0.5, 0.12),
+    'cornflower': (9, 1.9, 0.85, (0.16, 0.30, 0.86), (0.22, 0.14, 0.48), 0.5, 0.5, 0.2),
+}
+
+
+def wildflowers(name, seed, kind):
+    """кучка полевых цветов (мак, лютик, ромашка, василёк): 5–9 стеблей с листьями, головки повёрнуты к зрителю и чуть
+    вверх, лепестки — тонкие изогнутые пластины с просвечиванием; цвет и форма — по виду"""
+    sc, rng = scene(28, ((1.0, 0.95, 0.88), 4.6), seed)
+    n_pet, L, W, col, ccol, cr, rough, cup = FLOWER[kind]
+    stems, leaves, petals, centers = bmesh.new(), bmesh.new(), bmesh.new(), bmesh.new()
+    def strip(bm, pts, w0, w1):
+        prev = None
+        for k, (px, py, pz) in enumerate(pts):
+            t = k / (len(pts) - 1); ww = w0 + (w1 - w0) * t
+            v1 = bm.verts.new(((px - ww) * U, py * U, pz * U)); v2 = bm.verts.new(((px + ww) * U, py * U, pz * U))
+            if prev: bm.faces.new((prev[0], prev[1], v2, v1))
+            prev = (v1, v2)
+    for _ in range(rng.randint(5, 9)):
+        x0 = rng.gauss(0, 3.0); y0 = rng.uniform(-3, 3); h = rng.uniform(8, 17); lean = rng.uniform(-0.25, 0.25); bend = rng.uniform(-0.15, 0.15)
+        pts = []
+        for k in range(9):
+            t = k / 8; pts.append((x0 + math.sin(lean * t + bend * t * t) * h * t, y0, h * t - 0.6))
+        strip(stems, pts, 0.28, 0.16)
+        for j in range(rng.randint(1, 3)):   # узкие листья у основания
+            la = rng.uniform(0.5, 1.1) * (1 if rng.random() < 0.5 else -1); ll = rng.uniform(3.5, 6.5); z0 = rng.uniform(0, h * 0.35)
+            lp = [(x0 + math.sin(la * (0.4 + t)) * ll * t, y0 - 0.1, z0 + math.cos(la * (0.4 + t)) * ll * t * 0.8) for t in [i / 6 for i in range(7)]]
+            prev = None
+            for k, (px, py, pz) in enumerate(lp):
+                t = k / 6; ww = 0.75 * math.sin(math.pi * min(1, t * 1.15 + 0.08))
+                v1 = leaves.verts.new(((px - ww * 0.3) * U, py * U, (pz - ww) * U)); v2 = leaves.verts.new(((px + ww * 0.3) * U, py * U, (pz + ww) * U))
+                if prev: leaves.faces.new((prev[0], prev[1], v2, v1))
+                prev = (v1, v2)
+        tip = Vector(pts[-1]) * U
+        # головка смотрит на зрителя (−y) и вверх; небольшой разворот у каждой
+        d = Vector((rng.uniform(-0.35, 0.35), -rng.uniform(0.55, 0.9), rng.uniform(0.35, 0.8))).normalized()
+        R = d.to_track_quat('Z', 'Y').to_matrix().to_4x4(); ph = rng.uniform(0, math.tau); k = rng.uniform(0.85, 1.15)
+        for i in range(n_pet):
+            a = ph + i / n_pet * math.tau + rng.uniform(-0.08, 0.08)
+            M = Matrix.Translation(tip) @ R @ Matrix.Rotation(a, 4, 'Z') @ Matrix.Rotation(-cup, 4, 'Y') @ Matrix.Translation(Vector((L * 0.55 * k * U, 0, 0))) @ Matrix.Diagonal(Vector((L * 0.5 * k * U, W * 0.5 * k * U, 0.12 * W * U, 1)))
+            bmesh.ops.create_uvsphere(petals, u_segments=12, v_segments=8, radius=1, matrix=M)
+        bmesh.ops.create_uvsphere(centers, u_segments=16, v_segments=10, radius=1, matrix=Matrix.Translation(tip + d * 0.25 * U) @ R @ Matrix.Diagonal(Vector((cr * U, cr * U, cr * 0.55 * U, 1))))
+    for bm, nm, m in ((stems, '_st', mat_col('stem', (0.24, 0.42, 0.13), 0.6, 0.2)), (leaves, '_lf', mat_col('leaf', (0.20, 0.40, 0.12), 0.55, 0.25)),
+                      (petals, '_pt', mat_col('petal_' + kind, col, rough, 0.35)), (centers, '_cn', mat_col('center_' + kind, ccol, 0.7, 0.2, 0.4, 260))):
+        me = bpy.data.meshes.new(name + nm); bm.to_mesh(me); bm.free(); o = obj(name + nm, me, m, sc)
+        if nm in ('_pt', '_lf'):
+            b = m.node_tree.nodes['Principled BSDF']
+            for key in ('Subsurface Weight', 'Subsurface'):
+                if key in b.inputs: b.inputs[key].default_value = 0.3; break
+    return sc
+
+
+def leaf(name, seed, col, lobes, serr):
+    """падающий лист для погоды «листья»: контур с лопастями (дуб) или зубчиками (берёза), заострённый кончик, черешок,
+    лёгкий изгиб по средней жилке; жилки — рельеф, просвечивание"""
+    sc, rng = scene(8, ((1.0, 0.95, 0.88), 4.6), seed)
+    L, Wd = 3.2, 1.7
+    def half(t):   # t от −1 (основание) до 1 (кончик)
+        u = (t + 1) / 2; w = Wd * math.sin(math.pi * u ** 0.85) ** 0.9
+        if lobes: w *= 1 + 0.22 * math.sin(u * math.pi * 2 * lobes) * (1 - u * 0.4)
+        if serr: w *= 1 + 0.05 * math.sin(u * 90)
+        return max(0.0, w)
+    bm = bmesh.new(); N, M = 60, 14; grid = []
+    for i in range(N + 1):
+        t = -1 + 2 * i / N; w = half(t); row = []
+        for j in range(M + 1):
+            v = -1 + 2 * j / M; x = t * L; z = v * w
+            y = 0.35 * (v * v) * w + 0.25 * t * t   # изгиб по жилке и к кончику
+            row.append(bm.verts.new((x * U, -y * U, (z + 2) * U)))
+        grid.append(row)
+    for i in range(N):
+        for j in range(M):
+            if half(-1 + 2 * (i + 0.5) / N) > 0.02: bm.faces.new((grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]))
+    bmesh.ops.create_cone(bm, cap_ends=False, segments=6, radius1=0.09 * U, radius2=0.06 * U, depth=1.1 * U,
+                          matrix=Matrix.Translation(Vector((-(L + 0.5) * U, 0, 2 * U))) @ Matrix.Rotation(math.pi / 2, 4, 'Y'))
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    m, nt, b = mt.principled('leaf_' + name, 0.55, 0.3); N_, Lk = nt.nodes, nt.links
+    tc = N_.new('ShaderNodeTexCoord'); nz = N_.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 400; Lk.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N_.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+    E[0].color = (*mt.lin(tuple(c * 0.78 for c in col)), 1); E[1].color = (*mt.lin(tuple(min(1, c * 1.12) for c in col)), 1)
+    Lk.new(nz.outputs['Fac'], ramp.inputs['Fac']); Lk.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    vein = N_.new('ShaderNodeTexWave'); vein.wave_type = 'BANDS'; vein.inputs['Scale'].default_value = 900; vein.inputs['Distortion'].default_value = 2
+    Lk.new(tc.outputs['Object'], vein.inputs['Vector'])
+    bu = N_.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.25; Lk.new(vein.outputs['Fac'], bu.inputs['Height']); Lk.new(bu.outputs['Normal'], b.inputs['Normal'])
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.35; break
+    o = obj(name, me, m, sc); o.rotation_euler = (0, rng.uniform(-0.5, 0.5), 0)
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -701,6 +794,10 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'rock1': (lambda n, s: boulder(n, s, (0.36, 0.35, 0.33), (0.72, 0.70, 0.66)), 111, 36), 'rock2': (lambda n, s: boulder(n, s, (0.36, 0.35, 0.33), (0.72, 0.70, 0.66)), 112, 36),
     'rock3': (lambda n, s: boulder(n, s, (0.36, 0.35, 0.33), (0.72, 0.70, 0.66), moss=0.5), 113, 36),
     'rockb1': (lambda n, s: boulder(n, s, (0.34, 0.29, 0.23), (0.68, 0.60, 0.50)), 114, 36), 'rockb2': (lambda n, s: boulder(n, s, (0.34, 0.29, 0.23), (0.68, 0.60, 0.50)), 115, 36),
+    'flower1': (lambda n, s: wildflowers(n, s, 'poppy'), 151, 28), 'flower2': (lambda n, s: wildflowers(n, s, 'buttercup'), 152, 28),
+    'flower3': (lambda n, s: wildflowers(n, s, 'daisy'), 153, 28), 'flower4': (lambda n, s: wildflowers(n, s, 'cornflower'), 154, 28),
+    'leaf1': (lambda n, s: leaf(n, s, (0.33, 0.55, 0.15), 3.5, False), 161, 8), 'leaf2': (lambda n, s: leaf(n, s, (0.88, 0.70, 0.16), 0, True), 162, 8),
+    'leaf3': (lambda n, s: leaf(n, s, (0.86, 0.40, 0.11), 2.5, False), 163, 8), 'leaf4': (lambda n, s: leaf(n, s, (0.55, 0.47, 0.22), 0, True), 164, 8),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
 

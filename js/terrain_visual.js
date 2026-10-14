@@ -1232,13 +1232,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         const bs = !G.cap.bushPal && ['bush1', 'bush2'].map((n) => TexLib.data[n]).filter(Boolean);
         if (bs && bs.length) { const T = bs[(rng() * bs.length) | 0], D = R * 3.6; if (surface) surface.sprite(T.canvas, T === TexLib.data.bush1 ? 'bush1' : 'bush2'); c.drawImage(T.canvas, x - D / 2, y + 3 - D, D, D); }
         else foliage(c, blobs, G.cap.bushPal || ['#1c3410', '#3c6a1c', '#7aa42c', '#cce060']);
-        if (G.cap.flowers && rng() < 0.6) { c.fillStyle = rng.pick(G.cap.flowers); for (let j = 0; j < 6; j++) { c.beginPath(); c.arc(x + (rng() - 0.5) * R * 1.8, y - R * (0.4 + rng() * 0.8), 1.4, 0, TAU); c.fill(); } }
+        if (G.cap.flowers && rng() < 0.6) { c.fillStyle = rng.pick(G.cap.flowers); const dots = !(bs && bs.length); for (let j = 0; j < 6; j++) { const fx = x + (rng() - 0.5) * R * 1.8, fy = y - R * (0.4 + rng() * 0.8); if (dots) { c.beginPath(); c.arc(fx, fy, 1.4, 0, TAU); c.fill(); } } }   /* точки-цветы — только на нарисованных кустах, не на фото-кустах Blender */
       }
     }
   }
   if (G.cap.flowers) {
     // цветы кучками по 3–7 штук, крупные головки на заметных стеблях
+    // кучки цветов — спрайты Blender (мак, лютик, ромашка, василёк) в слое растений: чёткие при приближении; места и
+    // случайные числа — прежние (остальной рисунок карты не меняется)
+    const sprites = typeof TexLib !== 'undefined' && !!TexLib.data.flower1, bunch = [];
     const flower = (x, y, h, col, sc) => {
+      if (sprites) { rng(); rng(); const b = bunch[bunch.length - 1]; if (b) { b.n++; b.x += x; b.y = Math.max(b.y, y); } return; }
       c.strokeStyle = '#3a7a24'; c.lineWidth = 1.3; c.beginPath(); c.moveTo(x, y + 1); c.quadraticCurveTo(x + (rng() - 0.5) * 3, y - h * 0.5, x + (rng() - 0.5) * 2, y - h); c.stroke();
       c.fillStyle = '#4f9a30'; c.beginPath(); c.ellipse(x + 2, y - h * 0.4, 2.4, 1, -0.5, 0, TAU); c.fill();
       c.fillStyle = css(shadec(col, 0.7));
@@ -1264,8 +1268,18 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
       if (x < nextX || y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y)) continue;
       nextX = x + 40 + rng() * 60; if (rng() < 0.3) continue;
-      const col = rng.pick(G.cap.flowers), n = 3 + (rng() * 5 | 0);
+      const col = rng.pick(G.cap.flowers), n = 3 + (rng() * 5 | 0); if (sprites) bunch.push({ n: 0, x: 0, y: -1e9, col });
       for (let j = 0; j < n; j++) { const fx = x + (rng() - 0.5) * 16; if (!T.isSolid(fx, y + 3) || T.isSolid(fx, y - 3)) continue; flower(fx, y + (rng() - 0.5) * 2, 7 + rng() * 11, rng() < 0.75 ? col : rng.pick(G.cap.flowers), 0.9 + rng() * 0.4); }
+    }
+    for (const b of bunch) {
+      if (!b.n) continue;
+      const x = b.x / b.n, y = b.y, h = (((x * 73856093) ^ (y * 19349663)) >>> 0) / 4294967296;
+      const r = parseInt(b.col.slice(1, 3), 16), g = parseInt(b.col.slice(3, 5), 16), bl = parseInt(b.col.slice(5, 7), 16);   // вид — по цвету прежней кучки
+      const k = bl > r && bl > g ? 'flower4' : r > 200 && g > 200 && bl > 200 ? 'flower3' : r > 200 && g > 150 && bl < 120 ? 'flower2' : 'flower1';
+      const S = TexLib.data[k]; if (!S) continue;
+      const D = 28 * (0.75 + Math.min(7, b.n) * 0.05) * (0.9 + h * 0.2);
+      if (surface) surface.sprite(S.canvas, k);
+      c.save(); c.translate(x, y + 3); if (h < 0.5) c.scale(-1, 1); c.drawImage(S.canvas, -D / 2, -D, D, D); c.restore();
     }
   }
   // плющ на кладке: плети свисают с верхней кромки стен и мостов

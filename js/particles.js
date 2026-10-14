@@ -2,6 +2,8 @@
 /* =========================================================
    Частицы (дым, огонь, искры, обломки, брызги) и погода
    ========================================================= */
+/** упругость отскока обломков по материалу (1 земля/песок, 2–3, 5, 8–9 породы, 4 дерево, 6 металл, 7 снег/лёд) */
+const PART_REST = { 1: 0.18, 2: 0.4, 3: 0.36, 4: 0.28, 5: 0.38, 6: 0.48, 7: 0.25, 8: 0.42, 9: 0.36 };
 const FIRE_COLS = ['#fff6c2', '#ffd35a', '#ffa22a', '#ff6a1a', '#d8341a', '#7a1a10'];
 
 class Particles {
@@ -22,14 +24,17 @@ class Particles {
     for (let i = A.length - 1; i >= 0; i--) {
       const p = A[i]; p.life -= dt;
       if (p.life <= 0) { if (this.onRest && (p.t === 3 || p.t === 7) && p.y < wy) this.onRest(p); A[i] = A[A.length - 1]; A.pop(); continue; }
-      if (p.drag) { const k = 1 - p.drag * dt; p.vx *= k; p.vy *= k; }
+      if (p.t === 3) { const k = 1 / (1 + Math.hypot(p.vx, p.vy) * 0.0016 * dt / Math.max(1, p.s)); p.vx *= k; p.vy *= k; }   // обломки: сопротивление ~v², мелкие тормозят сильнее
+      else if (p.drag) { const k = 1 - p.drag * dt; p.vx *= k; p.vy *= k; }
       if (p.wind) p.vx += wind * p.wind * dt;
       if (p.g) p.vy += p.g * dt;
       const nx = p.x + p.vx * dt, ny = p.y + p.vy * dt;
       if (p.t === 4 && this.onRest && T.isSolid(nx, ny)) { this.onRest(p); A[i] = A[A.length - 1]; A.pop(); continue; }   // капля крови впиталась — пятно
       if (p.collide && T.isSolid(nx, ny)) {
-        if (T.isSolid(p.x, ny)) { p.vy *= -0.3; p.vx *= 0.65; } else p.vx *= -0.5;
-        if (Math.abs(p.vy) < 40) { p.vy = 0; p.vx *= 0.7; p.vr *= 0.5; }
+        // отскок по материалу: камень и металл — упруго, снег и песок гасят, по льду скользит; после удара — катится
+        const m = T.materialAt ? T.materialAt(nx, ny) : 1, e = PART_REST[m] || 0.3, f = m === 7 ? 0.95 : m === 1 ? 0.5 : 0.65;
+        if (T.isSolid(p.x, ny)) { p.vy *= -e; p.vx *= f; if (p.vr !== undefined) p.vr = p.vx / Math.max(1, p.s); } else p.vx *= -e * 1.4;
+        if (Math.abs(p.vy) < 40) { p.vy = 0; p.vx *= m === 7 ? 0.97 : 0.7; if (p.vr !== undefined) p.vr = p.vx / Math.max(1, p.s); }
       } else { p.x = nx; p.y = ny; }
       if (p.rot !== undefined) p.rot += p.vr * dt;
       if ((p.t === 4 || p.t === 3 || p.t === 7) && p.y > wy + 3) p.life = Math.min(p.life, 0.05);
@@ -130,7 +135,17 @@ class Weather {
         c.globalAlpha = a0; break;
       }
       case 'rain': c.strokeStyle = 'rgba(170,190,255,0.35)'; c.lineWidth = 1; c.beginPath(); for (const p of this.p) { c.moveTo(p.x, p.y); c.lineTo(p.x - 1.2, p.y - p.s); } c.stroke(); break;
-      case 'leaves': for (const p of this.p) { c.fillStyle = p.col; c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.scale(1, Math.abs(Math.sin(p.rot * 1.3)) * 0.8 + 0.2); c.beginPath(); c.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, TAU); c.fill(); c.restore(); } break;
+      case 'leaves': {
+        // настоящие листья из Blender (дуб, берёза, осенний, сухой) кувыркаются в воздухе; без них — прежние эллипсы
+        const LV = typeof TexLib !== 'undefined' ? ['leaf1', 'leaf2', 'leaf3', 'leaf4'].map(n => TexLib.data[n]).filter(Boolean) : [];
+        for (const p of this.p) {
+          c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.scale(1, Math.abs(Math.sin(p.rot * 1.3)) * 0.8 + 0.2);
+          if (LV.length) { const im = LV[(p.ph * 7 | 0) % LV.length].canvas, d = p.s * 2.6; c.drawImage(im, -d / 2, -d / 2, d, d); }
+          else { c.fillStyle = p.col; c.beginPath(); c.ellipse(0, 0, p.s, p.s * 0.55, 0, 0, TAU); c.fill(); }
+          c.restore();
+        }
+        break;
+      }
       case 'dust': c.fillStyle = 'rgba(255,230,190,0.35)'; for (const p of this.p) c.fillRect(p.x, p.y, p.s, p.s); break;
       default: {
         c.save(); c.globalCompositeOperation = 'lighter';

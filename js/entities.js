@@ -40,6 +40,10 @@ function flyStep(g, e, dt, grav, windF, r, ignore) {
   return null;
 }
 /** мина миномёта отскакивает от стен и потолка; от пола — нет (там она взрывается) */
+/** разгон ракеты: двигатель работает T с — скорость растёт с k0 до k1 от стартовой (k1 чуть больше 1 — дальность прежняя) */
+const ROCKET_MOTOR = { k0: 0.85, k1: 1.005, T: 0.1 };
+function motorK(M, t) { return M.k0 + (M.k1 - M.k0) * Math.min(1, Math.max(0, t) / M.T); }
+function motorStep(e, M, age, dt) { if (age - dt < M.T) { const f = motorK(M, age) / motorK(M, age - dt); e.vx *= f; e.vy *= f; } }
 function mortarBounce(g, e) {
   const T = g.terrain, sp = Math.hypot(e.vx, e.vy) || 1;
   const n = T.normalAt(e.x - e.vx / sp * 2, e.y - e.vy / sp * 2, 4);
@@ -188,6 +192,7 @@ class Proj extends Ent {
   constructor(g, k, x, y, vx, vy, owner, o = {}) {
     super(g, k, x, y, vx, vy); this.owner = owner; this.team = owner ? owner.team : -1; this.o = o;
     this.wind = o.wind ?? 0; this.grav = o.grav ?? 1; this.r = o.r ?? 2.5; this.a = Math.atan2(vy, vx); this.pushable = false;
+    if (o.motor) { this.vx *= o.motor.k0; this.vy *= o.motor.k0; }
   }
   update(g, dt) {
     this.age += dt;
@@ -205,6 +210,7 @@ class Proj extends Ent {
     if (this.k === 'drill' && this.s === 1) return this.drillUpdate(g, dt);
     if (this.o.spiral) this.spiralStep(dt);
     if (this.o.dragX) this.vx *= Math.exp(-this.o.dragX * dt);   // бомба: горизонтальная скорость самолёта гаснет в воздухе
+    if (this.o.motor) motorStep(this, this.o.motor, this.age, dt);
     const hit = flyStep(g, this, dt, this.grav, this.wind, this.r, this.age < 0.3 ? this.owner : null);
     this.a = Math.atan2(this.vy, this.vx);
     if (!hit) { if (this.age > 16) this.boom(g); return; }
@@ -671,7 +677,7 @@ function boltPath(x1, y1, x2, y2, rough) {
   return pts.map(p => [Math.round(p[0]), Math.round(p[1])]);
 }
 const FIRE = {
-  bazooka(g, s, p) { shootProj(g, s, p, 'rocket', 1050, { wind: 1, r: 3 }); },
+  bazooka(g, s, p) { shootProj(g, s, p, 'rocket', 1050, { wind: 1, r: 3, motor: ROCKET_MOTOR }); },
   homing(g, s, p) {
     const t = g.turn.target; if (!t) return false;
     // захват цели с ошибкой: чем дальше цель, тем больше промах головки
@@ -820,7 +826,9 @@ function simulateShot(g, kind, x, y, vx, vy, owner, fuse) {
     return { x: e.x, y: e.y };
   }
   const wind = kind === 'rocket' || kind === 'mortar' ? 1 : 0; let bn = 0;
+  if (kind === 'rocket') { e.vx *= ROCKET_MOTOR.k0; e.vy *= ROCKET_MOTOR.k0; }
   for (let t = 0; t < 8; t += dt) {
+    if (kind === 'rocket') motorStep(e, ROCKET_MOTOR, t + dt, dt);
     const hit = flyStep(g, e, dt, 1, wind, 3, t < 0.3 ? owner : null);
     if (kind === 'mortar' && hit && hit.type === 'terrain' && bn < 4 && mortarBounce(g, e)) { bn++; continue; }
     if (hit) return (hit.type === 'terrain' || hit.type === 'soldier') ? { x: e.x, y: e.y } : null;

@@ -194,10 +194,16 @@ const Sfx = (() => {
   const STEPS = { 1: 'dirt', 2: 'rock', 3: 'rock', 4: 'wood', 5: 'rock', 6: 'metal', 7: 'snow', 8: 'rock', 9: 'rock' };
   const buffers = {};
   function loadSamples() {
-    const names = new Set(Object.values(REAL).flatMap(e => e.f).concat(['boom1', 'boom2', 'boom3', 'boom4']));
+    const names = new Set(Object.values(REAL).flatMap(e => e.f).concat(BOOM_S, BOOM_L, ['nukeboom', 'ice0', 'ice1']));
     for (const k in STEP_SET) for (const n of STEP_SET[k]) names.add(n);
-    for (const n of names) fetch(`assets/sfx/${n}.ogg`).then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => ac.decodeAudioData(b)).then(buf => { let pk = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i += 2) pk = Math.max(pk, Math.abs(d[i])); } buffers[n] = { buf, norm: clamp(0.9 / (pk || 1), 0.4, 6) }; }).catch(() => { /* останется синтез */ });
+    for (const n of names) loadOne(n).catch(() => { /* останется синтез */ });
   }
+  function loadOne(n) {
+    return fetch(`assets/sfx/${n}.ogg`).then(r => r.ok ? r.arrayBuffer() : Promise.reject()).then(b => ac.decodeAudioData(b)).then(buf => { let pk = 0; for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i += 2) pk = Math.max(pk, Math.abs(d[i])); } return (buffers[n] = { buf, norm: clamp(0.9 / (pk || 1), 0.4, 6) }); });
+  }
+  /* настоящие разрывы (Sonniss GDC 2026, фейерверочные заряды вблизи) вперемешку с прежними записями; крупные — ниже и с хвостом */
+  const BOOM_S = ['boom1', 'boom2', 'boom4', 'boom5', 'boom6', 'boom7'], BOOM_L = ['boom3', 'boom4', 'boom8', 'boom9'];
+  let lastNuke = -9;
   function sample(n, pos, vol, rate = 1, offset = 0) {
     const e = buffers[n]; if (!e) return false; const b = e.buf;   // громкость выровнена по пику записи
     const src = ac.createBufferSource(); src.buffer = b; src.playbackRate.value = rate;
@@ -208,8 +214,10 @@ const Sfx = (() => {
   function real(name, pos, arg) {
     if (name === 'explosion') {
       // запись взрыва + синтезированный низкий удар для веса; крупные взрывы ниже и громче
-      const size = clamp(arg || 1, 0.6, 3), n = pick(size > 1.6 ? ['boom3', 'boom4', 'boom1'] : ['boom1', 'boom2', 'boom4']);
+      const size = clamp(arg || 1, 0.6, 3), n = pick(size > 1.6 ? BOOM_L : BOOM_S);
       if (!sample(n, pos, 1.5 + size * 0.45, rr([0.84, 0.98]) / Math.sqrt(Math.max(1, size * 0.8)), n === 'boom3' ? 0.45 : 0)) return false;
+      // ядерный удар: под разрывом — долгий низкий раскат (9 с) с рокотом по земле
+      if (size >= 2.9 && ac.currentTime - lastNuke > 1.5) { lastNuke = ac.currentTime; sample('nukeboom', pos, 2.4, 0.92); }
       const t = ac.currentTime, d = out(pos, 1.0 + size * 0.3); tone(d, t, 0.5 + size * 0.35, { f0: 64, f1: 26, gain: 0.9 }); noise(d, t, 0.9 + size * 0.5, { f0: 700, f1: 60, gain: 0.55 });   // удар и рокот — взрыв заметно громче любого стука
       // эхо — от настоящих стен рельефа вокруг взрыва (скалы, стены зданий, своды пещер): задержка — путь до стены и обратно
       // со скоростью звука, дальние отражения тише и глуше; в открытом поле — одно далёкое отражение от горизонта
@@ -334,11 +342,19 @@ const Sfx = (() => {
     try { c.g.gain.setTargetAtTime(0.0001, ac.currentTime, 0.02); c.osc.stop(ac.currentTime + 0.1); } catch (e) { /* */ }
   }
   /* фоновая атмосфера карты: несколько живых слоёв, огибающие меняются случайно (порывы, волны), а не по кругу */
+  /* живые записи фона (Sonniss GDC 2026): петля 44 с с бесшовным стыком; громкость — по среднему уровню записи */
+  const AMB_REC = { wind: ['amb_wind', 0.1], snow: ['amb_snow', 0.13], sea: ['amb_sea', 0.18], lava: ['amb_lava', 0.4], space: ['amb_space', 0.027], meadow: ['amb_meadow', 0.11], city: ['amb_city', 0.068] };
+  function recLoop(n, v, A, to) {
+    const go = (e) => { if (!A.alive || ambient !== A || !e) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = e.buf; s.loop = true; g.gain.value = v; s.connect(g); g.connect(to); s.start(0, Math.random() * e.buf.duration); A.nodes.push(s, g); };
+    if (buffers[n]) go(buffers[n]); else loadOne(n).then(go).catch(() => { /* только синтез */ });
+  }
   function setAmbient(kind) {
     stopAmbient();
     if (!ac || !kind) return;
     const bus = ac.createGain(); bus.gain.value = 0.0001; bus.connect(master);
     const A = { g: bus, nodes: [], timers: [], alive: true }; ambient = A;
+    const rec = AMB_REC[kind], pbus = ac.createGain(); pbus.gain.value = rec ? 0.5 : 1; pbus.connect(bus); A.nodes.push(pbus);   // синтез — тише под записью: живые порывы поверх
+    if (rec) recLoop(rec[0], rec[1], A, bus);
     const R = (a, b) => a + Math.random() * (b - a);
     const src = () => { const n = ac.createBufferSource(); n.buffer = noiseBuf; n.loop = true; n.start(0, Math.random() * 1.9); A.nodes.push(n); return n; };
     const filt = (type, f, q = 0.7) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; A.nodes.push(b); return b; };
@@ -346,7 +362,7 @@ const Sfx = (() => {
     const later = (ms, fn) => { const id = setTimeout(() => { if (A.alive && ambient === A) fn(); }, ms); A.timers.push(id); };
     /** параметр бродит к случайным значениям: каждые tmin–tmax с — новое значение, плавно */
     const wander = (param, lo, hi, tmin, tmax) => { const step = () => { const d = R(tmin, tmax); param.setTargetAtTime(R(lo, hi), ac.currentTime, d * 0.45); later(d * 1000, step); }; step(); };
-    const layer = (type, f, q, g0, to = bus) => { const n = src(), b = filt(type, f, q), g = gain(g0); n.connect(b); b.connect(g); g.connect(to); return { b, g }; };
+    const layer = (type, f, q, g0, to = pbus) => { const n = src(), b = filt(type, f, q), g = gain(g0); n.connect(b); b.connect(g); g.connect(to); return { b, g }; };
     switch (kind) {
       case 'wind': {   // долина, каньон, замки, город: низкий гул ветра и свист в порывах
         const lo = layer('lowpass', 320, 0.6, 0.04); wander(lo.g.gain, 0.015, 0.075, 1.2, 3.5); wander(lo.b.frequency, 220, 520, 2, 5);
@@ -358,6 +374,9 @@ const Sfx = (() => {
         const lo = layer('lowpass', 400, 0.6, 0.05); wander(lo.g.gain, 0.025, 0.09, 1.5, 4);
         const howl = layer('bandpass', 520, 7, 0.02); wander(howl.b.frequency, 330, 880, 2.5, 6); wander(howl.g.gain, 0.004, 0.035, 2, 5);
         const hiss = layer('highpass', 4200, 0.6, 0.006); wander(hiss.g.gain, 0.001, 0.01, 0.8, 2.5);
+        // вдали трескается лёд (каждые 6–18 с, в разных сторонах)
+        const ice = () => { sample(Math.random() < 0.5 ? 'ice0' : 'ice1', { x: listener.x + R(-1600, 1600), y: listener.y + R(-150, 350) }, R(0.05, 0.12), R(0.8, 1.1)); later(R(6000, 18000), ice); };
+        later(R(3000, 8000), ice);
         break;
       }
       case 'sea': {   // пиратская бухта: накат волн (подъём-спад 5–9 с) и шипение пены на гребне
@@ -376,21 +395,21 @@ const Sfx = (() => {
         const blub = () => { const t = ac.currentTime, f = R(70, 190), o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
           o.frequency.setValueAtTime(f * 1.6, t); o.frequency.exponentialRampToValueAtTime(f * 0.6, t + 0.18);
           g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(R(0.02, 0.06), t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-          o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.25); later(R(250, 1600), blub); };
+          o.connect(g); g.connect(pbus); o.start(t); o.stop(t + 0.25); later(R(250, 1600), blub); };
         later(600, blub);
-        const crack = () => { noise(bus, ac.currentTime, R(0.02, 0.06), { type: 'highpass', f0: R(2500, 5000), gain: R(0.01, 0.035), attack: 0.001 }); later(R(400, 3000), crack); };
+        const crack = () => { noise(pbus, ac.currentTime, R(0.02, 0.06), { type: 'highpass', f0: R(2500, 5000), gain: R(0.01, 0.035), attack: 0.001 }); later(R(400, 3000), crack); };
         later(900, crack);
         break;
       }
       case 'space': {   // Alien: гул станции (два близких тона дают биения) и плывущий шорох
-        for (const [f, v] of [[55, 0.03], [55.6, 0.03], [110.4, 0.008]]) { const o = ac.createOscillator(), g = gain(v); o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(bus); o.start(); A.nodes.push(o); }
+        for (const [f, v] of [[55, 0.03], [55.6, 0.03], [110.4, 0.008]]) { const o = ac.createOscillator(), g = gain(v); o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(pbus); o.start(); A.nodes.push(o); }
         const air = layer('bandpass', 420, 1.2, 0.01); wander(air.b.frequency, 250, 900, 3, 7); wander(air.g.gain, 0.003, 0.016, 2, 5);
         break;
       }
       default: { const w = layer('lowpass', 400, 0.6, 0.04); wander(w.g.gain, 0.015, 0.06, 1.5, 4); }
     }
     // птицы (долина, замки, бухта): редкие короткие трели с вибрато, далеко и в разных сторонах
-    if (scene && scene.theme && scene.theme.birds) {
+    if (scene && scene.theme && scene.theme.birds && kind !== 'meadow') {   // в записи луга птицы уже есть
       const bird = () => {
         const t0 = ac.currentTime, pan = ac.createStereoPanner(), g = gain(1); pan.pan.value = R(-0.8, 0.8); g.connect(pan); pan.connect(bus); A.nodes.push(pan);
         const n = 2 + Math.floor(Math.random() * 4), base = R(2400, 4200), v = R(0.004, 0.012);

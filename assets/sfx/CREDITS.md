@@ -17,4 +17,20 @@
 | splash1–2 | 100 CC0 SFX | набор «100-CC0-SFX» из сборки выше |
 | thunder | 100 CC0 SFX 2 | набор «100-cc0-sfx-2» из сборки выше |
 
+## Sonniss GDC 2026 Game Audio Bundle
+
+Файлы `amb_*`, `boom5–9`, `nukeboom`, `ice0–1` вырезаны и сжаты из бесплатного набора [Sonniss GDC 2026](https://gdc.sonniss.com/) (лицензия: без указания авторства, можно использовать в играх; нельзя распространять сами записи как отдельную библиотеку звуков, нельзя использовать для обучения ИИ — https://sonniss.com/gdc-bundle-license/). Обработка — `dev/tools/sonniss_make.py`.
+
+| Файлы | Запись | Автор |
+|---|---|---|
+| amb_wind, amb_snow | WINDDsgn_EXT, Eye Of The Storm | 344 Audio — Extreme Winds Vol. 1 |
+| amb_sea | Medium Waves at Pebble Beach | Just Sound Effects — Rocky Coast of Norway |
+| amb_lava | Fire Crackling, Popping, Witch's Cauldron | 344 Audio — Haunting Ambiences Vol. 5 |
+| amb_meadow | Meadow Pipits, Insects, Wind through Grass | Just Sound Effects — Highlands of Norway |
+| amb_city | City, Madrid, Soft Traffic and Human Activity | Sonik Sound Library — Urban Life |
+| amb_space | Roomtone Space Ship Interior Muted | Cinematic Sound Design — Sci-Fi Drones |
+| boom5–9 | Fireworks, powerful explosions, near | Ivo Vicic — Fireworks FX |
+| nukeboom | Effective Trailer Booms Vol. 2 — 011 | Federico Soler |
+| ice0–1 | ice block snapping, surface cracking | Alexander Kopeikin — 100 kHz Designed Ice |
+
 В игре записи проходят через пространственную обработку `js/audio.js`: стереопанораму, затухание с расстоянием, приглушение препятствиями и реверберацию. К взрывам добавляется синтезированный низкочастотный удар. Если запись не загрузилась, используется процедурный синтез.

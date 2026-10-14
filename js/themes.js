@@ -24,7 +24,7 @@ const THEMES = {
       outline: '#2c1a0d', rim: '#b89a78', sun: '#ffe0a0', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_valley', cave: 'cave_wall', grass: 'grass_valley' },
     },
     scatter: ['bush', 'rock', 'flowers', 'flowers', 'bush', 'tuft'],
-    weather: 'leaves', birds: true, ambient: null, ambientSound: 'wind',
+    weather: 'leaves', birds: true, ambient: null, ambientSound: 'meadow',
   },
   desert: {
     id: 'desert',
@@ -160,7 +160,7 @@ const THEMES = {
       outline: '#23170c', veins: null, ceiling: 'roots', capMats: [1], tex: { dirt: 'dirt_castle', cave: 'cave_wall', grass: 'grass_valley', gain: [0.94, 0.96, 1.04] /* r24: новый грунт чуть спокойнее по цвету */ },
     },
     scatter: ['bush', 'rock', 'flowers', 'tuft', 'bush'],
-    weather: 'leaves', birds: true, ambient: '#ffe6d0', ambientSound: 'wind', glow: true,
+    weather: 'leaves', birds: true, ambient: '#ffe6d0', ambientSound: 'meadow', glow: true,
   },
   city: {
     id: 'city',
@@ -182,7 +182,7 @@ const THEMES = {
       outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [2.9, 2.6, 1.6] },
     },
     scatter: ['trash', 'tuft'],
-    weather: null, birds: false, ambient: '#aaa8cf', ambientSound: 'wind', glow: true,   // без дождя (просьба игрока)
+    weather: null, birds: false, ambient: '#aaa8cf', ambientSound: 'city', glow: true,   // без дождя (просьба игрока)
   },
 };
 
