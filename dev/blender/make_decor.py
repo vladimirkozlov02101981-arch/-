@@ -886,8 +886,13 @@ def lantern(name, seed):
     iron = mat_col('iron', (0.10, 0.09, 0.08), 0.55, 0.5, 0.4, 200)
     brass = mat_col('brass', (0.62, 0.45, 0.20), 0.35, 0.8, 0.3, 300)
     bm = bmesh.new()
-    for k in range(3):   # звенья цепи
-        bmesh.ops.create_cone(bm, cap_ends=False, segments=12, radius1=0.45 * U, radius2=0.45 * U, depth=1.1 * U, matrix=Matrix.Translation(Vector((0, 0, (21.0 - k * 0.95) * U))) @ Matrix.Rotation(math.pi / 2 * (k % 2), 4, 'Z') @ Matrix.Rotation(math.pi / 2, 4, 'X'))
+    # крепление к потолку: кованая пластина с двумя шляпками гвоздей и крюк; от крюка до крышки — цепь из звеньев-колец
+    box(bm, -2.4, 2.4, -1.2, 1.2, 21.2, 22.2)
+    for sx in (-1.6, 1.6): bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=0.38 * U, matrix=Matrix.Translation(Vector((sx * U, -1.2 * U, 21.7 * U))))
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=10, radius1=0.32 * U, radius2=0.32 * U, depth=1.0 * U, matrix=Matrix.Translation(Vector((0, 0, 20.8 * U))))
+    for k in range(4):   # звенья цепи — торы, через одно повёрнуты на 90°
+        z = 19.9 - k * 0.62
+        bmesh.ops.create_cone(bm, cap_ends=False, segments=14, radius1=0.5 * U, radius2=0.5 * U, depth=0.22 * U, matrix=Matrix.Translation(Vector((0, 0, z * U))) @ Matrix.Rotation(math.pi / 2 * (k % 2), 4, 'Z') @ Matrix.Rotation(math.pi / 2, 4, 'X') @ Matrix.Diagonal(Vector((0.75, 1.0, 1.0, 1))))
     bmesh.ops.create_cone(bm, cap_ends=True, segments=4, radius1=4.2 * U, radius2=0.6 * U, depth=3.2 * U, matrix=Matrix.Translation(Vector((0, 0, 16.6 * U))) @ Matrix.Rotation(math.pi / 4, 4, 'Z'))
     box(bm, -3.2, 3.2, -3.2, 3.2, 4.6, 5.8)
     part('_i', bm, iron)
