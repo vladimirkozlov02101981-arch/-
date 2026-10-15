@@ -685,6 +685,15 @@ class Renderer {
     if (back) { c.fillStyle = css(shadec(L.mid, lava ? 1 : 0.8)); c.fill(); return; }
     const g = c.createLinearGradient(0, wy - 6, 0, wy + 280); g.addColorStop(0, L.top); g.addColorStop(0.22, L.mid); g.addColorStop(1, L.deep);
     c.save(); c.globalAlpha = L.alpha; c.fillStyle = g; c.fill(); c.restore();
+    // лава: настоящая корка — тёмные плиты и светящиеся трещины расплава (dev/tools/make_lava.py), медленно дрейфует;
+    // к глубине темнее. Без текстуры — прежняя заливка с плитами-эллипсами
+    const LT = lava && typeof TexLib !== 'undefined' && TexLib.data.lava_surface;
+    if (LT) {
+      if (!this.lavaPat || this.lavaPatC !== c || this.lavaPatS !== LT.canvas) { this.lavaPat = c.createPattern(LT.canvas, 'repeat'); this.lavaPatC = c; this.lavaPatS = LT.canvas; }
+      const k = 512 / LT.canvas.width; this.lavaPat.setTransform(new DOMMatrix([k, 0, 0, k * 0.55, t * 4, wy + t * 1.2]));
+      c.save(); c.fillStyle = this.lavaPat; c.globalAlpha = 0.94; c.fill();
+      const gd = c.createLinearGradient(0, wy, 0, wy + 300); gd.addColorStop(0, 'rgba(40,6,0,0)'); gd.addColorStop(1, 'rgba(30,4,0,0.7)'); c.fillStyle = gd; c.globalAlpha = 1; c.fill(); c.restore();
+    }
     if (!lava) this.drawReflection(c, wy, t);
     c.save();
     const span = Math.max(1, x1 - x0), far = span > 9000, fc = hex2rgb(L.foam);
@@ -716,8 +725,8 @@ class Renderer {
     }
     if (lava) {
       c.fillStyle = 'rgba(90,20,5,0.45)';
-      for (let i = 0; i < 24; i++) { const gx = x0 + (((i * 173.3 + t * 9 * (i % 3 + 1)) % span) + span) % span; c.beginPath(); c.ellipse(gx, wy + 8 + (i * 7 % 40), 12 + (i % 5) * 5, 3, 0, 0, TAU); c.fill(); }
-      c.globalCompositeOperation = 'lighter'; const g2 = c.createLinearGradient(0, wy - 50, 0, wy + 40); g2.addColorStop(0, 'rgba(255,120,30,0)'); g2.addColorStop(1, 'rgba(255,150,50,0.35)'); c.fillStyle = g2; c.fillRect(x0, wy - 50, span, 90);
+      if (!LT) for (let i = 0; i < 24; i++) { const gx = x0 + (((i * 173.3 + t * 9 * (i % 3 + 1)) % span) + span) % span; c.beginPath(); c.ellipse(gx, wy + 8 + (i * 7 % 40), 12 + (i % 5) * 5, 3, 0, 0, TAU); c.fill(); }
+      c.globalCompositeOperation = 'lighter'; const g2 = c.createLinearGradient(0, wy - 50, 0, wy + 70); g2.addColorStop(0, 'rgba(255,120,30,0)'); g2.addColorStop(0.42, 'rgba(255,150,50,0.35)'); g2.addColorStop(1, 'rgba(255,150,50,0)'); c.fillStyle = g2; c.fillRect(x0, wy - 50, span, 120);   /* жар над лавой — без резкой нижней границы */
     } else {
       // лучи света в толще воды: мягкие наклонные клинья, медленно колышутся
       c.save(); c.globalCompositeOperation = 'lighter';
