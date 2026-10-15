@@ -31,7 +31,7 @@ STYLES = {
                   # r26 → v53: глыбы светлее и контрастнее (эталон: медиана ~30, разброс ~47 — светлые грани на тёмной крошке)
                   rock=[(104, 96, 100), (86, 79, 85), (120, 110, 112), (76, 70, 78), (96, 88, 90), (112, 100, 106)],
                   matrix=(26, 23, 29), moss=(66, 76, 40), moss_k=0.16,
-                  crystals=160, crystal_cols=[(150, 110, 255), (90, 210, 255), (210, 120, 255)],
+                  crystals=90, crystal_size=2.3, crystal_cols=[(150, 110, 255), (90, 210, 255), (210, 120, 255)],
                   light=dict(col=(0.86, 0.88, 1.0), elev=30, energy=4.6)),
 }
 
@@ -102,7 +102,7 @@ def field(st):
     for k in range(st['crystals']):
         x0, y0 = rng.uniform(0, T), rng.uniform(0, TY); col = np.array(st['crystal_cols'][rng.integers(0, len(st['crystal_cols']))], np.float32)
         for j in range(rng.integers(3, 6)):
-            a = rng.uniform(0, math.tau); L = rng.uniform(2.5, 7); w = rng.uniform(0.8, 1.6)
+            a = rng.uniform(0, math.tau); cz = st.get('crystal_size', 1.0); L = rng.uniform(2.5, 7) * cz; w = rng.uniform(0.8, 1.6) * cz   # r28: крупнее и заметнее
             ax, ay = math.cos(a), math.sin(a)
             xs = int((x0 - 9) * R); ys = int((y0 - 9) * R); sz = int(18 * R)
             yy, xx = np.mgrid[ys:ys + sz, xs:xs + sz]; wx = (xx + 0.5) / R - x0; wy = (yy + 0.5) / R - y0
