@@ -581,9 +581,9 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) {
             // свет каждого окна свой (ячейка окна в координатах здания, а не плитки): часть гаснет, у остальных — разная яркость и тон
-            const wc = Math.floor((x - prm.x0) / 31.4), wr = Math.floor((y - prm.y0) / 38), hw = hash3(wc, wr, info.idx * 7 + 11), ht = hash3(wc, wr, info.idx * 7 + 12);
+            const wc = Math.floor((x - prm.x0) / 32), wr = Math.floor((y - prm.y0) / 40), hw = hash3(wc, wr, info.idx * 7 + 11), ht = hash3(wc, wr, info.idx * 7 + 12);
             if (hw < 0.3) { r *= 0.16; g *= 0.17; bl *= 0.2; }
-            else { const k = 0.72 + hw * 0.42; r = Math.min(255, r * k * (ht < 0.5 ? 1.04 : 0.94)); g = Math.min(255, g * k); bl = Math.min(255, bl * k * (ht < 0.5 ? 0.9 : 1.1));
+            else { const k = 0.72 + hw * 0.42, warmW = ht < 0.68; r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
               o.emit = true; o.emitTex = true; o.ga = (isBack ? 150 : 230) * (0.6 + hw * 0.4); o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           }
           else { r *= S.tgR; g *= S.tgG; bl *= S.tgB; }                                              // стены: яркость по эталону (gain темы)
