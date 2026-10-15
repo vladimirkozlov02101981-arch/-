@@ -415,16 +415,25 @@ def obsidian(name, seed):
 def lavarock(name, seed):
     """остывающая лава: бугристый тёмный камень, по трещинам светится"""
     sc, rng = scene(34, ((1.0, 0.7, 0.5), 4.6), seed)
-    me = lumpy_sphere(name, Vector((0, 0, 4 * U)), 11 * U, seed, 0.28, 0.62)
-    m = mt.mat_stone('lava', (0.05, 0.04, 0.035), (0.20, 0.16, 0.14), rough=0.9, spec=0.15, scale=50, bumpk=1.5)
-    nt = m.node_tree; b = nt.nodes['Principled BSDF']
-    vo = nt.nodes.new('ShaderNodeTexVoronoi'); vo.feature = 'DISTANCE_TO_EDGE'; vo.inputs['Scale'].default_value = 3.2
-    mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.0; mr.inputs['From Max'].default_value = 0.018
+    # v57: бугристее и угловатее; трещины рваные (искажённые шумом), светится лишь треть из них и тоньше — не «панцирь»
+    me = lumpy_sphere(name, Vector((0, 0, 4 * U)), 11 * U, seed, 0.42, 0.58)
+    m = mt.mat_stone('lava', (0.05, 0.04, 0.035), (0.22, 0.17, 0.15), rough=0.92, spec=0.12, scale=70, bumpk=2.0)
+    nt = m.node_tree; b = nt.nodes['Principled BSDF']; N_, L_ = nt.nodes, nt.links
+    tc = N_.new('ShaderNodeTexCoord'); dn = N_.new('ShaderNodeTexNoise'); dn.inputs['Scale'].default_value = 6; dn.inputs['Detail'].default_value = 6
+    L_.new(tc.outputs['Object'], dn.inputs['Vector'])
+    mix = N_.new('ShaderNodeVectorMath'); mix.operation = 'MULTIPLY_ADD'; mix.inputs[1].default_value = (0.35, 0.35, 0.35)
+    L_.new(dn.outputs['Color'], mix.inputs[0]); L_.new(tc.outputs['Object'], mix.inputs[2])
+    vo = N_.new('ShaderNodeTexVoronoi'); vo.feature = 'DISTANCE_TO_EDGE'; vo.inputs['Scale'].default_value = 3.2; L_.new(mix.outputs['Vector'], vo.inputs['Vector'])
+    mr = N_.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.0; mr.inputs['From Max'].default_value = 0.009
     mr.inputs['To Min'].default_value = 4.0; mr.inputs['To Max'].default_value = 0.0
-    nt.links.new(vo.outputs['Distance'], mr.inputs['Value'])
-    if 'Emission Strength' in b.inputs: nt.links.new(mr.outputs['Result'], b.inputs['Emission Strength'])
+    L_.new(vo.outputs['Distance'], mr.inputs['Value'])
+    mk = N_.new('ShaderNodeTexNoise'); mk.inputs['Scale'].default_value = 2.2; L_.new(tc.outputs['Object'], mk.inputs['Vector'])
+    gate = N_.new('ShaderNodeMapRange'); gate.inputs['From Min'].default_value = 0.52; gate.inputs['From Max'].default_value = 0.6
+    L_.new(mk.outputs['Fac'], gate.inputs['Value'])
+    mul = N_.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'; L_.new(mr.outputs['Result'], mul.inputs[0]); L_.new(gate.outputs['Result'], mul.inputs[1])
+    if 'Emission Strength' in b.inputs: L_.new(mul.outputs['Value'], b.inputs['Emission Strength'])
     for key in ('Emission Color', 'Emission'):
-        if key in b.inputs: b.inputs[key].default_value = (1.0, 0.36, 0.06, 1); break
+        if key in b.inputs: b.inputs[key].default_value = (1.0, 0.30, 0.04, 1); break
     obj(name, me, m, sc)
     return sc
 
@@ -476,10 +485,14 @@ def skull(name, seed):
 def bones(name, seed):
     """кости в песке: дуги рёбер и длинная кость"""
     sc, rng = scene(44, ((1.0, 0.86, 0.66), 5.0), seed)
+    # v57: рёбра неровные — разной длины, наклона и кривизны, вдоль позвоночника; часть ушла в грунт (ниже z=0)
     bm = bmesh.new()
-    for i in range(4):
-        R = (8 + i * 3.6); pts = [Vector((-4 * U + math.cos(a) * R * U, (i - 1.5) * 2.5 * U, math.sin(a) * R * 0.9 * U)) for a in [math.pi * (0.55 + 0.4 * k / 10) for k in range(11)]]
-        rib_tube(bm, pts, [(1.1 - 0.4 * k / 10) * U for k in range(11)], 0, 0, 10, True)
+    for i in range(5):
+        R = rng.uniform(10, 14) * (1 - i * 0.06); a0 = rng.uniform(0.06, 0.12); a1 = rng.uniform(0.6, 0.7); sx = -10 + i * 3.6
+        kz = rng.uniform(0.85, 1.0); pts = [Vector(((sx + (math.cos(a) - 1) * R * 0.5) * U, (i - 2) * 1.2 * U, (math.sin(a) * R * kz - 0.6) * U)) for a in [math.pi * (a0 + (a1 - a0) * k / 10) for k in range(11)]]
+        rib_tube(bm, pts, [(1.0 - 0.45 * k / 10) * U for k in range(11)], 0, 0, 9, True)
+    for k in range(9):   # позвонки — бугристые бусины вдоль хребта
+        bmesh.ops.create_icosphere(bm, subdivisions=2, radius=rng.uniform(0.9, 1.2) * U, matrix=Matrix.Translation(Vector(((-14 + k * 2.4) * U, 1.5 * U, (0.9 + rng.uniform(-0.2, 0.2)) * U))) @ Matrix.Diagonal(Vector((1.0, 0.8, 1.1, 1))))
     rib_tube(bm, [Vector(((-16 + 26 * t) * U, -6 * U, (1 + 0.6 * t) * U)) for t in [k / 10 for k in range(11)]], [1.3 * U * (1.4 if k in (0, 10) else 1) for k in range(11)], 0, 0, 12, True)
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
     obj(name, me, mt.mat_stone('bone', (0.62, 0.56, 0.46), (0.92, 0.88, 0.80), rough=0.7, spec=0.25, scale=40, bumpk=0.6), sc)
