@@ -33,8 +33,9 @@ STYLES = {
                     light=dict(col=(0.86, 0.9, 1.0), elev=28, energy=4.6)),
     'steel': dict(name='metal_steel', seed=6, T=512, profile='plates', sheet=(64, 32), amp=0.6,
                   paint=(122, 130, 144), primer=(104, 108, 114), rust=(128, 72, 40), chip=0.05, streaks=0.35, dirt=0.25, light=None),
-    'ufo': dict(name='metal_ufo', seed=7, T=512, profile='plates', sheet=(48, 24), amp=0.4,
-                paint=(156, 163, 181), primer=(120, 126, 140), rust=(98, 104, 120), chip=0.03, streaks=0.2, dirt=0.15,
+    # r27 → v55: крупные листы 128×64 (сетка заклёпок втрое реже, не «кирпич»), рельеф глубже, потёки и грязь гуще
+    'ufo': dict(name='metal_ufo', seed=7, T=512, profile='plates', sheet=(128, 64), amp=0.75,
+                paint=(156, 163, 181), primer=(120, 126, 140), rust=(98, 104, 120), chip=0.035, streaks=0.4, dirt=0.32,
                 light=dict(col=(0.86, 0.88, 1.0), elev=30, energy=4.6)),
 }
 
