@@ -872,6 +872,49 @@ def cottage(name, seed):
     for o in parts: o.location = (-(x0 + x1) / 2, 0, -z0 - 0.5 * U)
     return sc
 
+
+def lantern(name, seed):
+    """судовой фонарь: цепь, кованая крышка-пирамида, латунный каркас из четырёх стоек, стёкла, внутри горит свеча
+    (тёплое свечение изнутри); верх цепи — у верхнего края кадра (фонарь висит под потолком трюма)"""
+    sc, rng = scene(24, ((1.0, 0.85, 0.65), 2.2), seed)
+    def box(bm, x0, x1, y0, y1, z0, z1):
+        bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation(Vector(((x0 + x1) / 2 * U, (y0 + y1) / 2 * U, (z0 + z1) / 2 * U))) @ Matrix.Diagonal(Vector(((x1 - x0) * U, (y1 - y0) * U, (z1 - z0) * U, 1))))
+    def part(nm, bm, mat, smooth=True):
+        me = bpy.data.meshes.new(name + nm); bm.to_mesh(me); bm.free(); o = obj(name + nm, me, mat, sc)
+        for p_ in me.polygons: p_.use_smooth = smooth
+        return o
+    iron = mat_col('iron', (0.10, 0.09, 0.08), 0.55, 0.5, 0.4, 200)
+    brass = mat_col('brass', (0.62, 0.45, 0.20), 0.35, 0.8, 0.3, 300)
+    bm = bmesh.new()
+    for k in range(3):   # звенья цепи
+        bmesh.ops.create_cone(bm, cap_ends=False, segments=12, radius1=0.45 * U, radius2=0.45 * U, depth=1.1 * U, matrix=Matrix.Translation(Vector((0, 0, (21.0 - k * 0.95) * U))) @ Matrix.Rotation(math.pi / 2 * (k % 2), 4, 'Z') @ Matrix.Rotation(math.pi / 2, 4, 'X'))
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=4, radius1=4.2 * U, radius2=0.6 * U, depth=3.2 * U, matrix=Matrix.Translation(Vector((0, 0, 16.6 * U))) @ Matrix.Rotation(math.pi / 4, 4, 'Z'))
+    box(bm, -3.2, 3.2, -3.2, 3.2, 4.6, 5.8)
+    part('_i', bm, iron)
+    bm = bmesh.new()
+    for sx in (-1, 1):
+        for sy in (-1, 1): box(bm, sx * 2.9 - 0.35, sx * 2.9 + 0.35, sy * 2.9 - 0.35, sy * 2.9 + 0.35, 5.8, 15.0)
+    box(bm, -3.3, 3.3, -3.3, 3.3, 14.6, 15.2); box(bm, -3.3, 3.3, -3.3, 3.3, 5.6, 6.2)
+    part('_b', bm, brass, False)
+    glass, nt, b = mt.principled('lglass', 0.15, 0.5); b.inputs['Base Color'].default_value = (*mt.lin((1.0, 0.80, 0.48)), 1)
+    for key in ('Emission Color', 'Emission'):
+        if key in b.inputs: b.inputs[key].default_value = (*mt.lin((1.0, 0.70, 0.32)), 1); break
+    if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = 0.7
+    if 'Alpha' in b.inputs: b.inputs['Alpha'].default_value = 0.45
+    bm = bmesh.new(); box(bm, -2.8, 2.8, -2.8, 2.8, 6.2, 14.6); part('_g', bm, glass, False)
+    wax = mat_col('wax', (0.92, 0.88, 0.78), 0.5, 0.2)
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=0.8 * U, radius2=0.8 * U, depth=3.2 * U, matrix=Matrix.Translation(Vector((0, 0, 7.8 * U)))); part('_c', bm, wax)
+    flame, nt, b = mt.principled('flame', 0.5, 0.0); b.inputs['Base Color'].default_value = (*mt.lin((1.0, 0.8, 0.4)), 1)
+    for key in ('Emission Color', 'Emission'):
+        if key in b.inputs: b.inputs[key].default_value = (*mt.lin((1.0, 0.75, 0.35)), 1); break
+    if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = 14
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=1, matrix=Matrix.Translation(Vector((0, 0, 10.4 * U))) @ Matrix.Diagonal(Vector((0.55 * U, 0.55 * U, 1.3 * U, 1)))); part('_fl', bm, flame)
+    lt = bpy.data.lights.new(name + '_pl', 'POINT'); lt.energy = 1.2; lt.color = (1.0, 0.7, 0.35); lt.shadow_soft_size = 0.004
+    lo = bpy.data.objects.new(name + '_pl', lt); lo.location = (0, 0, 10.4 * U); sc.collection.objects.link(lo)
+    for o in sc.collection.objects:   # поворот: видны две грани
+        if o.name.startswith(name) and o.type == 'MESH': o.rotation_euler = (0, 0, math.radians(35))
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -897,6 +940,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'leaf3': (lambda n, s: leaf(n, s, (0.86, 0.40, 0.11), 2.5, False), 163, 8), 'leaf4': (lambda n, s: leaf(n, s, (0.55, 0.47, 0.22), 0, True), 164, 8),
     'roots1': (roots, 171, 32), 'roots2': (roots, 172, 32), 'roots3': (roots, 173, 32),
     'cottage1': (cottage, 181, 100),
+    'lantern1': (lantern, 191, 24),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
 

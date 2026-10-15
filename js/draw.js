@@ -633,6 +633,13 @@ function drawProps(c, sc, t, additive) {
         else { c.drawImage(glowSprite('#ff8a2a'), p.x - 14 * f, p.y - 40 * f, 28 * f, 30 * f); c.drawImage(glowSprite('#fff0a0'), p.x - 4, p.y - 32, 8, 10); }
         break;
       }
+      case 'lantern': {
+        // судовой фонарь из Blender (dev/blender/make_decor.py, lantern1) висит под потолком, чуть покачивается; свеча мерцает
+        const sw = Math.sin(t * 1.3 + p.seed) * 0.05, f = 1 + Math.sin(t * 13 + p.seed) * 0.06 + Math.sin(t * 23 + p.seed * 2) * 0.04;
+        if (!additive) { const S = (TexLib.surfaceHi && TexLib.surfaceHi.lantern1) || TexLib.data.lantern1; if (S) { const D = 24; c.save(); c.translate(p.x, p.y); c.rotate(sw); c.drawImage(S.canvas, -D / 2, -D * 0.02, D, D); c.restore(); } }
+        else { const cx = p.x - Math.sin(sw) * 12, cy = p.y + 12; c.drawImage(glowSprite('#ffb060'), cx - 64 * f, cy - 52 * f, 128 * f, 104 * f); c.drawImage(glowSprite('#fff0b0'), cx - 6, cy - 7, 12, 14); }
+        break;
+      }
       case 'fire': {
         const f = 1 + Math.sin(t * 17 + p.seed) * 0.15;
         if (!additive) { c.fillStyle = '#4a4e56'; c.fillRect(p.x - 7, p.y - 18, 14, 18); c.fillStyle = '#2a2e36'; c.fillRect(p.x - 7.5, p.y - 19, 15, 2); }

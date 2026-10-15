@@ -1378,13 +1378,18 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       if (x - lastL < 230 || matAt(x, y) !== 4 || y > waterY - 60) continue;
       let air = 0; for (let q = 1; q < 50; q++) { if (T.isSolid(x, y + q)) break; air = q; }
       if (air < 44 || T.isSolid(x - 14, y + 20) || T.isSolid(x + 14, y + 20)) continue;
-      lastL = x; const ly = y + 16;
-      c.strokeStyle = '#3a2614'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, y); c.lineTo(x, ly - 5); c.stroke();
-      c.fillStyle = '#2a1a0e'; c.fillRect(x - 4, ly - 6, 8, 2); c.fillRect(x - 4, ly + 5, 8, 2);
-      const lg = c.createRadialGradient(x, ly, 0.5, x, ly, 5); lg.addColorStop(0, '#fff6c8'); lg.addColorStop(0.6, '#ffc24a'); lg.addColorStop(1, '#d0701e');
-      c.fillStyle = lg; c.fillRect(x - 3.5, ly - 4, 7, 9);
-      c.strokeStyle = '#2a1a0e'; c.lineWidth = 1; c.strokeRect(x - 3.5, ly - 4, 7, 9); c.beginPath(); c.moveTo(x, ly - 4); c.lineTo(x, ly + 5); c.stroke();
-      if (gc) { gc.fillStyle = 'rgba(255,190,90,0.85)'; gc.beginPath(); gc.arc(x, ly, 9, 0, TAU); gc.fill(); }
+      lastL = x; const ly = y + 16, LS = TexLib.data.lantern1;
+      if (LS) {   // судовой фонарь из Blender (latun, стёкла, свеча) — в слое растений, чёткий при приближении
+        const D = 22; if (surface) { surface.sprite(LS.canvas, 'lantern1'); anchor(x, y - 1); }
+        cs.save(); cs.translate(x, y - 1); cs.drawImage(LS.canvas, -D / 2, 0, D, D); cs.restore(); if (surface) anchor(null);
+      } else {
+        c.strokeStyle = '#3a2614'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x, y); c.lineTo(x, ly - 5); c.stroke();
+        c.fillStyle = '#2a1a0e'; c.fillRect(x - 4, ly - 6, 8, 2); c.fillRect(x - 4, ly + 5, 8, 2);
+        const lg = c.createRadialGradient(x, ly, 0.5, x, ly, 5); lg.addColorStop(0, '#fff6c8'); lg.addColorStop(0.6, '#ffc24a'); lg.addColorStop(1, '#d0701e');
+        c.fillStyle = lg; c.fillRect(x - 3.5, ly - 4, 7, 9);
+        c.strokeStyle = '#2a1a0e'; c.lineWidth = 1; c.strokeRect(x - 3.5, ly - 4, 7, 9); c.beginPath(); c.moveTo(x, ly - 4); c.lineTo(x, ly + 5); c.stroke();
+      }
+      if (gc) { gc.fillStyle = LS ? 'rgba(255,190,90,0.5)' : 'rgba(255,190,90,0.85)'; gc.beginPath(); gc.arc(x, LS ? y + 10 : ly, LS ? 4.5 : 9, 0, TAU); gc.fill(); }   /* свечение — огонёк свечи, фонарь виден */
       if (dc) { dc.save(); dc.globalCompositeOperation = 'source-atop'; const pg = dc.createRadialGradient(x, ly, 4, x, ly + 10, 110);
         pg.addColorStop(0, 'rgba(255,200,110,0.55)'); pg.addColorStop(0.45, 'rgba(255,160,70,0.2)'); pg.addColorStop(1, 'rgba(255,140,60,0)');
         dc.fillStyle = pg; dc.fillRect(x - 120, ly - 110, 240, 230); dc.restore(); }

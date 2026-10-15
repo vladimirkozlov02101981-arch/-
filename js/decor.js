@@ -823,7 +823,7 @@ function resolveProps(T, map) {
     const [kind, x, y0, o = {}] = p;
     let y = y0 == null ? T.findTop(x, 0) : y0;
     if (o.dy) y += o.dy;
-    const hitR = { windmill: 60, flag: 20, torch: 14, lamp: 16, neon: 40, beacon: 12, smoke: 0, fire: 14 }[kind] ?? 16;
+    const hitR = { windmill: 60, flag: 20, torch: 14, lamp: 16, lantern: 12, neon: 40, beacon: 12, smoke: 0, fire: 14 }[kind] ?? 16;
     list.push({ kind, x, y, o, alive: true, hitR, seed: list.length * 1.7 });
   }
   return list;
