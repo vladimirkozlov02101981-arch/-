@@ -262,6 +262,7 @@ const TexLib = {
     for (const d of map.decor || []) for (const n of trees[d[0]] || []) add(n);
     for (const k of theme.scatter || []) for (const n of trees[k] || []) add(n);   // россыпь по поверхности (камни, кристаллы, кости)
     if (theme.scatterRock) for (const n of ['drygrass1', 'drygrass2', 'drygrass3', 'drygrass4']) add(n);
+    if (theme.ground && theme.ground.ceiling === 'crystals') for (const n of ['crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2']) add(n);   // кристаллы на сводах
     if (theme.ground && theme.ground.ceiling === 'roots') for (const n of ['roots1', 'roots2', 'roots3']) add(n);   // корни в пещерах (terrain_visual.js)
     if (theme.liquid && theme.liquid.kind === 'lava') add('lava_surface');   // корка лавы (render.js, drawLiquid)
     if (theme.weather === 'leaves') for (const n of ['leaf1', 'leaf2', 'leaf3', 'leaf4']) add(n);   // падающие листья (particles.js, погода)

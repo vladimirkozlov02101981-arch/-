@@ -1521,10 +1521,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       const len = 4 + rng() * 12; c.fillStyle = '#1e1817'; c.beginPath(); c.moveTo(x - 2.8, y); c.lineTo(x + 2.8, y); c.quadraticCurveTo(x + 0.8, y + len * 0.6, x, y + len); c.quadraticCurveTo(x - 0.8, y + len * 0.6, x - 2.8, y); c.fill();
       if (gc && rng() < 0.12) { gc.fillStyle = 'rgba(255,110,20,0.7)'; gc.beginPath(); gc.arc(x, y + len - 1, 1.6, 0, TAU); gc.fill(); c.fillStyle = '#ff9a3a'; c.beginPath(); c.arc(x, y + len - 1, 0.7, 0, TAU); c.fill(); }   /* угольки редкие и мелкие (r23: «гирлянда») */
     } else if (kind === 'crystals' && rng() < 0.035) {
-      const len = 5 + rng() * 10; const col = rng() < 0.5 ? '#5ff4ff' : '#ff6ef6';
-      c.fillStyle = col; c.beginPath(); c.moveTo(x - 2, y); c.lineTo(x + 2, y); c.lineTo(x + 1.5, y + len * 0.7); c.lineTo(x, y + len); c.lineTo(x - 1.5, y + len * 0.7); c.closePath(); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillRect(x - 1, y, 0.8, len * 0.6);
-      if (gc) { gc.fillStyle = col; gc.globalAlpha = 0.6; gc.beginPath(); gc.arc(x, y + len * 0.5, 5, 0, TAU); gc.fill(); gc.globalAlpha = 1; }
+      const len = 5 + rng() * 10, cyan = rng() < 0.5, col = cyan ? '#5ff4ff' : '#ff6ef6';
+      const CN = cyan ? ['crystal_c1', 'crystal_c2'] : ['crystal_m1', 'crystal_m2'], cn = CN[(x * 7 + y) & 1], CR = TexLib.data[cn];
+      if (CR) {   // кристаллы из Blender остриём вниз (как в эталоне свисают со свода) — чёткие при приближении
+        const D = (len + 6) * 1.9; if (surface) { surface.sprite(CR.canvas, cn); anchor(x, y - 1); }
+        cs.save(); cs.translate(x, y + 2); cs.scale((x & 2) ? -1 : 1, -1); cs.drawImage(CR.canvas, -D / 2, -D, D, D); cs.restore();
+        if (surface) anchor(null);
+      } else {
+        c.fillStyle = col; c.beginPath(); c.moveTo(x - 2, y); c.lineTo(x + 2, y); c.lineTo(x + 1.5, y + len * 0.7); c.lineTo(x, y + len); c.lineTo(x - 1.5, y + len * 0.7); c.closePath(); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillRect(x - 1, y, 0.8, len * 0.6);
+      }
+      if (gc) { gc.fillStyle = col; gc.globalAlpha = 0.32; gc.beginPath(); gc.arc(x, y + len * 0.5, 4, 0, TAU); gc.fill(); gc.globalAlpha = 1; }
     }
   }
   // --- Декоративная отделка пещер: кромка ±4 px, сколы углов, гравий и редкая трава/мох ---
