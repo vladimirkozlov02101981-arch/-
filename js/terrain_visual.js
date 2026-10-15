@@ -94,6 +94,9 @@ function boxBlurF32(a, W, H, r) {
 
 /** камень в толще земли: неровный контур, грани, мягкий свет сверху слева, тусклый тёплый блик,
     тёплый отсвет почвы снизу и контактная тень. Меняет o.r/o.g/o.b (вне камня — только тень) */
+/** контекст-заглушка: векторный рисунок «вхолостую», когда вместо него стоит спрайт (случайные числа расходуются те же) */
+const NULL_CTX = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => NULL_GRAD), set: (t, k, v) => { t[k] = v; return true; } });
+const NULL_GRAD = { addColorStop() {} };
 function stoneAt(S, o, ox, oy, rad, ph, pc, n1, n2, r, g, bl) {
   const a = Math.atan2(oy, ox);
   const irr = S.smoothStones ? 0.4 : 1;
@@ -1232,14 +1235,21 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
           // как в эталоне: пышный пурпурный кустик-соцветие (объёмная крона с общим светом), по верху — мелкие светлые
           // цветки; без плоского купола и без пятна свечения (светятся только кристаллы)
           const low = blobs.map(b => ({ x: b.x, y: y - (y - b.y) * 0.62, r: b.r * 0.78 }));
+          const pink = rng() < 0.5, AB = TexLib.data[pink ? 'alienbush1' : 'alienbush2'];
+          const real = c; if (AB) {   // куст из Blender (dev/blender/make_decor.py alienbush) — чёткий при приближении; вектор ниже рисуется вхолостую (rng те же)
+            const D = R * 3.4; if (surface) surface.sprite(AB.canvas, pink ? 'alienbush1' : 'alienbush2');
+            c.save(); c.translate(x, y + 3); if (rng() < 0.5) c.scale(-1, 1); c.drawImage(AB.canvas, -D / 2, -D, D, D); c.restore();
+            c = NULL_CTX;
+          }
           foliage(c, low, G.cap.bushPal || ['#2a1450', '#5a2a9a', '#b058e0', '#ffb0ff']);
-          const tops = rng() < 0.5 ? ['#ffd0ff', '#f6a0ff'] : ['#d8f8ff', '#9ff4ff'];
+          const tops = pink ? ['#ffd0ff', '#f6a0ff'] : ['#d8f8ff', '#9ff4ff'];
           for (let vi = 0; vi < 9 + ((rng() * 7) | 0); vi++) {
             const b = low[(rng() * low.length) | 0], a = -Math.PI * (0.15 + rng() * 0.7), d = b.r * (0.55 + rng() * 0.35);
             const fx = b.x + Math.cos(a) * d, fy = b.y + Math.sin(a) * d, rr = 0.9 + rng() * 0.9;
             c.fillStyle = 'rgba(30,6,40,0.45)'; c.beginPath(); c.arc(fx + 0.4, fy + 0.5, rr, 0, TAU); c.fill();
             c.fillStyle = tops[vi & 1]; c.beginPath(); c.arc(fx, fy, rr, 0, TAU); c.fill();
           }
+          c = real;
         }
       } else {
         const bs = !G.cap.bushPal && ['bush1', 'bush2'].map((n) => TexLib.data[n]).filter(Boolean);

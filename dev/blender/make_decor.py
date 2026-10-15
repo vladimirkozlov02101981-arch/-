@@ -952,6 +952,30 @@ def striplight(name, seed):
     bm = bmesh.new(); box(bm, -13.2, 13.2, -1.7, 1.7, 25.3, 26.1); me = bpy.data.meshes.new(name + '_d'); bm.to_mesh(me); bm.free(); obj(name + '_d', me, dif, sc)
     return sc
 
+
+def alienbush(name, seed, tip):
+    """пышный куст Alien (как в эталоне): плотная крона из множества мелких фиолетовых листьев-чешуек на коротких
+    ветках, по верху — светящиеся соцветия (розовые или бирюзовые)"""
+    sc, rng = scene(40, ((0.85, 0.85, 1.0), 3.8), seed)
+    lv = bmesh.new(); fl = bmesh.new()
+    for _ in range(rng.randint(420, 520)):
+        a = rng.uniform(0, math.pi); rr = rng.uniform(0.0, 1.0) ** 0.5 * 13
+        x = math.cos(a) * rr * 1.25; z = math.sin(a) * rr * 0.95 + 0.5; y = rng.uniform(-5, 5)
+        s_ = rng.uniform(1.1, 2.0)
+        bmesh.ops.create_icosphere(lv, subdivisions=1, radius=s_ * U, matrix=Matrix.Translation(Vector((x * U, y * U, z * U))) @ Matrix.Diagonal(Vector((1.0, 0.6, 0.55, 1))) @ Matrix.Rotation(rng.uniform(0, math.tau), 4, 'Y'))
+    for _ in range(rng.randint(26, 36)):
+        a = rng.uniform(0.25, math.pi - 0.25); rr = rng.uniform(10, 14)
+        bmesh.ops.create_uvsphere(fl, u_segments=10, v_segments=8, radius=rng.uniform(0.5, 0.9) * U, matrix=Matrix.Translation(Vector((math.cos(a) * rr * 1.2 * U, rng.uniform(-6, -2) * U, (math.sin(a) * rr * 0.95 + 1.5) * U))))
+    me = bpy.data.meshes.new(name + '_l'); lv.to_mesh(me); lv.free()
+    leaf = mat_col('aleaf', (0.30, 0.12, 0.48), 0.55, 0.3, 0.4, 160)
+    b = leaf.node_tree.nodes['Principled BSDF']
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.3; break
+    obj(name + '_l', me, leaf, sc)
+    me = bpy.data.meshes.new(name + '_f'); fl.to_mesh(me); fl.free()
+    obj(name + '_f', me, mat_glow('abud', tuple(c * 0.6 for c in tip), tip, 1.6, 0.3, 0.2), sc)
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -979,6 +1003,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'cottage1': (cottage, 181, 100),
     'lantern1': (lantern, 191, 24),
     'striplight1': (striplight, 201, 32),
+    'alienbush1': (lambda n, s: alienbush(n, s, (1.0, 0.55, 0.95)), 211, 40), 'alienbush2': (lambda n, s: alienbush(n, s, (0.5, 0.95, 1.0)), 212, 40),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
 

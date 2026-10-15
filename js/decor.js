@@ -806,10 +806,10 @@ function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
   let lastX = -999;
   for (let k = 0; k < tops.length; k += 2) {
     const x = tops[k], y = tops[k + 1];
-    if (x - lastX < 30 || y > waterY - 12 || x < 40 || x > T.W - 40) continue;
+    if (x - lastX < (theme.id === 'alien' ? 18 : 30) || y > waterY - 12 || x < 40 || x > T.W - 40) continue;
     const mm = mat[y * T.W + x]; if (mm !== 1 && !(mm === 2 && theme.scatterRock)) continue;   // на скалах — только там, где тема это разрешает (сухая трава, щебень в каньоне)
     if (!T.isSolid(x - 6, y + 4) || !T.isSolid(x + 6, y + 4) || T.isSolid(x - 6, y - 8) || T.isSolid(x + 6, y - 8) || T.isSolid(x, y - 20)) continue;
-    if (r() > 0.3) continue;
+    if (r() > (theme.id === 'alien' ? 0.55 : 0.3)) continue;
     if (occupied.some(ox => Math.abs(ox - x) < 45)) continue;
     lastX = x;
     const fn = DECOR[r.pick(kinds)]; if (fn) drawDecorItem(fn, c, g, x, y + 2, r.range(0.75, 1.1), r, r() < 0.5);
