@@ -1398,6 +1398,30 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         dc.fillStyle = pg; dc.fillRect(x - 120, ly - 110, 240, 230); dc.restore(); }
     }
   }
+  // станция Alien: линейные светильники из Blender под металлическими потолками, бирюзовый свет на стене (критик r27)
+  if (theme.id === 'alien' && TexLib.data.striplight1) {
+    const SL = TexLib.data.striplight1, lastAt = new Map(), lc = T.ctx;
+    for (let x = 20; x < W - 20; x += 4) {
+      let prev = false;
+      for (let y = 60; y < waterY - 60; y++) {
+        const sld = T.isSolid(x, y);
+        if (prev && !sld && matAt(x, y - 1) === 6) {
+          const key = y >> 3, lx = lastAt.get(key) ?? -999;
+          let air = 0; for (let q = 1; q < 46; q++) { if (T.isSolid(x, y + q)) break; air = q; }
+          if (x - lx >= 200 && air >= 40 && !T.isSolid(x - 16, y + 3) && !T.isSolid(x + 16, y + 3) && T.isSolid(x - 16, y - 1) && T.isSolid(x + 16, y - 1)) {
+            lastAt.set(key, x); lastAt.set(key - 1, x); lastAt.set(key + 1, x); const D = 32;
+            if (surface) { surface.sprite(SL.canvas, 'striplight1'); anchor(x, y - 2); }
+            cs.save(); cs.translate(x, y - 2); cs.drawImage(SL.canvas, -D / 2, -D * 0.02, D, D); cs.restore(); if (surface) anchor(null);
+            if (gc) { gc.fillStyle = 'rgba(120,235,255,0.5)'; gc.fillRect(x - 13, y + 3, 26, 2); }
+            lc.save(); lc.globalCompositeOperation = 'source-atop'; const pg = lc.createRadialGradient(x, y + 6, 4, x, y + 30, 140);
+            pg.addColorStop(0, 'rgba(130,235,255,0.6)'); pg.addColorStop(0.5, 'rgba(90,200,255,0.2)'); pg.addColorStop(1, 'rgba(80,180,255,0)');
+            lc.fillStyle = pg; lc.fillRect(x - 150, y - 6, 300, 170); lc.restore();
+          }
+        }
+        prev = sld;
+      }
+    }
+  }
   // кладка на грунте (замки, долина): низ стены потемнел от сырости и налипшей земли на 8–14 px — без резкого шва (критик r27)
   if (theme.id === 'castle' || theme.id === 'valley') {
     const gx = T.ctx; gx.save(); gx.fillStyle = '#2b2116';

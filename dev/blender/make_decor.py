@@ -933,6 +933,25 @@ def lantern(name, seed):
         if o.name.startswith(name) and o.type == 'MESH': o.rotation_euler = (0, 0, math.radians(35))
     return sc
 
+
+def striplight(name, seed):
+    """линейный светильник станции Alien под металлическим потолком: тёмный корпус с торцевыми крышками и креплениями,
+    светящийся бирюзовый рассеиватель снизу; верх — у верхнего края кадра (потолок)"""
+    sc, rng = scene(32, ((0.85, 0.9, 1.0), 2.4), seed)
+    def box(bm, x0, x1, y0, y1, z0, z1):
+        bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation(Vector(((x0 + x1) / 2 * U, (y0 + y1) / 2 * U, (z0 + z1) / 2 * U))) @ Matrix.Diagonal(Vector(((x1 - x0) * U, (y1 - y0) * U, (z1 - z0) * U, 1))))
+    hous = mat_col('housing', (0.10, 0.11, 0.14), 0.4, 0.6, 0.3, 300)
+    bm = bmesh.new(); box(bm, -14, 14, -2.2, 2.2, 26.0, 28.4); box(bm, -14.6, -13.4, -2.4, 2.4, 25.2, 28.6); box(bm, 13.4, 14.6, -2.4, 2.4, 25.2, 28.6)
+    for x in (-9, 9): box(bm, x - 0.6, x + 0.6, -0.6, 0.6, 28.4, 30.2)
+    me = bpy.data.meshes.new(name + '_h'); bm.to_mesh(me); bm.free(); o = obj(name + '_h', me, hous, sc)
+    for p_ in me.polygons: p_.use_smooth = False
+    dif, nt, b = mt.principled('diff', 0.3, 0.2); b.inputs['Base Color'].default_value = (*mt.lin((0.6, 0.95, 1.0)), 1)
+    for key in ('Emission Color', 'Emission'):
+        if key in b.inputs: b.inputs[key].default_value = (*mt.lin((0.45, 0.92, 1.0)), 1); break
+    if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = 3.0
+    bm = bmesh.new(); box(bm, -13.2, 13.2, -1.7, 1.7, 25.3, 26.1); me = bpy.data.meshes.new(name + '_d'); bm.to_mesh(me); bm.free(); obj(name + '_d', me, dif, sc)
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -959,6 +978,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'roots1': (roots, 171, 32), 'roots2': (roots, 172, 32), 'roots3': (roots, 173, 32),
     'cottage1': (cottage, 181, 100),
     'lantern1': (lantern, 191, 24),
+    'striplight1': (striplight, 201, 32),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
 
