@@ -1442,6 +1442,20 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       }
     }
   }
+  // мокрая полоса у воды: камень и дерево над водой на 6–18 px темнее и холоднее (намокли от волн), у самой воды —
+  // зеленоватый налёт водорослей (критик r28: «жёсткая ватерлиния»); у лавы — нет
+  if (!(theme.liquid && theme.liquid.kind === 'lava')) {
+    const wx = T.ctx; wx.save();
+    for (let x = 0; x < W; x++) {
+      const h = 6 + ((hash3(x >> 3, 1, seed + 611) * 12) | 0), wy0 = Math.round(waterY);
+      for (let k = 0; k < h; k++) {
+        const y = wy0 - k; if (y < 1 || y >= T.H || !T.isSolid(x, y)) continue;
+        const q = Math.pow(1 - k / h, 1.3);
+        wx.globalAlpha = 0.42 * q; wx.fillStyle = k < 3 ? '#1d2a18' : '#141a1e'; wx.fillRect(x, y, 1, 1);
+      }
+    }
+    wx.restore();
+  }
   // кладка на грунте (замки, долина): низ стены потемнел от сырости и налипшей земли на 8–14 px — без резкого шва (критик r27)
   if (theme.id === 'castle' || theme.id === 'valley') {
     const gx = T.ctx; gx.save(); gx.fillStyle = '#2b2116';
