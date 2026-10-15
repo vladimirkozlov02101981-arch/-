@@ -1398,6 +1398,16 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
         dc.fillStyle = pg; dc.fillRect(x - 120, ly - 110, 240, 230); dc.restore(); }
     }
   }
+  // кладка на грунте (замки, долина): низ стены потемнел от сырости и налипшей земли на 8–14 px — без резкого шва (критик r27)
+  if (theme.id === 'castle' || theme.id === 'valley') {
+    const gx = T.ctx; gx.save(); gx.fillStyle = '#2b2116';
+    for (let x = 0, HH = T.H; x < W; x++) for (let y = 12; y < HH - 2; y++) {
+      const i = y * W + x; if (mat[i] !== 3 || mat[i + W] !== 1) continue;
+      const h = 8 + ((hash3(x >> 2, y >> 4, seed + 501) * 7) | 0);
+      for (let k = 0; k < h && mat[i - k * W] === 3; k++) { gx.globalAlpha = Math.pow(1 - k / h, 1.6) * 0.5; gx.fillRect(x, y - k, 1, 1); }
+    }
+    gx.restore();
+  }
   // камешки на поверхности
   if (!G.cap.snow) {
     const pebs = G.pebbles;

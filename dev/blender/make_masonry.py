@@ -61,6 +61,14 @@ STYLES = {
                    mortar=(13, 15, 20), lichen=0.0, moss=0.0, wob=1.8, rough=1.6, warp=(3.2, 3.0),
                    snow=dict(th=(6.5, 15), col=(232, 238, 250), gaps=0.35, icicles=1.7),   # r27: шапки вдвое толще
                    light=dict(col=(0.82, 0.88, 1.0), elev=32, energy=4.2)),
+    # вулкан (критик r26–27: нет крупных плит, лава — пятна): базальтовые плиты 30–70 × 90–260 ед., в трети швов —
+    # светящийся расплав (свечение в Blender → слой свечения игры), тёплый свет снизу
+    'basalt': dict(name='rock_volcano', seed=71, T=1024, TY=512, hr=(30, 70), wr=(90, 260), joint=2.4, bev=3.0, recess=3.0, tilt=0.8,
+                   slant=(5, 20), ledge=3.0, mottk=0.22,
+                   stone=[(60, 46, 40), (52, 40, 35), (68, 52, 44), (46, 36, 32), (62, 48, 41)],
+                   mortar=(20, 14, 12), lichen=0.0, moss=0.0, wob=1.8, rough=1.7, warp=(3.2, 3.0),
+                   lava=dict(thr=0.55, col=(255, 116, 28)), emit=0.45,
+                   light=dict(col=(1.0, 0.86, 0.72), elev=32, energy=4.2)),
     # пиратский маяк: побелённый камень, мелкие блоки, светлый раствор
     'light': dict(name='stone_light', seed=51, T=512, hr=(10, 13), wr=(17, 32), joint=1.8, bev=1.5, recess=1.2,
                   stone=[(234, 229, 217), (220, 213, 198), (240, 236, 226), (210, 202, 186), (228, 222, 208)],
@@ -92,7 +100,9 @@ def field(st):
     wob = (gnoise(SH, 2.5 * R, 2.5 * R, rng) * 0.9 + gnoise(SH, 0.8 * R, 0.8 * R, rng) * 0.25 + gnoise(SH, 9 * R, 9 * R, rng) * (wk - 1)) * min(wk, 1.4)   # «гуляющий» шов, неровные края
     rough = (gnoise(SH, 1.1 * R, 1.1 * R, rng) * 0.12 + gnoise(SH, 3 * R, 3 * R, rng) * 0.3 + gnoise(SH, 8 * R, 8 * R, rng) * 0.45
              + np.abs(gnoise(SH, 2.4 * R, 2.4 * R, rng)) * 0.18 + gnoise(SH, 0.35 * R, 0.35 * R, rng) * 0.05) * rk   # колотая лицевая сторона: грани, бугры, гребни, зерно
-    SN = st.get('snow')
+    SN = st.get('snow'); LV = st.get('lava')
+    E = np.zeros((NY, NX, 3), np.float32) if LV else None
+    if LV: lavan = gnoise(SH, 3 * R, 40 * R, rng)   # расплав тянется вдоль шва
     if SN:
         snowv = gnoise(SH, 5 * R, 14 * R, rng); snowg = gnoise(SH, 4 * R, 26 * R, rng); sgrain = gnoise(SH, 0.6 * R, 0.6 * R, rng)
         frost = gnoise(SH, 0.5 * R, 0.5 * R, rng); drip = gnoise(SH, 9 * R, 0.9 * R, rng); gran = gnoise(SH, 0.38 * R, 0.38 * R, rng)
@@ -178,8 +188,12 @@ def field(st):
                 if not m_.any(): continue
                 Cr = np.where(m_[..., None], Cr * 0.25 + np.array([196, 214, 236], np.float32) * 0.75, Cr)
                 Hr = np.where(m_, np.maximum(Hr, st['recess'] + 0.8), Hr)
+        if LV:   # светящийся расплав в части швов: сам шов — оранжевый, свечение — в карту излучения
+            k = np.clip((lavan[rows] - LV['thr']) * 2.2, 0, 1) * (~stone)
+            col = np.array(LV['col'], np.float32)
+            Cr = Cr * (1 - k[..., None]) + col * k[..., None]; E[rows] = (col / 255.0) * k[..., None]
         C[rows] = Cr; H[rows] = Hr
-    return H, np.clip(C, 0, 255)
+    return (H, np.clip(C, 0, 255), E) if LV else (H, np.clip(C, 0, 255))
 
 
 def render_field(st, H, C):
@@ -219,8 +233,8 @@ def render_field(st, H, C):
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     for key in (argv or list(STYLES)):
-        st = STYLES[key]; H, C = field(st)
-        hf.render_blocks(mt, st['name'], H, C, None, R2=R, up=UP, light=st['light'], samples=128,
+        st = STYLES[key]; res = field(st); H, C = res[0], res[1]; E = res[2] if len(res) > 2 else None
+        hf.render_blocks(mt, st['name'], H, C, E, R2=R, up=UP, light=st['light'], samples=128, emit=st.get('emit', 1.6),
                          hgrain=st.get('hgrain', 0.22), cgrain=st.get('cgrain', 0.6), speck=st.get('speck', 0.006))   # зерно камня в 1–2 текселя
         print('MASONRY', st['name'], flush=True)
 
