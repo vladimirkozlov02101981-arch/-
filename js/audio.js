@@ -22,7 +22,8 @@ const Sfx = (() => {
       comp.threshold.value = -6; comp.knee.value = 10; comp.ratio.value = 3;
       master = ac.createGain(); master.gain.value = enabled ? volume : 0;
       const lim = ac.createDynamicsCompressor(); lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15;   // ограничитель: громкий взрыв без хрипа
-      master.connect(comp); comp.connect(lim); lim.connect(ac.destination);
+      const makeup = ac.createGain(); makeup.gain.value = 2.5;   // общий подъём (~+8 дБ): раньше игру было еле слышно; ограничитель держит пики
+      master.connect(comp); comp.connect(makeup); makeup.connect(lim); lim.connect(ac.destination);
       reverb=ac.createConvolver();reverb.connect(master);makeImpulse();
       const len = ac.sampleRate * 2; noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
@@ -47,9 +48,9 @@ const Sfx = (() => {
     if(pos){
       const dx=pos.x-listener.x,dy=pos.y-listener.y;
       distance=Math.hypot(dx,dy*.65);pan=clamp(dx/(listener.w/Math.max(.4,listener.z)*.7),-.92,.92);
-      v*=1/Math.sqrt(1+(distance/700)**2);
+      v*=1/Math.sqrt(1+(distance/1100)**2);   /* затухание с расстоянием мягче: бой за полэкрана слышен ясно */
       if(scene&&scene.terrain){for(let u=.12;u<.95;u+=.1)if(scene.terrain.isSolid(listener.x+dx*u,listener.y+dy*u))blocked++;}
-      v*=Math.pow(.9,blocked);
+      v*=Math.pow(.94,blocked);
     }
     g.gain.value=v;
     const filter=ac.createBiquadFilter();filter.type='lowpass';filter.frequency.value=clamp(16000/(1+distance/700+blocked*1.8),500,16000);   // воздух гасит высокие частоты вдали
@@ -345,7 +346,7 @@ const Sfx = (() => {
   }
   /* фоновая атмосфера карты: несколько живых слоёв, огибающие меняются случайно (порывы, волны), а не по кругу */
   /* живые записи фона (Sonniss GDC 2026): петля 44 с с бесшовным стыком; громкость — по среднему уровню записи */
-  const AMB_REC = { wind: ['amb_wind', 0.1], snow: ['amb_snow', 0.13], sea: ['amb_sea', 0.18], lava: ['amb_lava', 0.4], space: ['amb_space', 0.027], meadow: ['amb_meadow', 0.11], city: ['amb_city', 0.068] };
+  const AMB_REC = { wind: ['amb_wind', 0.16], snow: ['amb_snow', 0.2], sea: ['amb_sea', 0.28], lava: ['amb_lava', 0.6], space: ['amb_space', 0.045], meadow: ['amb_meadow', 0.18], city: ['amb_city', 0.11] };
   function recLoop(n, v, A, to) {
     const go = (e) => { if (!A.alive || ambient !== A || !e) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = e.buf; s.loop = true; g.gain.value = v; s.connect(g); g.connect(to); s.start(0, Math.random() * e.buf.duration); A.nodes.push(s, g); };
     if (buffers[n]) go(buffers[n]); else loadOne(n).then(go).catch(() => { /* только синтез */ });

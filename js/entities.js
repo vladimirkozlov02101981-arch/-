@@ -779,7 +779,9 @@ const FIRE = {
   },
   orbital(g, s, p) {
     if (!isNum(p.tx)) return false;
-    const e = new Orbital(g, clamp(Math.round(p.tx + gaussRand() * 36), 0, g.W - 1), s); g.spawn(e);
+    // ошибка наведения спутника — по ветру (как и у тучи): чем сильнее ветер, тем дальше в его сторону; в штиль — небольшой разброс
+    const w = clamp((g.turn.wind || 0) / MAX_WIND, -1, 1), off = w * 42 + gaussRand() * (10 + 14 * (1 - Math.abs(w)));
+    const e = new Orbital(g, clamp(Math.round(p.tx + off), 0, g.W - 1), s); g.spawn(e);
     return { usage: { update() { return e.dead; } } };
   },
   nuke(g, s, p) {

@@ -93,7 +93,7 @@ class AISearch {
       if (Math.abs(ex - s.x) < 22 && Math.abs(e.y - s.y) < 18 && avail('bat')) { const dir = ex >= s.x ? 1 : -1; this.consider({ w: 'bat', aim: dir > 0 ? -0.6 : Math.PI + 0.6, pw: 1, score: 55 + kb(30) }); }
       if (avail('airstrike') && !own(ex, 110)) { const n = this.enemies.filter(o => Math.abs(o.x - ex) < 90).length; this.consider({ w: 'airstrike', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 24 * n + kb(26) - 14 }); }
       if (avail('lightning') && !own(ex, 80)) this.consider({ w: 'lightning', aim: s.aim, pw: 1, tx: ex - g.turn.wind * 1.0, ty: ey, score: 30 + kb(38) - 12 });
-      if (avail('orbital') && !own(ex, 90)) this.consider({ w: 'orbital', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 38 + kb(45) - 12 });
+      if (avail('orbital') && !own(ex, 90)) this.consider({ w: 'orbital', aim: s.aim, pw: 1, tx: ex - clamp(g.turn.wind / MAX_WIND, -1, 1) * 42, ty: ey, score: 38 + kb(45) - 12 });
       if (avail('homing') && dist > 250) this.consider({ w: 'homing', aim: -Math.PI / 2 + (ex > s.x ? 0.5 : -0.5), pw: 0.65, tx: ex, ty: ey, score: 36 + kb(45) - 10 });
       if (avail('nuke')) { const n = this.enemies.filter(o => Math.hypot(o.x - ex, o.y - e.y) < 260).length; if (n >= 2 && !own(ex, 400)) this.consider({ w: 'nuke', aim: s.aim, pw: 1, tx: ex, ty: ey, score: 60 * n }); }
     }

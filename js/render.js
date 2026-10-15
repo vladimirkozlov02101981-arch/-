@@ -69,6 +69,9 @@ class Camera {
     }
     const TOP = 125, BOT = 50, zMin = P[2] === 'airstrike' ? (sw / 2) / 1250 : 0;
     let z = Math.min((sh / 2 - TOP) / Math.max(1, y - top), (sh / 2 - BOT) / Math.max(1, bot - y)), cy = y;
+    // по высоте кадр — середина участка «самолёт (туча, ракета)…земля», а не точка клика: оба видны, а отдаление вдвое меньше
+    // (раньше кадр держал клик в центре и отдалялся так, что бойцов было не разглядеть)
+    const zFit = (sh - TOP - BOT) / Math.max(1, bot - top); if (zFit > z) { z = zFit; cy = top + (sh / 2 - TOP) / z; }
     if (z < zMin) { z = Math.max(zMin, (sh - TOP - BOT) / Math.max(1, bot - top)); cy = top + (sh / 2 - TOP) / z; }
     return { x, y: cy, k: 'pick', live, z, key: T.team + ':' + T.sid + ':' + T.round + ':' + P[2] + ':' + x + ':' + y };
   }
@@ -447,6 +450,8 @@ class Camera {
     if (this.z <= this.zoomLimits(sh, sw)[0] * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; return; }
     const hw = sw / 2 / this.z, hh = sh / 2 / this.z;
     let minX = Math.min(sc.W / 2, hw - 250), maxX = Math.max(sc.W / 2, sc.W - hw + 250);
+    // свободный обзор (прицел с выбором точки, оптика, бинокль): край карты можно поставить в центр экрана и разглядеть вблизи
+    if (this.edge || this.scopeFocus || this.binoc) { minX = Math.min(minX, 0); maxX = Math.max(maxX, sc.W); }
     // удар по точке, попадание, снаряд, взрыв, прицел соперника — по центру кадра в любой точке карты, и у самого её края
     // (за краем — фон); обычный кадр у бойца — в прежних пределах
     if (reach && !(typeof reach.k === 'string' && reach.k[0] === 's') && Number.isFinite(reach.x)) { minX = Math.min(minX, Math.max(0, reach.x)); maxX = Math.max(maxX, Math.min(sc.W, reach.x)); }
@@ -957,7 +962,18 @@ class Renderer {
         }
         c.restore();
       }
-      brightCross(c, mx, my, t, pointCol, 1.35);
+      if (ownPoint) brightCross(c, mx, my, t, pointCol, 1.35);
+      else {
+        // прицел соперника всегда целиком на экране: точка за кадром — прицел у края, стрелка показывает, где она на самом деле
+        const m = 34, top = 112, qx = clamp(mx, m, sw - m), qy = clamp(my, top, sh - m);
+        brightCross(c, qx, qy, t, pointCol, 1.35);
+        if (Math.hypot(qx - mx, qy - my) > 1) {
+          const a = Math.atan2(my - qy, mx - qx), ax = qx + Math.cos(a) * 26, ay = qy + Math.sin(a) * 26;
+          c.save(); c.translate(ax, ay); c.rotate(a);
+          for (const [col, w] of [['rgba(0,0,0,0.7)', 5], [pointCol, 2.4]]) { c.strokeStyle = col; c.lineWidth = w; c.lineJoin = 'round'; c.beginPath(); c.moveTo(-6, -8); c.lineTo(4, 0); c.lineTo(-6, 8); c.stroke(); }
+          c.restore();
+        }
+      }
     }
     // противники за экраном: стрелки у края, пока в руках оружие с выбором точки, — видно, куда вести обзор курсором
     if (cam.edge && (T.phase === 'aim')) {
