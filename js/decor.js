@@ -416,10 +416,36 @@ const DECOR = {
     if (g) { g.strokeStyle = 'rgba(255,90,20,0.8)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + 2, y - h * 0.2); g.lineTo(x - 2, y - h * 0.5); g.lineTo(x + 3, y - h * 0.7); g.stroke(); }
     c.strokeStyle = '#ff7a2a'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(x + 2, y - h * 0.2); c.lineTo(x - 2, y - h * 0.5); c.lineTo(x + 3, y - h * 0.7); c.stroke();
   },
-  bones(c, g, x, y, s) {
-    c.strokeStyle = '#d9cfb8'; c.lineWidth = 2.2 * s; c.lineCap = 'round';
-    for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(x, y + 2, (8 + i * 4) * s, Math.PI * 1.1, Math.PI * 1.45); c.stroke(); }
-    c.beginPath(); c.moveTo(x - 20 * s, y); c.lineTo(x + 6 * s, y - 2 * s); c.stroke();
+  bones(c, g, x, y, s, r) {
+    /* полузасыпанный скелет: позвоночник лежит на земле, рёбра поднимаются дугами и уходят концами в грунт, череп с глазницей.
+       Кость — выбеленная, с тёмным контуром и тенью снизу; рёбра разной длины и наклона */
+    const rr = r ? () => r() : Math.random, dir = rr() < 0.5 ? -1 : 1, L = 34 * s, y0 = y - 1.5 * s;
+    c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+    c.fillStyle = 'rgba(20,12,8,0.35)'; c.beginPath(); c.ellipse(x, y + 1, L * 0.62, 3.2 * s, 0, 0, TAU); c.fill();
+    const bone = (w, path) => { c.strokeStyle = '#3b2f24'; c.lineWidth = w + 1.6 * s; path(); c.stroke(); c.strokeStyle = '#cfc2a4'; c.lineWidth = w; path(); c.stroke(); c.strokeStyle = 'rgba(255,250,232,0.75)'; c.lineWidth = Math.max(0.6, w * 0.35); c.save(); c.translate(-0.4 * s, -0.5 * s); path(); c.stroke(); c.restore(); };
+    /* рёбра: от позвоночника вверх и наружу, концы утоплены */
+    const nR = 5 + Math.floor(rr() * 2);
+    for (let i = 0; i < nR; i++) {
+      const sx = x - L * 0.38 + i * (L * 0.62 / nR), h = (11 + rr() * 6) * s * (1 - Math.abs(i - nR / 2) / nR * 0.6), lean = (rr() - 0.5) * 4 * s + dir * 3 * s;
+      bone(1.5 * s * (1 - i * 0.04), () => { c.beginPath(); c.moveTo(sx, y0); c.bezierCurveTo(sx + lean - 4 * s, y0 - h * 0.9, sx + lean + 7 * s, y0 - h * 1.05, sx + lean + 9 * s, y + 1); });
+    }
+    /* позвоночник */
+    for (let i = 0; i < 9; i++) {
+      const vx = x - L * 0.48 + i * L * 0.11, vy = y0 + Math.sin(i * 0.7) * 0.8 * s;
+      c.fillStyle = '#3b2f24'; c.beginPath(); c.ellipse(vx, vy, 2.6 * s, 2.1 * s, 0, 0, TAU); c.fill();
+      c.fillStyle = i % 2 ? '#d6caae' : '#c7b998'; c.beginPath(); c.ellipse(vx - 0.3 * s, vy - 0.3 * s, 2.0 * s, 1.6 * s, 0, 0, TAU); c.fill();
+    }
+    /* череп на конце позвоночника */
+    const kx = x + dir * L * 0.55, ky = y - 3 * s;
+    c.save(); c.translate(kx, ky); c.scale(dir, 1);
+    c.fillStyle = '#3b2f24'; c.beginPath(); c.moveTo(-5 * s, -4 * s); c.quadraticCurveTo(2 * s, -7.5 * s, 11 * s, -2.5 * s); c.lineTo(12 * s, 1.5 * s); c.quadraticCurveTo(3 * s, 3.5 * s, -5 * s, 3 * s); c.closePath(); c.fill();
+    c.fillStyle = '#d3c6a8'; c.beginPath(); c.moveTo(-4 * s, -3.2 * s); c.quadraticCurveTo(2 * s, -6.5 * s, 10.3 * s, -2 * s); c.lineTo(11 * s, 1 * s); c.quadraticCurveTo(3 * s, 2.6 * s, -4 * s, 2.2 * s); c.closePath(); c.fill();
+    c.fillStyle = '#2a201a'; c.beginPath(); c.ellipse(1.5 * s, -2 * s, 1.8 * s, 1.3 * s, -0.2, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,250,230,0.6)'; c.fillRect(-2 * s, -4.5 * s, 7 * s, 0.8 * s);
+    c.restore();
+    /* засыпка: песок/пепел поверх нижних концов */
+    c.fillStyle = 'rgba(60,44,34,0.55)'; for (let i = 0; i < 7; i++) { c.beginPath(); c.ellipse(x - L * 0.5 + i * L * 0.17 + rr() * 3, y + 0.5, (3 + rr() * 3) * s, 1.4 * s, 0, 0, TAU); c.fill(); }
+    c.restore();
   },
   obsidian(c, g, x, y, s, r) {
     c.fillStyle = hgrad(c, x - 10 * s, x + 10 * s, ['#3a2e4a', '#16121c', '#050407']);

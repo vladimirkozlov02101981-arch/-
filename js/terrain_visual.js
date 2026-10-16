@@ -152,6 +152,10 @@ function caveAO(m, i, W, y, bk, H) {
   let k = 1;
   for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; k = 0.52 + 0.48 * t * (2 - t); break; }
   for (let q = 1; q < 40; q++) if (y + q < H && m[i + q * W]) { k *= 1 + 0.22 * (1 - q / 40) * (1 - q / 40); break; }
+  /* узкая шахта (стены слева и справа ближе 110 px): свет туда почти не доходит — задняя стена темнее, особенно у боковых стен */
+  const x = i - y * W; let l = 0, r = 0;
+  for (let q = 1; q <= 110; q++) { if (!l && x - q >= 0 && m[i - q]) l = q; if (!r && x + q < W && m[i + q]) r = q; if (l && r) break; }
+  if (l && r && l + r >= 70) { const wdt = l + r, edge = Math.min(l, r) / (wdt / 2); k *= (0.58 + 0.2 * Math.min(1, wdt / 220)) * (0.78 + 0.22 * Math.sqrt(edge)); }   /* узкие лазы под лестницу не трогаем — они и так тёмные */
   return k;
 }
 /** нерезкое маскирование 3×3 (только внутри непрозрачных областей, без ореолов по краю) */
@@ -581,6 +585,11 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         break;
       }
       case 9: { // базальтовые столбы со скруглёнными гранями
+        if (S.tx.rock) {
+          /* та же фото-порода, что у скал темы (как в эталоне), без нарисованных столбов: ровные полосы выглядели как забор или кладка */
+          texAt(S.tx.rock, x + 377, y + 211, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
+          break;
+        }
         const cw = 16; const col = Math.floor(x / cw); const hh = hash3(col, 0, 4);
         const fx = x - col * cw; const yy = y + hh * 60; const seg = Math.floor(yy / 46); const fy = yy - seg * 46;
         const c = S.rockC[col % S.RL]; let f = 0.86 + hash3(col, seg, 8) * 0.28;

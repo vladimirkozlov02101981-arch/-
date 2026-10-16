@@ -196,8 +196,9 @@ const MAP_CANYON = buildLevel({
   // останцы по краям плато — снайперские вышки с лестницами
   B.add(Sh.poly([[66, 970], [78, 800], [90, 720], [110, 690], [146, 694], [162, 730], [172, 820], [182, 910]], { mat: 'rock', rough: 3 }), Sh.ellipse(126, 684, 40, 18, { mat: 'rock', rough: 3 }));
   B.ladder(206, 668, 902);
-  B.add(Sh.poly([[4540, 962], [4550, 860], [4562, 780], [4582, 748], [4618, 752], [4630, 790], [4636, 880], [4630, 962]], { mat: 'rock', rough: 3 }), Sh.ellipse(4598, 742, 40, 18, { mat: 'rock', rough: 3 }));
-  B.ladder(4516, 726, 956);
+  /* останец стоит левее прохода к мосту: проход (cut у district) раньше срезал его основание, и скала висела в воздухе */
+  B.add(Sh.poly([[4386, 962], [4396, 860], [4408, 780], [4428, 748], [4464, 752], [4476, 790], [4482, 880], [4476, 962]], { mat: 'rock', rough: 3 }), Sh.ellipse(4444, 742, 40, 18, { mat: 'rock', rough: 3 }));
+  B.ladder(4362, 726, 956); B.ladder(4500, 726, 956);   /* останец перекрывает тропу к мосту — лестницы с обеих сторон */
   B.bridge(2330, 1548, 2470, 1548, { mat: 'wood', thick: 10, sag: 14, pal: PAL.lightWood, rails: true });
   // Великая арка
   B.add(Sh.band(1236, 904, 3514, 952, { thick: 100, sag: -470, mat: 'rock', rough: 5 }));
@@ -209,7 +210,7 @@ const MAP_CANYON = buildLevel({
   B.ladder(3940, 1152, 1358); B.ladder(4260, 946, 1152);
   B.tower(3700, 946, 150, { mat: 'wood', pal: PAL.lightWood, wall: 12, slab: 12, stories: [80], windows: false, found: 30 });
   B.decor(['cactus', 240, null, 1.1], ['watertower', 760], ['cactus', 980, null, 0.9], ['deadtree', 1180, null, 1], ['column', 1310, 1150, 1], ['column', 1270, 1150, 1], ['pot', 1100, 1150], ['pot', 1140, 1150, 0.8], ['skull', 1680, 1400],
-    ['cactus', 2100, null, 1], ['skull', 2600, null], ['cactus', 2960, null, 0.9], ['tumbleweed', 2700, null, 1], ['cactus', 3600, null, 1.2], ['deadtree', 4050, null, 0.9], ['watertower', 4450], ['cactus', 4560, null, 0.8]);
+    ['cactus', 2100, null, 1], ['skull', 2600, null], ['cactus', 2960, null, 0.9], ['tumbleweed', 2700, null, 1], ['cactus', 3600, null, 1.2], ['deadtree', 4050, null, 0.9], ['watertower', 4160], ['cactus', 4432, null, 0.8]);
   district(B, { from: [4650, 956], gy: 960, water: 1700, mat: 'brick', pal: P_SAND, cut: () => [Sh.cut(Sh.rect(4490, 902, 180, 52))], bridge: { mat: 'wood', pal: PAL.lightWood }, decor: [['cactus', 4970], ['cactus', 6190, null, 1.2], ['skull', 5900]], props: [['torch', 4990, 960], ['torch', 5770, 960]] });
 });
 
@@ -268,8 +269,9 @@ const MAP_VOLCANO = buildLevel({
   // базальтовое нагорье с рудником
   B.ground([[3420, 1810], [3426, 1600], [3434, 1400], [3444, 1300, 1], [3500, 1282], [3600, 1252], [3700, 1212], [3800, 1172], [3900, 1152], [4100, 1148], [4300, 1152], [4450, 1160], [4560, 1170], [4640, 1180, 1], [4652, 1300], [4660, 1500], [4668, 1810]], { mat: 'basalt', rough: 3 });
   B.tower(3960, 1150, 220, { mat: 'metal', pal: PAL.steel, wall: 14, slab: 14, stories: [100, 90], ladders: [40, 186], found: 40 });
-  B.add(Sh.poly([[4560, 1180], [4566, 1000], [4584, 960], [4620, 956], [4640, 1000], [4652, 1180]], { mat: 'basalt', rough: 1 }));
-  B.ladder(4536, 952, 1170);
+  /* столб левее прохода к мосту (cut у district срезал его основание — висел в воздухе) */
+  B.add(Sh.poly([[4446, 1180], [4452, 1000], [4470, 960], [4506, 956], [4526, 1000], [4532, 1180]], { mat: 'basalt', rough: 1 }));
+  B.ladder(4422, 952, 1170); B.ladder(4556, 952, 1170);   /* столб перекрывает тропу к мосту — лестницы с обеих сторон */
   B.tunnel([[3500, 1290], [3640, 1330], [3800, 1340], [3960, 1336], [4100, 1330], [4200, 1320]], 70, { arch: 6 });
   B.ladder(4150, 1150, 1322);
   B.decor(['deadtree', 260, null, 1.1], ['spike', 400, null, 1], ['obsidian', 900], ['deadtree', 1060, null, 0.9], ['bones', 1780], ['deadtree', 2000, null, 0.8], ['spike', 2800, null, 1.2], ['deadtree', 2950, null, 0.9], ['obsidian', 3600], ['deadtree', 3760, null, 1], ['bones', 4250], ['spike', 4560, null, 1.1]);
@@ -407,6 +409,8 @@ const MAP_CITY = buildLevel({
   house(1300, 200, 3, P_TOWER('#3c3a4a', '#ffcf70', 0.4), 30);
   // парковка: открытые перекрытия
   for (const y of [1420, 1340, 1260]) B.add(Sh.rect(1580, y, 380, 14, { mat: 'concrete', pal: { base: '#5a5e66', road: true } }));
+  /* многоярусная парковка: колонны за перекрытиями (задний план, не мешают ходить) — плиты больше не висят в воздухе */
+  for (const x of [1592, 1700, 1830, 1940]) B.add(Sh.rect(x, 1260, 12, 240, { mat: 'concrete', back: true, pal: { base: '#4a4e56' } }));
   B.ladder(1606, 1420, 1500); B.ladder(1934, 1340, 1420); B.ladder(1606, 1260, 1340);
   // эстакада над каналом
   B.add(Sh.rect(1480, 1194, 1200, 26, { mat: 'concrete', pal: { base: '#5a5e66', road: true } }));
