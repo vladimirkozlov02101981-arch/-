@@ -562,7 +562,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       case 7: { // лёд: светлый у поверхности, густо-синий в толще, трещинки и искры
         const A = S.iceA, B = S.iceB, k = Math.min(1, d / 64) * 0.75 + n3 * 0.25;
         r = A[0] + (B[0] - A[0]) * k; g = A[1] + (B[1] - A[1]) * k; bl = A[2] + (B[2] - A[2]) * k;
-        const dv = Math.abs(tl.tv[ty2 | ((x >> 1) & 255)] - 0.5); if (dv < 0.01) { r = 236; g = 250; bl = 255; }
+        const dv = Math.abs(tl.tv[ty2 | ((x >> 1) & 255)] - 0.5); if (dv < 0.01) { r = r * 0.55 + 200 * 0.45; g = g * 0.55 + 215 * 0.45; bl = bl * 0.55 + 225 * 0.45; }
         if (hash3(x, y, 5) > 0.997) { r = g = bl = 255; }
         // пузырьки воздуха, слои намерзания, иней у поверхности
         { const bx = Math.floor(x / 9), by = Math.floor(y / 9), hb = hash3(bx, by, 21);
@@ -570,7 +570,10 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
             if (rr < rad * rad) { const k = rr < (rad - 0.8) * (rad - 0.8) ? 0.1 : 0.45; r += (255 - r) * k; g += (255 - g) * k; bl += (255 - bl) * k; } } }
         { const layer = Math.sin(y * 0.18 + tileAt(tl.t3, x, y, 3) * 6); r += layer * 5; g += layer * 6; bl += layer * 4; }
         if (d < 6 && n1 > 0.55) { r += (250 - r) * 0.45; g += (253 - g) * 0.45; bl += (255 - bl) * 0.45; }
-        o.spec = 0.9;
+        /* натуральный лёд: меньше насыщенности и глянца (была «пластиковая» плита), матовая изморозь пятнами, мутные слои */
+        { const L = (r + g + bl) / 3, fr = tileAt(tl.t3, x * 1.3, y * 1.3, 4, 61); r = L + (r - L) * 0.6 - 6; g = L + (g - L) * 0.6 - 3; bl = L + (bl - L) * 0.65;
+          if (fr > 0.62) { const q = (fr - 0.62) * 1.6; r += (214 - r) * q; g += (224 - g) * q; bl += (232 - bl) * q; } }
+        o.spec = 0.35;
         break;
       }
       case 8: { // кристалл: неправильные грани (ячейки Вороного), плавный перелив цвета, светлые рёбра, свечение изнутри

@@ -1,6 +1,7 @@
 """Грунт долины и замков из эталонов, с воспроизводимыми картами деталей.
 
 Запуск из любой папки: python dev/reference_ground.py [dirt_valley dirt_castle].
+Сейчас dirt_castle = dirt_valley × (0.91, 0.91, 0.98): исходник замков давал узор «ёлочкой» (16.10).
 Крупные исходные участки сохраняют форму валунов; не меняет геометрию карт.
 """
 from pathlib import Path
@@ -26,6 +27,8 @@ RECIPES = {
     'dirt_castle': {
         'seed': 113,
         'scale': 1.35,
+        'mirror': 0.0,          # зеркальные лоскуты косых слоёв давали узор «ёлочкой»
+        'reuse_penalty': 0.6,
         'lightness': 1.3,
         'sources': {
             'castles': [(1170, 550, 1480, 810), (1050, 640, 1340, 820), (15, 640, 195, 820)],
@@ -40,7 +43,7 @@ def build(name):
     for ref, boxes in recipe['sources'].items():
         srcs.extend(load_sources(ROOT / 'dev/reference' / (ref + '.png'), boxes, recipe['scale']))
     a = quilt(srcs, 2048, B=224, O=64, seed=recipe['seed'], cands=48,
-              feather=24, mirror=0.4, brightness=10.0, reuse_penalty=0.0)
+              feather=24, mirror=recipe.get('mirror', 0.4), brightness=10.0, reuse_penalty=recipe.get('reuse_penalty', 0.0))
     im = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
     im = ImageEnhance.Color(im).enhance(0.8)
     im = ImageEnhance.Brightness(im).enhance(recipe['lightness'])
