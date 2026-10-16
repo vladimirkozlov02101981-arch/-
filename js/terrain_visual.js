@@ -441,8 +441,19 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           const dw = S.waterY - y;
           if (dw < 70 && dw > -40) {
             const wet = Math.max(0, Math.min(1, 1 - dw / 70)); r *= 1 - 0.35 * wet; g *= 1 - 0.3 * wet; bl *= 1 - 0.3 * wet;
-            const alg = dw < 26 && tileAt(tl.t1, x, y * 2, 1, 71) > 0.45 - (26 - dw) / 60;
-            if (alg) { const k = 0.6 + n2 * 0.5; r = 46 * k; g = 64 * k; bl = 30 * k; }
+            /* водоросли пятнами и ракушки у самой ватерлинии (раньше — сплошная зелёная полоса) */
+            const near = Math.max(0, 1 - Math.abs(dw - 4) / 34);
+            /* пятна: ячейки 40×14 px со своим случайным пятном-эллипсом, край рваный от мелкого шума */
+            let alg = 0;
+            for (let oy = -1; oy <= 1 && !alg; oy++) for (let ox = -1; ox <= 1; ox++) {
+              const cx = Math.floor(x / 40) + ox, cy = Math.floor(y / 14) + oy, hp = hash3(cx, cy, 91);
+              if (hp > 0.62 * near + 0.05) continue;
+              const ex = cx * 40 + 20 + (hash3(cx, cy, 92) - 0.5) * 30, ey = cy * 14 + 7 + (hash3(cx, cy, 93) - 0.5) * 8, rx = 14 + hash3(cx, cy, 94) * 22, ry = 4 + hash3(cx, cy, 95) * 6;
+              const dd = ((x - ex) / rx) ** 2 + ((y - ey) / ry) ** 2 + (n1 - 0.5) * 0.7;
+              if (dd < 1) { alg = Math.min(1, (1 - dd) * 3); break; }
+            }
+            if (alg) { const k = 0.55 + n2 * 0.45; r += (40 * k - r) * alg; g += (60 * k - g) * alg; bl += (28 * k - bl) * alg; }
+            else if (near > 0.3 && hash3(x >> 1, y >> 1, 77) > 0.996) { r = 96 + n1 * 20; g = 90 + n1 * 18; bl = 76 + n1 * 14; }
           }
         }
         break;
@@ -488,12 +499,12 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (ly < 6) { r = 44 + n1 * 12; g = 46 + n1 * 12; bl = 54 + n1 * 12; if (ly >= 2 && ly < 3.5 && (x % 44) < 22) { r = 240; g = 206; bl = 80; } }
           else if (x % 90 < 2) { r *= 0.68; g *= 0.68; bl *= 0.68; }
         } else if (P.cornice) { r *= 1.18; g *= 1.18; bl *= 1.18; }
-        else if (P.win && prm && S.tx.facade) {                                              // фасад из Blender: окна, кондиционеры, водостоки
+        else if (P.win && prm && S.tx.facade && isBack && !(P.found && y > prm.y0 + prm.h - P.found + 2)) {   /* окна — только на задней стене здания, не на земле и не в фундаменте */                                              // фасад из Blender: окна, кондиционеры, водостоки
           texAt(S.tx.facade, x - prm.x0, y - prm.y0, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) { o.emit = true; o.ga = isBack ? 150 : 230; o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           else { r *= S.tgR; g *= S.tgG; bl *= S.tgB; }                                              // стены: яркость по эталону (gain темы)
-        } else if (P.win && prm) {
+        } else if (P.win && prm && isBack && !(P.found && y > prm.y0 + prm.h - P.found + 2)) {
           const lx = x - prm.x0, ly = y - prm.y0;
           const cw = 26, fh = 34, mx = 12, my = 16;
           const cols = Math.max(1, Math.floor((prm.w - 2 * mx + 12) / cw));

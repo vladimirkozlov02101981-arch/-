@@ -46,7 +46,7 @@ function buildLevel(def, fn) {
       const stories = o.stories || [110, 110];
       const h = stories.reduce((a, b) => a + b, 0) + (o.roofSlab ?? slab);
       const top = gy - h;
-      B.add(Sh.rect(x, top, w, h + (o.found ?? 60), { mat, pal, back: true }));
+      B.add(Sh.rect(x, top, w, h + (o.found ?? 60), { mat, pal: pal && pal.win ? { ...pal, found: o.found ?? 60 } : pal, back: true }));   /* found — фундамент: окон под землёй нет */
       let f = gy; const ls = o.ladders || [];
       stories.forEach((sh, i) => {
         const ceil = f - sh + slab;                 // низ перекрытия над этажом
@@ -408,9 +408,9 @@ const MAP_CITY = buildLevel({
   house(940, 280, 5, P_TOWER('#34384a', '#ff9ce0', 0.3), 30);
   house(1300, 200, 3, P_TOWER('#3c3a4a', '#ffcf70', 0.4), 30);
   // парковка: открытые перекрытия
+  /* многоярусная парковка: колонны на заднем плане (добавлены и сразу вырезаны — остаётся только задняя стена, ходить не мешают) — плиты больше не висят в воздухе */
+  for (const x of [1592, 1700, 1830, 1940]) B.add(Sh.rect(x, 1260, 12, 240, { mat: 'concrete', back: true, pal: { base: '#4a4e56' } }), Sh.cut(Sh.rect(x, 1260, 12, 240)));
   for (const y of [1420, 1340, 1260]) B.add(Sh.rect(1580, y, 380, 14, { mat: 'concrete', pal: { base: '#5a5e66', road: true } }));
-  /* многоярусная парковка: колонны за перекрытиями (задний план, не мешают ходить) — плиты больше не висят в воздухе */
-  for (const x of [1592, 1700, 1830, 1940]) B.add(Sh.rect(x, 1260, 12, 240, { mat: 'concrete', back: true, pal: { base: '#4a4e56' } }));
   B.ladder(1606, 1420, 1500); B.ladder(1934, 1340, 1420); B.ladder(1606, 1260, 1340);
   // эстакада над каналом
   B.add(Sh.rect(1480, 1194, 1200, 26, { mat: 'concrete', pal: { base: '#5a5e66', road: true } }));

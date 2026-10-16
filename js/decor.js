@@ -731,6 +731,18 @@ function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
     const from = opts && opts.ground != null ? opts.ground : y0 == null ? 0 : y0 - 40;
     let x = x0, y = DECOR_EXACT.has(kind) ? y0 : T.findTop(x, from) + 2;
     if (y >= T.H) continue;
+    /* предмет попал в узкую шахту или люк (земля слева и справа намного выше) — дерево росло бы сквозь грунт;
+       сдвигаем к ближайшему месту, где поверхность ровная по обе стороны */
+    if (!DECOR_EXACT.has(kind)) {
+      const inPit = (xx, yy) => { const l = T.findTop(Math.round(xx) - 22, from) + 2, r = T.findTop(Math.round(xx) + 22, from) + 2; return yy - l > 24 || yy - r > 24; };
+      if (inPit(x, y)) {
+        for (let dx = 8; dx <= 160; dx += 8) {
+          let done = false;
+          for (const sg of [-1, 1]) { const xx = x0 + sg * dx, yy = T.findTop(xx, from) + 2; if (yy < T.H && !inPit(xx, yy)) { x = xx; y = yy; done = true; break; } }
+          if (done) break;
+        }
+      }
+    }
     // широкий предмет на узкой опоре или на краю (стог на зубце стены, сундук на скате крыши) — сдвигаем к ближайшему
     // месту, где земля есть под всем основанием; не нашлось — предмет не ставим, чтобы он не висел в воздухе
     const fw = DECOR_FOOT[kind] ? DECOR_FOOT[kind] * s : 0;
