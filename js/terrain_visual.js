@@ -305,14 +305,14 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
     { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
   } else if (mt === 1) {
-    const sd = t - capT;
+    const sd = t - capT, sdS = S.TDs ? Math.max(0, S.TDs[y * S.W + x] - capT) : sd;   /* sdS — плавная глубина (без черты у торцов туннеля); sd — до ближайшей поверхности: кромка, губа, почва */
     // крупный масштаб: пятна тона, изгиб пластов и скопления камней (не равномерная сетка)
     const big = tileAt(tl.t3, x, y, 4), big2 = tileAt(tl.t2, x, y, 5, 97);
     const v = (y + S.colOff[x] + (n3 - 0.5) * 70 + (big2 - 0.5) * 120) / S.band;
     const bi = Math.floor(v), fr = v - bi, L = S.L;
     const c0 = S.strata[((bi % L) + L) % L], c1 = S.strata[(((bi + 1) % L) + L) % L];
     let bm = fr < S.st ? 0 : (fr - S.st) / (1 - S.st); bm = bm * bm * (3 - 2 * bm);
-    const lv = (0.9 + n3 * 0.1 + (n2 - 0.5) * 0.05 + (big - 0.5) * 0.16) * (1 - Math.min(0.2, sd / 1100));
+    const lv = (0.9 + n3 * 0.1 + (n2 - 0.5) * 0.05 + (big - 0.5) * 0.16) * (1 - Math.min(0.2, sdS / 1100));
     r = (c0[0] + (c1[0] - c0[0]) * bm) * lv; g = (c0[1] + (c1[1] - c0[1]) * bm) * lv; bl = (c0[2] + (c1[2] - c0[2]) * bm) * lv;
     if (sd < S.soilDepth) { const k = sd / S.soilDepth, q = k * k; const so = S.soil; r = so[0] + (r - so[0]) * q; g = so[1] + (g - so[1]) * q; bl = so[2] + (bl - so[2]) * q; }
     if (capT > 0 && sd < 12) { const k = sd < 6 ? 0.36 : 0.6 + (sd - 6) * 0.066; r *= k; g *= k * 0.95; bl *= k * 0.92; }        // тень под травяной губой
@@ -320,7 +320,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     { const nm = tileAt(tl.t1, x, y, 1, 7), nb = tileAt(tl.t2, x, y, 4, 41);
       let gk = 1 + (nm - 0.5) * 0.2 + (nb - 0.5) * 0.26 + (n1 - 0.5) * 0.08;
       if (n1 < 0.06) gk *= 0.78;
-      const warmK = sd < 140 ? 1 - sd / 140 : 0;
+      const warmK = sdS < 140 ? 1 - sdS / 140 : 0;
       r *= gk * (1 + warmK * 0.14); g *= gk * (1 + warmK * 0.05); bl *= gk * (1 - warmK * 0.08);
       // комья: светлый бугорок, тень снизу справа
       const CL = 7, qx = Math.floor(x / CL), qy = Math.floor(y / CL), hq = hash3(qx, qy, 55);
@@ -331,7 +331,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         else { const sx = dx - 1, sy = dy - 1; if (sx * sx + sy * sy < cr2 * cr2 && dx > -0.5 && dy > -0.5) { r *= 0.85; g *= 0.83; bl *= 0.83; } }
       }
     }
-    if (sd > 7) {                                                                             // камни в толще: неровный контур, грани, тёплый отсвет, контактная тень
+    if (sdS > 7) {                                                                            // камни в толще: неровный контур, грани, тёплый отсвет, контактная тень
       const V = S.vs, vi = ((y & 255) << 8) | (x & 255), id = V.id[vi];
       if (V.rnd[id] > 1 - (0.4 + big * 0.42) * S.pebD) {
         const q2 = V.rnd2[id], rad = Math.min(V.cell * 0.42, V.cell * (0.09 + 0.3 * q2 * q2) * (0.75 + big * 0.7));
@@ -340,16 +340,16 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         r = o.r; g = o.g; bl = o.b;
       }
     }
-    if (sd > 18 && !S.snowy) {                                                                // крупные камни 25–45 px (каждый пятый)
+    if (sdS > 18 && !S.snowy) {                                                               // крупные камни 25–45 px (каждый пятый)
       const V = S.vl, vi = ((y & 511) << 9) | (x & 511), id = V.id[vi];
       if (V.rnd[id] > 0.78) { const q2 = V.rnd2[id]; stoneAt(S, o, -V.vx[vi] * 0.5, -V.vy[vi] * 0.56, 12 + q2 * 10, id * 1.7, S.pebs[(id * 3) % S.pebs.length], n1, n2, r, g, bl); r = o.r; g = o.g; bl = o.b; }
     }
     // разрез как иллюстрация: корни у поверхности, крупные валуны в глубине, порода темнее с глубиной
-    if (sd < 70) {
-      const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.016 * (1 - sd / 70);
+    if (sdS < 70) {
+      const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.016 * (1 - sdS / 70);
       if (dvr < wr) { const k = (1 - dvr / wr) * 0.8; r += (58 - r) * k; g += (36 - g) * k; bl += (24 - bl) * k; }
     }
-    if (sd > 30) {
+    if (sdS > 30) {
       const BC = 118, cx = Math.floor(x / BC), cy = Math.floor(y / BC), hb = hash3(cx, cy, 77);
       if (hb > 0.55) {
         // валун целиком помещается в свою ячейку — без обрезанных краёв
@@ -361,7 +361,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         r = o.r; g = o.g; bl = o.b;
       }
     }
-    { const dk = Math.min(1, sd / 480); r *= 1 - 0.34 * dk; g *= 1 - 0.38 * dk; bl *= 1 - 0.36 * dk; }
+    { const dk = Math.min(1, sdS / 480); r *= 1 - 0.34 * dk; g *= 1 - 0.38 * dk; bl *= 1 - 0.36 * dk; }
     if (S.soilBand) { const k = S.soilBand[y]; r *= k; g *= k; bl *= k; }   // слои грунта разной яркости (долина, замки)
     if (S.veinC && sd > 8) {
       const dv = tileAt(tl.t3, x, y, 5, 61) < (t - capT < 70 ? 0.3 : S.veinMask) ? 1 : veinDist(tl, x, y, n2);   // рваные трещины, не везде
@@ -922,6 +922,14 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
     band: G.band, st: 1 - (1 - G.bandSharp) * 0.6, rockBand: G.rockBand || Math.max(26, G.band * 1.2),
     iceA: [226, 246, 255], iceB: [92, 158, 214],
   };
+  /* глубина для тона, камней и корней грунта — сглаженная по горизонтали (±48 px по твёрдому): под полом туннеля глубина по столбцу
+     начинается заново, и у торцов туннеля тон, валуны и корни менялись прямой вертикальной чертой (город x≈300, 4500) */
+  S.W = W; S.TDs = new Uint16Array(N);
+  { const R = 48, sumT = new Float64Array(W + 1), sumM = new Uint32Array(W + 1);
+    for (let y = 0, row = 0; y < H; y++, row += W) {
+      for (let x = 0; x < W; x++) { const k = m[row + x] ? 1 : 0; sumM[x + 1] = sumM[x] + k; sumT[x + 1] = sumT[x] + (k ? TD[row + x] : 0); }
+      for (let x = 0; x < W; x++) if (m[row + x]) { const a = Math.max(0, x - R), b = Math.min(W, x + R + 1), n = sumM[b] - sumM[a]; S.TDs[row + x] = (sumT[b] - sumT[a]) / n; }
+    } }
   const outl = hex2rgb(G.outline); const capThick = G.cap.thick * 1.45;
   // толщина снежной шапки по столбцам — та же для заливки и для сосулек под её губой (drawSurfaceDetails)
   if (snowLip) { T.snowCapT = new Float32Array(W); for (let x = 0; x < W; x++) T.snowCapT[x] = Math.max(6, capThick * (0.62 + 0.55 * (fbm1(x / 170, seed + 7, 2) + 1) * 0.5) + snowLip[x]); }   /* толщина меняется плавно: низ шапки без «чёрных гор» */
