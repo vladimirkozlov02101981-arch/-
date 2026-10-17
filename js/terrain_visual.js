@@ -1424,6 +1424,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       if (dc) { dc.save(); dc.globalCompositeOperation = 'source-atop'; const pg = dc.createRadialGradient(x, ly, 4, x, ly + 10, 110);
         pg.addColorStop(0, 'rgba(255,200,110,0.55)'); pg.addColorStop(0.45, 'rgba(255,160,70,0.2)'); pg.addColorStop(1, 'rgba(255,140,60,0)');
         dc.fillStyle = pg; dc.fillRect(x - 120, ly - 110, 240, 230); dc.restore(); }
+      /* критик r29: «фонари есть, но стену не освещают» — задняя стена трюма лежит в слое ландшафта, а не декора: тёплый свет
+         прибавляется к его непрозрачным пикселям (радиус 120 px, спад (1 − d/R)², у самого фонаря ярче) */
+      { const RL = 120, x0 = Math.max(0, x - RL), y0 = Math.max(0, ly - RL), x1 = Math.min(W, x + RL), y1 = Math.min(T.H, ly + RL);
+        const id = T.ctx.getImageData(x0, y0, x1 - x0, y1 - y0), px = id.data, iw = x1 - x0;
+        for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
+          const j = ((yy - y0) * iw + (xx - x0)) * 4; if (!px[j + 3]) continue;
+          const dd = Math.hypot(xx - x, (yy - ly - 8) * 1.15) / RL; if (dd >= 1) continue;
+          const q = (1 - dd) * (1 - dd), kl = q * 1.35 + (dd < 0.18 ? (0.18 - dd) * 2.6 : 0);
+          px[j] = Math.min(255, px[j] * (1 + kl * 0.95) + kl * 34); px[j + 1] = Math.min(255, px[j + 1] * (1 + kl * 0.55) + kl * 16); px[j + 2] = Math.min(255, px[j + 2] * (1 + kl * 0.12) + kl * 3);
+        }
+        T.ctx.putImageData(id, x0, y0); }
     }
   }
   // станция Alien: линейные светильники из Blender под металлическими потолками, бирюзовый свет на стене (критик r27)
