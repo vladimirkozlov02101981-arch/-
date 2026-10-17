@@ -112,7 +112,7 @@ const THEMES = {
       strata: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98', '#50387a'], band: 28, bandSharp: 0.3,
       rock: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98'],
       pebbles: ['#6a55a0', '#56448a', '#7d68b8'], smoothStones: true, stoneRim: '#7ae8ff',
-      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], gain: [1.6, 1.52, 1.36] /* v53: порода — насыпь глыб из Blender (make_rubble.py alien), светлее и контрастнее прежней сшивки */ },
+      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], gain: [1.12, 1.28, 0.72] /* v70: cmatch к эталону, кадр alien:1700:1000 — порода 26/23/30 при эталоне 29/27/30 (было [1.6, 1.52, 1.36] — порода в 1,7 раза светлее и фиолетовая; эталон — почти чёрная) */ },
     },
     scatter: ['crystal', 'pod', 'alienplant', 'crystal', 'alienplant', 'pod', 'alienplant'],   /* r28: растений на островах вдвое больше */
     weather: 'spores', birds: false, ambient: '#8474b0', gravity: 0.72, ambientSound: 'space', glow: true,
