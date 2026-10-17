@@ -1,8 +1,8 @@
-"""Обшивка корабельного корпуса (пиратская бухта) как в эталоне dev/reference/pirate.png: ровные ряды досок 24 px,
+"""Обшивка корабельного корпуса (пиратская бухта) как в эталоне dev/reference/pirate.png: ровные ряды досок 16 px (до v72 — 24),
 доски 150–330 px со сдвинутыми стыками, тёмные щели 2 px, светлая фаска сверху и тень снизу у каждой доски, длинные волокна
 (вытянутость 1:8), у части досок — дуги годичных слоёв, грязь у щелей, пятна, по два болта у каждого торца и редкие гвозди.
 
-Пишет бесшовную текстуру в 4 раза подробнее игровой (4096×3840 = 1024×960 единиц, 40 рядов) и делает из неё родную ×4 и
+Пишет бесшовную текстуру в 4 раза подробнее игровой (4096×3840 = 1024×960 единиц, 60 рядов) и делает из неё родную ×4 и
 обычную текстуру: python dev/tools/make_hull_planks.py [имя=wood_hull]   (HULL_K=2 — прежний вариант с картой деталей)
 (внутри вызывается dev/make_native.py: assets/tex/native/<имя>.webp и assets/tex/<имя>.png, список nativeAvail в js/art.js).
 """
@@ -16,7 +16,7 @@ from scipy import ndimage as nd
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 K = int(os.environ.get('HULL_K', '4'))   # пикселей на единицу мира: 4 — родная ×4 (чёткая при приближении), 2 — прежний вариант с картой деталей
-W1, ROW, ROWS = 1024, 24, 40
+W1, ROW, ROWS = 1024, 16, 60   # v72 (критик r29: доски ~30 px на экране, в эталоне 15–20): ряд 16 ед. вместо 24
 H1 = ROW * ROWS
 W, H = W1 * K, H1 * K
 rng = np.random.default_rng(606)
@@ -56,7 +56,7 @@ for r in range(ROWS):
         xs = np.arange(int(np.floor(ja * K)), int(np.ceil(jb * K)))
         cols = xs % W
         sub = (slice(y0, y1), cols)
-        fy = (yy[y0:y1][:, :len(xs)] - y0) / K                          # 0..24 поперёк доски
+        fy = (yy[y0:y1][:, :len(xs)] - y0) / K                          # 0..ROW поперёк доски
         fx = (xs[None, :] / K - ja).astype(np.float32) * np.ones_like(fy)   # 0..L вдоль доски
         v = 0.5 + tone + fiber[sub] * 0.14 + streak[sub] * 0.09 + stain[sub] * 0.07 + pores[sub] * 0.05 + fine[sub] * 0.12
         # чёткие линии годичных слоёв (≈1–2 текселя) с волной и поры-штрихи: деталь, которая видна только при приближении
@@ -82,10 +82,10 @@ for r in range(ROWS):
         img[y0:y1, cols] = c
         edge[y0:y1, cols] = np.minimum(np.minimum(fy, ROW - fy), ex)
         for bx in (ja + 7, jb - 7):                                       # по два болта у торцов
-            for by in (7.5, 16.5):
-                bolts.append(((bx % W1) * K, (r * ROW + by) * K, 2.3))
+            for by in (ROW * 0.31, ROW * 0.69):
+                bolts.append(((bx % W1) * K, (r * ROW + by) * K, 2.3 * min(1.0, ROW / 20)))
         for nx in np.arange(ja + rng.uniform(60, 110), jb - 40, rng.uniform(80, 130)):   # редкие гвозди
-            bolts.append(((nx % W1) * K, (r * ROW + ROW / 2 + rng.choice([-5, 5])) * K, 1.2))
+            bolts.append(((nx % W1) * K, (r * ROW + ROW / 2 + rng.choice([-1, 1]) * ROW * 0.21) * K, 1.2))
 
 grime = np.clip(1 - edge / 5.0, 0, 1) * 0.28                              # грязь и сырость у щелей
 img *= (1 - grime)[..., None]
