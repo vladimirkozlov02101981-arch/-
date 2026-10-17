@@ -181,6 +181,10 @@ function caveAO(m, i, W, y, bk, H, wallShade = null) {
   let k = wallShade ? wallShade[i] / 255 : 1;
   for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; k *= 0.52 + 0.48 * t * (2 - t); break; }
   for (let q = 1; q < 40; q++) if (y + q < H && m[i + q * W]) { k *= 1 + 0.22 * (1 - q / 40) * (1 - q / 40); break; }
+  /* узкая шахта (стены слева и справа ближе 110 px): свет туда почти не доходит — задняя стена темнее, особенно у боковых стен */
+  const x = i - y * W; let l = 0, r = 0;
+  for (let q = 1; q <= 110; q++) { if (!l && x - q >= 0 && m[i - q]) l = q; if (!r && x + q < W && m[i + q]) r = q; if (l && r) break; }
+  if (l && r && l + r >= 70) { const wdt = l + r, edge = Math.min(l, r) / (wdt / 2); k *= (0.58 + 0.2 * Math.min(1, wdt / 220)) * (0.78 + 0.22 * Math.sqrt(edge)); }   /* узкие лазы под лестницу не трогаем — они и так тёмные */
   return k;
 }
 /** нерезкое маскирование 3×3 (только внутри непрозрачных областей, без ореолов по краю) */
@@ -583,7 +587,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (ly < 6) { r = 44 + n1 * 12; g = 46 + n1 * 12; bl = 54 + n1 * 12; if (ly >= 2 && ly < 3.5 && (x % 44) < 22) { r = 240; g = 206; bl = 80; } }
           else if (x % 90 < 2) { r *= 0.68; g *= 0.68; bl *= 0.68; }
         } else if (P.cornice) { r *= 1.18; g *= 1.18; bl *= 1.18; }
-        else if (P.win && prm && S.tx.facade) {                                              // фасад из Blender: окна, кондиционеры, водостоки
+        else if (P.win && prm && S.tx.facade && isBack && !(P.found && y > prm.y0 + prm.h - P.found + 2)) {   /* окна — только на задней стене здания, не на земле и не в фундаменте */                                              // фасад из Blender: окна, кондиционеры, водостоки
           texAt(S.tx.facade, x - prm.x0, y - prm.y0, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) {
@@ -594,7 +598,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
               o.emit = true; o.emitTex = true; o.ga = (isBack ? 150 : 230) * (0.6 + hw * 0.4); o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           }
           else { r *= S.tgR; g *= S.tgG; bl *= S.tgB; }                                              // стены: яркость по эталону (gain темы)
-        } else if (P.win && prm) {
+        } else if (P.win && prm && isBack && !(P.found && y > prm.y0 + prm.h - P.found + 2)) {
           const lx = x - prm.x0, ly = y - prm.y0;
           const cw = 26, fh = 34, mx = 12, my = 16;
           const cols = Math.max(1, Math.floor((prm.w - 2 * mx + 12) / cw));

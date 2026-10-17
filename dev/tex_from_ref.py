@@ -10,6 +10,7 @@ python dev/tex_from_ref.py <эталон.png> <выход.png> <масштаб> 
 Их значения можно задать через PATCH_SIZE, OVERLAP, FEATHER, SEED, CANDIDATES,
 MIRROR, BRIGHTNESS, REUSE_PENALTY. FEATHER — радиус: 24 означает полосу смешивания в 49 px.
 DESPECKLE=1 убирает одиночные яркие точки снега/искр до синтеза.
+SKYMASK=1 не берёт лоскуты с кусками неба/фона (голубые пиксели).
 """
 import argparse
 import math
@@ -18,6 +19,8 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 DESPECKLE = os.environ.get('DESPECKLE', '').lower() not in ('', '0', 'false', 'no')
+# SKYMASK=1: отбрасывать лоскуты, где попалось небо или дальний фон эталона (голубые пиксели)
+SKYMASK = os.environ.get('SKYMASK', '').lower() not in ('', '0', 'false', 'no')
 
 
 def load_sources(path, boxes, scale):
@@ -155,6 +158,9 @@ def quilt(srcs, size, B, O, seed=1, cands=64, feather=24, mirror=0.35, brightnes
                 height, width = s.shape[:2]
                 sy, sx = int(rng.integers(height - B + 1)), int(rng.integers(width - B + 1))
                 p = s[sy:sy + B, sx:sx + B]
+                if SKYMASK:
+                    q = p[::4, ::4]; sky = ((q[..., 2] > q[..., 0] + 12) & (q[..., 2] > 70)).mean()
+                    if sky > 0.004: continue
                 if rng.random() < mirror:
                     p = p[:, ::-1]
                 adjustment = 0.0
