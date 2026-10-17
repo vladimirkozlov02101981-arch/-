@@ -181,10 +181,6 @@ function caveAO(m, i, W, y, bk, H, wallShade = null) {
   let k = wallShade ? wallShade[i] / 255 : 1;
   for (let q = 1; q < 70; q++) if (y - q >= 0 && m[i - q * W]) { const t = q / 70; k *= 0.52 + 0.48 * t * (2 - t); break; }
   for (let q = 1; q < 40; q++) if (y + q < H && m[i + q * W]) { k *= 1 + 0.22 * (1 - q / 40) * (1 - q / 40); break; }
-  /* узкая шахта (стены слева и справа ближе 110 px): свет туда почти не доходит — задняя стена темнее, особенно у боковых стен */
-  const x = i - y * W; let l = 0, r = 0;
-  for (let q = 1; q <= 110; q++) { if (!l && x - q >= 0 && m[i - q]) l = q; if (!r && x + q < W && m[i + q]) r = q; if (l && r) break; }
-  if (l && r && l + r >= 70) { const wdt = l + r, edge = Math.min(l, r) / (wdt / 2); k *= (0.58 + 0.2 * Math.min(1, wdt / 220)) * (0.78 + 0.22 * Math.sqrt(edge)); }   /* узкие лазы под лестницу не трогаем — они и так тёмные */
   return k;
 }
 /** нерезкое маскирование 3×3 (только внутри непрозрачных областей, без ореолов по краю) */
