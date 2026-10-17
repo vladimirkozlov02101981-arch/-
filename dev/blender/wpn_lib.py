@@ -79,7 +79,75 @@ def _n(m, kind, **kw):
 def _lin(c): return (*[x ** 2.2 for x in c], 1)
 
 
-def pbr(name, col, metal=0.0, rough=0.5, wear=0.0, bare=(0.6, 0.6, 0.62), dirt=0.3, scratch=0.0, bump=0.06, scale=60, coat=0.0, emit=None, emit_k=0.0, stipple=0.0, aniso=0.0, mottle=0.0):
+# фотосканы Poly Haven (CC0), скачанные dev/blender/fetch_pbr.py в dev/pbr: дают настоящую микрошероховатость,
+# рельеф и пятнистость поверх процедурного материала. Нет папки — материал остаётся чисто процедурным. WPN_SCANS=0 — выключить.
+PBR_DIR = os.environ.get('WPN_PBR_DIR') or os.path.join(HERE, '..', 'pbr')
+_SCANS = {}
+SCANS_USED = set()
+
+
+def scan(target):
+    """{'diff','rough','nor'}: пути карт первого найденного скана цели из dev/pbr/catalog.json (или None)"""
+    if target in _SCANS: return _SCANS[target]
+    _SCANS[target] = None
+    if os.environ.get('WPN_SCANS', '1') == '0': return None
+    try:
+        import json
+        with open(os.path.join(PBR_DIR, 'catalog.json'), encoding='utf-8') as f: cat = json.load(f)
+    except Exception: return None
+    for aid in cat.get(target) or []:
+        d = os.path.join(PBR_DIR, aid)
+        if not os.path.isdir(d): continue
+        got = {}
+        for fn in sorted(os.listdir(d)):
+            for key, tag in (('diff', '_diff_'), ('rough', '_rough_'), ('nor', '_nor_gl_')):
+                if tag in fn and key not in got: got[key] = os.path.join(d, fn)
+        if 'rough' in got or 'nor' in got:
+            _SCANS[target] = got; print('SCAN', target, aid, flush=True); break
+    return _SCANS[target]
+
+
+def _scan_tex(m, path, vec, color=False):
+    im = bpy.data.images.load(path, check_existing=True)
+    if not color:
+        try: im.colorspace_settings.name = 'Non-Color'
+        except Exception: pass
+    t = _n(m, 'ShaderNodeTexImage', projection='BOX', projection_blend=0.3); t.image = im
+    m.node_tree.links.new(vec, t.inputs['Vector'])
+    return t
+
+
+def _apply_scan(m, target, color_out, rough_out, k=1.0, tile=10.0, diff=0.15):
+    """смешать карты скана в материал: шероховатость ×(0.7…1.3), пятнистость цвета (overlay яркости),
+    нормали; WPN_SCAN_K — общий множитель силы. Возвращает (цвет, шероховатость, нормаль или None)"""
+    sc = scan(target)
+    if not sc: return color_out, rough_out, None
+    # сканы сняты с поверхностей в метры: мелкий масштаб (1/tile м на плитку) оставляет микрорельеф без швов листов и досок
+    k *= float(os.environ.get('WPN_SCAN_K', 1.0))
+    SCANS_USED.add(target)
+    L = m.node_tree.links; tc = _n(m, 'ShaderNodeTexCoord')
+    mp = _n(m, 'ShaderNodeMapping'); mp.inputs['Scale'].default_value = (tile, tile, tile)
+    L.new(tc.outputs['Object'], mp.inputs['Vector']); vec = mp.outputs['Vector']
+    nor = None
+    if 'rough' in sc:
+        t = _scan_tex(m, sc['rough'], vec)
+        mr = _n(m, 'ShaderNodeMapRange'); mr.inputs['To Min'].default_value = 1 - 0.3 * k; mr.inputs['To Max'].default_value = 1 + 0.3 * k
+        L.new(t.outputs['Color'], mr.inputs['Value'])
+        mul = _n(m, 'ShaderNodeMath', operation='MULTIPLY', use_clamp=True); L.new(rough_out, mul.inputs[0]); L.new(mr.outputs['Result'], mul.inputs[1])
+        rough_out = mul.outputs[0]
+    if 'diff' in sc:
+        t = _scan_tex(m, sc['diff'], vec, color=True)
+        bw = _n(m, 'ShaderNodeRGBToBW'); L.new(t.outputs['Color'], bw.inputs['Color'])
+        mx = _n(m, 'ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'OVERLAY'; mx.inputs['Factor'].default_value = diff * k
+        L.new(color_out, mx.inputs[6]); L.new(bw.outputs['Val'], mx.inputs[7]); color_out = mx.outputs[2]
+    if 'nor' in sc:
+        t = _scan_tex(m, sc['nor'], vec)
+        nm = _n(m, 'ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = 0.3 * k
+        L.new(t.outputs['Color'], nm.inputs['Color']); nor = nm.outputs['Normal']
+    return color_out, rough_out, nor
+
+
+def pbr(name, col, metal=0.0, rough=0.5, wear=0.0, bare=(0.6, 0.6, 0.62), dirt=0.3, scratch=0.0, bump=0.06, scale=60, coat=0.0, emit=None, emit_k=0.0, stipple=0.0, aniso=0.0, mottle=0.0, scan_target=None):
     """PBR без развёртки: шум шероховатости, царапины вдоль ствола (x), стёртая краска на рёбрах до металла (bare),
     грязь во впадинах, зерно/насечка (stipple), пятна закалки (mottle), свечение (emit)"""
     m = bpy.data.materials.new(name); m.use_nodes = True; N = m.node_tree.nodes; L = m.node_tree.links; b = N['Principled BSDF']
@@ -129,6 +197,10 @@ def pbr(name, col, metal=0.0, rough=0.5, wear=0.0, bare=(0.6, 0.6, 0.62), dirt=0
         dm = _n(m, 'ShaderNodeMix'); dm.data_type = 'RGBA'; dm.blend_type = 'MULTIPLY'
         L.new(dk.outputs[0], dm.inputs['Factor']); L.new(color_out, dm.inputs[6]); dm.inputs[7].default_value = (0.07, 0.055, 0.04, 1)
         color_out = dm.outputs[2]
+    # фотоскан: металл — «gun_metal», полимеры/резина/ткань/кожа — «rubber»; стекло-керамика и свечение — без скана
+    if scan_target is None: scan_target = None if (emit or coat >= 0.6) else 'gun_metal' if metal >= 0.5 else 'rubber'
+    scan_nor = None
+    if scan_target: color_out, rough_out, scan_nor = _apply_scan(m, scan_target, color_out, rough_out, k=0.6 if stipple else 1.0)
     L.new(color_out, b.inputs['Base Color']); L.new(rough_out, b.inputs['Roughness'])
     if metal_out: L.new(metal_out, b.inputs['Metallic'])
     else: b.inputs['Metallic'].default_value = metal
@@ -146,6 +218,7 @@ def pbr(name, col, metal=0.0, rough=0.5, wear=0.0, bare=(0.6, 0.6, 0.62), dirt=0
     bev = _n(m, 'ShaderNodeBevel', samples=8); bev.inputs['Radius'].default_value = 0.0011
     bp = _n(m, 'ShaderNodeBump'); bp.inputs['Strength'].default_value = bump + stipple; bp.inputs['Distance'].default_value = 0.0004 + stipple * 0.002
     fz = _n(m, 'ShaderNodeTexNoise', Scale=scale * (6 if not stipple else 14), Detail=12.0 if not stipple else 2.0, Roughness=0.65); L.new(tc.outputs['Object'], fz.inputs['Vector'])
+    if scan_nor: L.new(scan_nor, bev.inputs['Normal'])
     L.new(fz.outputs['Fac'], bp.inputs['Height']); L.new(bev.outputs['Normal'], bp.inputs['Normal']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
     return m
 
@@ -165,13 +238,16 @@ def wood(name='wood', tint=(1.0, 1.0, 1.0), rings=0.7):
     pores = _n(m, 'ShaderNodeTexNoise', Scale=70.0, Detail=2.0); L.new(mp.outputs['Vector'], pores.inputs['Vector'])
     pm = _n(m, 'ShaderNodeMix'); pm.data_type = 'RGBA'; pm.blend_type = 'MULTIPLY'; pm.inputs['Factor'].default_value = 0.32
     L.new(ramp.outputs['Color'], pm.inputs[6]); L.new(pores.outputs['Color'], pm.inputs[7])
-    L.new(pm.outputs[2], b.inputs['Base Color']); b.inputs['Roughness'].default_value = 0.36
+    rv = _n(m, 'ShaderNodeValue'); rv.outputs[0].default_value = 0.36
+    wcol, wrough, wnor = _apply_scan(m, 'gun_wood', pm.outputs[2], rv.outputs[0], k=0.7, tile=6.0, diff=0.1)
+    L.new(wcol, b.inputs['Base Color']); L.new(wrough, b.inputs['Roughness'])
     for k in ('Coat Weight', 'Clearcoat'):
         if k in b.inputs: b.inputs[k].default_value = 0.55; break
     for k in ('Coat Roughness', 'Clearcoat Roughness'):
         if k in b.inputs: b.inputs[k].default_value = 0.1; break
     bev = _n(m, 'ShaderNodeBevel', samples=8); bev.inputs['Radius'].default_value = 0.0014
     bp = _n(m, 'ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.1; bp.inputs['Distance'].default_value = 0.0003
+    if wnor: L.new(wnor, bev.inputs['Normal'])
     L.new(w.outputs['Fac'], bp.inputs['Height']); L.new(bev.outputs['Normal'], bp.inputs['Normal']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
     return m
 

@@ -24,7 +24,7 @@ def held(name, build):
     with open(os.path.join(OUT, 'wpn_' + name + '.json'), 'w', encoding='utf-8') as f:
         json.dump({'id': name, 'frame': [-16, 32, -12, 12], 'origin': [0, 0], 'pixels_per_unit': PXU,
                    'engine': sc.render.engine, 'samples': sc.cycles.samples, 'device': sc.cycles.device,
-                   'material_source': 'procedural PBR', 'hdri': W.BLENDER_HDRI}, f, ensure_ascii=False, indent=2)
+                   'material_source': 'procedural PBR' + (' + Poly Haven scans: ' + ', '.join(sorted(W.SCANS_USED)) if W.SCANS_USED else ''), 'hdri': W.BLENDER_HDRI}, f, ensure_ascii=False, indent=2)
 
 
 def thrown(name, build, hx=3.0):

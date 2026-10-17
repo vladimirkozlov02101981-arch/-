@@ -36,7 +36,7 @@ $env:WPN_OUT = $out
 $env:WPN_SAMPLES = '512'
 $env:WPN_SAVE_BLEND = '1'
 $t0 = Get-Date
-& $bl --background --python (Join-Path $root 'dev\blender\make_weapons2.py') 2>&1 | Where-Object { $_ -match '^(GPU|WROTE|Saved)|Error' }
+& $bl --background --python (Join-Path $root 'dev\blender\make_weapons2.py') 2>&1 | Where-Object { $_ -match '^(GPU|SCAN|WROTE|Saved)|Error|Traceback' }
 Write-Host ('Время: {0:N0} с' -f ((Get-Date) - $t0).TotalSeconds)
 
 Step 'Установка рендеров в игру'
