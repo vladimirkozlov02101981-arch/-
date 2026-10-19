@@ -480,7 +480,7 @@ const DECOR = {
     c.strokeStyle = 'rgba(200,180,255,0.45)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 5 * s, y - 4 * s); c.lineTo(x, y - 14 * s); c.stroke();
   },
   lavarock(c, g, x, y, s, r) {
-    if (treeSprite(c, ['lavarock1', 'lavarock2'], x, y, s, r, 34)) { if (g) { g.fillStyle = 'rgba(255,110,20,0.55)'; circ(g, x, y - 6 * s, 9 * s); } return; }   // остывающая лава (Blender)
+    if (treeSprite(c, ['lavarock1', 'lavarock2'], x, y, s, r, 34)) { if (g) { const gr = g.createRadialGradient(x, y - 6 * s, 0, x, y - 6 * s, 11 * s); gr.addColorStop(0, 'rgba(255,120,30,0.42)'); gr.addColorStop(0.5, 'rgba(255,90,20,0.16)'); gr.addColorStop(1, 'rgba(255,80,20,0)'); g.fillStyle = gr; circ(g, x, y - 6 * s, 11 * s); } return; }   /* r30: мягкий ореол, а не сплошной оранжевый круг */   // остывающая лава (Blender)
     c.fillStyle = hgrad(c, x - 12 * s, x + 12 * s, ['#4a3a36', '#2a201e', '#140e0d']);
     c.beginPath(); c.ellipse(x, y - 5 * s, 12 * s, 8 * s, 0, 0, TAU); c.fill();
     c.strokeStyle = '#ff8a2a'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 7 * s, y - 5 * s); c.lineTo(x - 1 * s, y - 8 * s); c.lineTo(x + 5 * s, y - 3 * s); c.stroke();

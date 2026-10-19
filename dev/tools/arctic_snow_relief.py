@@ -5,6 +5,7 @@ python dev/tools/arctic_snow_relief.py [--keep 0.55] [--seed 7] [--name rock_arc
 Берёт родную ×4 assets/tex/native/<имя>.webp (прежняя сохраняется в dev/tex-backup/<имя>_native.webp один раз):
 - снег = светлые малонасыщенные пиксели; каждый вертикальный отрезок снега в столбце затеняется сверху вниз
   (верх — свет, низ — синеватая тень 0.6), по верхней кромке — блик 1–2 px, лёгкое зерно — снег объёмный, а не плоский;
+- камень (не снег) умножается на --rock-tint (оттенок по эталону);
 - по желанию часть пятен (1 − keep, по умолчанию не убирается: остаются висящие сосульки) убирается: отрезок заполняется зеркальной копией породы над ним, края смешиваются.
 Пишет родную webp (lossy q90, как make_native --lossy) и малую assets/tex/<имя>.png — точное уменьшение 4×4.
 """
@@ -25,6 +26,7 @@ def main():
     ap.add_argument('--name', default='rock_arctic')
     ap.add_argument('--keep', type=float, default=1.0)
     ap.add_argument('--seed', type=int, default=7)
+    ap.add_argument('--rock-tint', default='1.159,0.944,0.748', help='множители каналов камня (не снега): r,g,b')
     a = ap.parse_args()
     nat = ROOT / 'assets/tex/native' / f'{a.name}.webp'
     bak = ROOT / 'dev/tex-backup' / f'{a.name}_native.webp'
@@ -69,6 +71,11 @@ def main():
             seg += grain[y0:y1, x, None]
             out[y0:y1, x] = seg
             if y1 < H: out[y1 % H, x] *= 0.78       # контактная тень под шапкой
+    # v73: оттенок камня по эталону (камень 22/27/37 при прежних 19/29/48): только камень, снег и сосульки — белые
+    tint = np.array([float(v) for v in a.rock_tint.split(',')], np.float32)
+    w = ndimage.gaussian_filter((~snow).astype(np.float32), 1.0)[..., None]
+    w *= np.clip((200 - L[..., None]) / 60, 0, 1)                 # светлый иней и сосульки не трогаем
+    out = out * (1 - w) + out * tint * w
     out = np.clip(np.rint(out), 0, 255).astype(np.uint8)
     Image.fromarray(out).save(nat, 'WEBP', quality=90, method=6)
     small = out.reshape(H // 4, 4, W // 4, 4, 3).astype(np.float32).mean((1, 3))

@@ -67,7 +67,7 @@ const THEMES = {
       strata: ['#b0c1d6', '#a3b5cc', '#bccbdd', '#98abc3', '#c3d0e0'], band: 30, bandSharp: 0.2,
       rock: ['#7c8cac', '#6e7e9e', '#8898b6', '#647494', '#9aa8c2'], rockDirt: true, rockBand: 62, rim: '#b0c8ff',
       pebbles: ['#c2cfdd', '#a9b8ca', '#d5dee8'],
-      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.51, 1.44, 1.31] /* v44: яркость пород по эталону (cmatch) */ },   // v44: тонкие пласты гранита, снежные уступы с сосульками (make_masonry.py strata)
+      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.51, 1.44, 1.31] /* v73: оттенок камня по эталону — в самой текстуре (arctic_snow_relief.py --rock-tint), канальный gain красил снег; v44: яркость пород по эталону (cmatch) */ },   // v44: тонкие пласты гранита, снежные уступы с сосульками (make_masonry.py strata)
     },
     scatter: ['rockSnow', 'iceCrystal', 'bushSnow', 'rockSnow'],
     weather: 'snow', birds: false, ambient: '#c3cde6', ambientSound: 'snow',
@@ -89,7 +89,7 @@ const THEMES = {
       strata: ['#4b3c39', '#5b4944', '#3e3130', '#655149', '#4e3e3a'], band: 26, bandSharp: 0.3,
       rock: ['#6a5244', '#7e6250', '#5a4438', '#8a6c56', '#725a4a'], rockDirt: true, rockBand: 48, backK: 1.5,
       pebbles: ['#6a5a54', '#7a6862', '#5a4a44'], smoothStones: true,
-      outline: '#0d0606', veins: { color: '#ff7a20', w: 0.012, glow: true, hot: true, mask: 0.64, halo: 3 /* v50: тонкие редкие трещины, как в эталоне (были кляксы) */ }, ceiling: 'stalactites', capMats: [1, 9], tex: { rock: 'rock_volcano', cave: 'cave_volcano', cap: 'cap_ash', gain: [1.55, 1.45, 1.42] /* v56: базальтовые плиты из Blender (make_masonry.py basalt) с расплавом в швах */, glowTex: [255, 110, 30], glowMin: 190 },
+      outline: '#0d0606', veins: { color: '#ff7a20', w: 0.012, glow: true, hot: true, mask: 0.64, halo: 3 /* v50: тонкие редкие трещины, как в эталоне (были кляксы) */ }, ceiling: 'stalactites', capMats: [1, 9], tex: { rock: 'rock_volcano', cave: 'cave_volcano', cap: 'cap_ash', gain: [1.8, 1.9, 1.78] /* v73: по замеру камня без свечения (эталон 29/16/12, было 21/10/8 — темнее и насыщеннее), ~60 % шага; v56: базальтовые плиты из Blender (make_masonry.py basalt) с расплавом в швах */, glowTex: [255, 110, 30], glowMin: 190 },
     },
     scatter: ['obsidian', 'lavarock', 'bones', 'obsidian', 'lavarock'],
     weather: 'embers', birds: false, ambient: '#a47a6c', ambientSound: 'lava', glow: true,
