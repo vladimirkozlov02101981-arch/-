@@ -333,7 +333,7 @@ const MAP_PIRATE = buildLevel({
   B.add(Sh.rect(2104, 1116, 92, 12, { mat: 'wood', pal: PAL.lightWood }));
   B.ladder(2170, 1116, 1392);
   B.add(Sh.band(2860, 1346, 3010, 1286, { thick: 10, mat: 'wood', pal: PAL.lightWood }));
-  B.add(Sh.cut(Sh.ellipse(2230, 1690, 40, 34, { rough: 6 }), true));
+  B.add(Sh.cut(Sh.ellipse(2230, 1690, 40, 34, { rough: 6 })));   /* пробоина не сквозная: за ней тёмная обшивка трюма (r31–32: «голубое пятно в воде») */
   // верёвочный мост с бака на скалу
   B.bridge(2846, 1338, 3070, 1334, { mat: 'wood', thick: 10, sag: 26, pal: PAL.lightWood, rails: true });
   // скала-череп: пасть-пещера, глазницы, нос, лестницы

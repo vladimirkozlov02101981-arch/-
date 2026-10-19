@@ -1434,7 +1434,10 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
         c.fillStyle = lg; c.fillRect(x - 3.5, ly - 4, 7, 9);
         c.strokeStyle = '#2a1a0e'; c.lineWidth = 1; c.strokeRect(x - 3.5, ly - 4, 7, 9); c.beginPath(); c.moveTo(x, ly - 4); c.lineTo(x, ly + 5); c.stroke();
       }
-      if (gc) { gc.fillStyle = LS ? 'rgba(255,190,90,0.5)' : 'rgba(255,190,90,0.85)'; gc.beginPath(); gc.arc(x, LS ? y + 10 : ly, LS ? 4.5 : 9, 0, TAU); gc.fill(); }   /* свечение — огонёк свечи, фонарь виден */
+      if (gc) { gc.fillStyle = LS ? 'rgba(255,190,90,0.5)' : 'rgba(255,190,90,0.85)'; gc.beginPath(); gc.arc(x, LS ? y + 10 : ly, LS ? 4.5 : 9, 0, TAU); gc.fill();
+        /* r32: «фонари без ореола» — мягкий тёплый ореол 44 px в слое свечения (виден и на тёмных досках) */
+        const hy = LS ? y + 10 : ly, hg = gc.createRadialGradient(x, hy, 2, x, hy, 44); hg.addColorStop(0, 'rgba(255,190,100,0.32)'); hg.addColorStop(0.4, 'rgba(255,160,70,0.12)'); hg.addColorStop(1, 'rgba(255,140,60,0)');
+        gc.fillStyle = hg; gc.beginPath(); gc.arc(x, hy, 44, 0, TAU); gc.fill(); }   /* свечение — огонёк свечи, фонарь виден */
       if (dc) { dc.save(); dc.globalCompositeOperation = 'source-atop'; const pg = dc.createRadialGradient(x, ly, 4, x, ly + 10, 110);
         pg.addColorStop(0, 'rgba(255,200,110,0.55)'); pg.addColorStop(0.45, 'rgba(255,160,70,0.2)'); pg.addColorStop(1, 'rgba(255,140,60,0)');
         dc.fillStyle = pg; dc.fillRect(x - 120, ly - 110, 240, 230); dc.restore(); }
