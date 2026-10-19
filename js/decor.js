@@ -78,6 +78,8 @@ function hgrad(c, x0, x1, cols) { const g = c.createLinearGradient(x0, 0, x1, 0)
 function vgrad(c, y0, y1, cols) { const g = c.createLinearGradient(0, y0, 0, y1); cols.forEach((col, i) => g.addColorStop(i / (cols.length - 1), col)); return g; }
 
 /** дерево-спрайт из Blender (прозрачный фон, основание ствола — низ кадра). Нет файла — false, рисуем процедурно */
+/** мягкий ореол в слое свечения: радиальный спад вместо сплошного круга (r33: «мыльные пузыри» на кромке Alien) */
+function softGlow(g, x, y, R, rgb, a) { const gr = g.createRadialGradient(x, y, 0, x, y, R); gr.addColorStop(0, `rgba(${rgb},${a})`); gr.addColorStop(0.45, `rgba(${rgb},${a * 0.35})`); gr.addColorStop(1, `rgba(${rgb},0)`); g.fillStyle = gr; circ(g, x, y, R); }
 function treeSprite(c, names, x, y, s, r, size) {
   const have = names.filter((n) => TexLib.data[n]); if (!have.length) return false;
   const name = have[(r() * have.length) | 0], T = TexLib.data[name], D = size * s * r.range(0.9, 1.1);
@@ -562,7 +564,7 @@ const DECOR = {
     }
   },
   alienplant(c, g, x, y, s, r) {
-    if (treeSprite(c, ['alienplant1', 'alienplant2'], x, y, s, r, 40)) { if (g) { g.fillStyle = 'rgba(120,255,230,0.35)'; circ(g, x, y - 22 * s, 12 * s); } return; }   // светящиеся побеги (Blender)
+    if (treeSprite(c, ['alienplant1', 'alienplant2'], x, y, s, r, 40)) { if (g) softGlow(g, x, y - 22 * s, 14 * s, '120,255,230', 0.18); return; }   // светящиеся побеги (Blender)
     for (let i = 0; i < 3; i++) {
       const h = r.range(14, 26) * s, a = r.range(-0.4, 0.4); const ex = x + Math.sin(a) * h, ey = y - Math.cos(a) * h;
       c.strokeStyle = '#2fa08a'; c.lineWidth = 1.5 * s; c.beginPath(); c.moveTo(x, y + 2); c.quadraticCurveTo(x, y - h * 0.5, ex, ey); c.stroke();
@@ -570,7 +572,7 @@ const DECOR = {
     }
   },
   pod(c, g, x, y, s, r) {
-    if (r && treeSprite(c, ['pod1'], x, y, s, r, 36)) { if (g) { g.fillStyle = 'rgba(255,120,230,0.35)'; circ(g, x, y - 12 * s, 11 * s); } return; }   // светящийся стручок (Blender)
+    if (r && treeSprite(c, ['pod1'], x, y, s, r, 36)) { if (g) softGlow(g, x, y - 12 * s, 13 * s, '255,120,230', 0.16); return; }   // светящийся стручок (Blender)
     c.fillStyle = vgrad(c, y - 22 * s, y, ['#ffb0f0', '#c040b0', '#5a1a50']); c.beginPath(); c.ellipse(x, y - 10 * s, 9 * s, 13 * s, 0, 0, TAU); c.fill();
     c.strokeStyle = 'rgba(255,220,250,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y - 10 * s, 5 * s, 11 * s, 0, 0, TAU); c.stroke();
     if (g) { g.fillStyle = 'rgba(255,120,230,0.4)'; circ(g, x, y - 10 * s, 10 * s); }
@@ -578,7 +580,7 @@ const DECOR = {
   crystal(c, g, x, y, s, r) {
     const cols = r() < 0.5 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];
     if (treeSprite(c, cols[1] === '#5ff4ff' ? ['crystal_c1', 'crystal_c2'] : ['crystal_m1', 'crystal_m2'], x, y, s, r, 56)) {   // гранёные кристаллы (Blender), свечение — в слой света
-      if (g) { g.fillStyle = cols[1]; g.globalAlpha = 0.3; circ(g, x, y - 16 * s, 16 * s); g.globalAlpha = 1; }
+      if (g) { const [R, G, B] = hex2rgb(cols[1]); softGlow(g, x, y - 16 * s, 18 * s, `${R},${G},${B}`, 0.2); }
       return;
     }
     for (let i = 0; i < 3; i++) {

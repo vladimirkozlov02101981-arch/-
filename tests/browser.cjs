@@ -31,7 +31,8 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await host.selectOption('#o-perTeam','2');await host.uncheck('#o-turnInf');await host.fill('#o-turnTime','90');await host.dispatchEvent('#o-turnTime','change');
     await guest.waitForFunction(()=>UI.settings.perTeam===2&&UI.settings.turnTime===90);
     await host.selectOption('#o-side','left');await host.selectOption('#o-first','team1');await host.click('#btn-start');await host.waitForFunction(()=>App.mode==='host'&&App.game.turn.phase==='aim',{timeout:60000});await guest.waitForFunction(()=>App.mode==='guest'&&App.remote.turn.phase==='aim',{timeout:60000});
-    await host.waitForTimeout(800);assert.equal(await mapHash(host),await mapHash(guest));
+    /* гость достраивает ландшафт асинхронно: сверка, когда обе стороны готовы (до 15 с), а не через фиксированные 800 мс */
+    {let hh=0,hg=1;for(let i=0;i<60&&hh!==hg;i++){await host.waitForTimeout(250);hh=await mapHash(host);hg=await mapHash(guest);}if(hh!==hg)console.log('mapHash host/guest',hh,hg,await guest.evaluate(()=>[App.remote&&App.remote.map&&App.remote.map.id,App.sc&&App.sc.map&&App.sc.map.id]),await host.evaluate(()=>App.sc.map.id));assert.equal(hh,hg);}
     await host.keyboard.press('Tab');await host.waitForSelector('#tray:not(.hidden)');assert.equal(await host.locator('.tray-item').count(),41);await host.screenshot({path:'test-results/arsenal.png'});await host.keyboard.press('Tab');await host.waitForSelector('#tray.hidden',{state:'attached'});
     // A real input action and pause must neutralize movement on the authoritative host.
     await host.keyboard.down('KeyD');await host.waitForTimeout(160);await host.keyboard.press('Escape');await host.keyboard.up('KeyD');
