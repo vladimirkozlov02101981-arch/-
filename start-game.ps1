@@ -22,7 +22,32 @@ try {
         & npm.cmd ci --omit=dev --no-audit --no-fund
         if ($LASTEXITCODE -ne 0) { throw 'Не удалось установить зависимости.' }
     }
-    # Отдельная рабочая копия: запускаем только её сервер, без обновления из Git.
+    # Автообновление (разрешено владельцем 19.10): только перемотка вперёд до origin/claude/hopeful-dirac-byxv27, без reset/clean.
+    # Есть свои изменения в отслеживаемых файлах или ветка разошлась — пропуск; неотслеживаемые файлы не трогаются.
+    $updated = $false
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        $branch = 'claude/hopeful-dirac-byxv27'; $cur = (& git rev-parse --abbrev-ref HEAD 2>$null)
+        $dirty = (& git status --porcelain --untracked-files=no 2>$null)
+        if ($cur -and $cur -ne 'HEAD' -and -not $dirty) {   # любая локальная ветка: --ff-only сам откажет, если она разошлась с origin
+            $before = (& git rev-parse HEAD 2>$null)
+            & git fetch --quiet origin $branch 2>$null
+            if ($LASTEXITCODE -eq 0) { & git merge --ff-only --quiet "origin/$branch" 2>$null }
+            $after = (& git rev-parse HEAD 2>$null)
+            if ($before -ne $after) {
+                $updated = $true; Write-Host ('Игра обновлена: ' + (& git log -1 --format='%s' 2>$null)) -ForegroundColor Green
+                if (& git diff --name-only $before $after -- package-lock.json) { & npm.cmd ci --omit=dev --no-audit --no-fund }
+            }
+        } elseif ($dirty) { Write-Host 'Обновление пропущено: в папке есть свои изменения в файлах игры.' -ForegroundColor Yellow }
+    }
+    # после обновления старый сервер этой папки перезапускается (PID — в dev/server.pid)
+    if ($updated) {
+        $pidFile = Join-Path $PSScriptRoot 'dev/server.pid'
+        if (Test-Path -LiteralPath $pidFile) {
+            $oldPid = [int](Get-Content -LiteralPath $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+            $old = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
+            if ($old -and $old.ProcessName -like 'node*') { Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500 }
+        }
+    }
     $running = $false
     try {
         $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3001/health' -TimeoutSec 2
