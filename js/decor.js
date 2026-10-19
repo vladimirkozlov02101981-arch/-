@@ -364,12 +364,24 @@ const DECOR = {
   chest(c, g, x, y, s) {
     c.fillStyle = hgrad(c, x - 14 * s, x + 14 * s, ['#9a6030', '#7a4420', '#4a2610']); c.fillRect(x - 14 * s, y - 16 * s, 28 * s, 18 * s);
     c.fillStyle = '#ffd23a'; c.beginPath(); c.ellipse(x, y - 17 * s, 12 * s, 5 * s, 0, Math.PI, 0); c.fill();
-    if (g) { g.fillStyle = 'rgba(255,210,60,0.8)'; circ(g, x, y - 18 * s, 14 * s); }
+    if (g) { g.fillStyle = 'rgba(255,210,60,0.42)'; circ(g, x, y - 18 * s, 10 * s); }   /* мягче: был «золотой шар» поверх стены (r31) */
     c.save(); c.translate(x - 14 * s, y - 16 * s); c.rotate(-1.92);   // открытая крышка на петле у задней кромки
     c.fillStyle = '#5e3416'; c.fillRect(0, 0, 28 * s, 6 * s); c.fillStyle = '#8a5428'; c.fillRect(0, 0, 28 * s, 2.4 * s);
     c.fillStyle = '#c9a23a'; c.fillRect(5 * s, 0, 2.5 * s, 6 * s); c.fillRect(20 * s, 0, 2.5 * s, 6 * s); c.restore();
     c.fillStyle = '#3a2210'; c.fillRect(x - 15 * s, y - 17.5 * s, 3 * s, 3 * s);   // петля
     c.fillStyle = '#c9a23a'; c.fillRect(x - 14 * s, y - 10 * s, 28 * s, 2.5 * s); c.fillRect(x - 2 * s, y - 13 * s, 4 * s, 6 * s);
+  },
+  /** закрытый грузовой ящик: доски с щелями, косая распорка, тёмные углы, тень на полу */
+  crate(c, g, x, y, s, r) {
+    const w = 26 * s, h = 22 * s, x0 = x - w / 2, y0 = y - h + 1, tone = r ? r.range(0.85, 1.1) : 1;
+    groundShadow(c, x + 2 * s, y + 1, w * 0.6, 2.5 * s, 0.35);
+    const sh = (hex, k) => { const [R, G, B] = hex2rgb(hex); return `rgb(${R * k * tone | 0},${G * k * tone | 0},${B * k * tone | 0})`; };
+    c.fillStyle = hgrad(c, x0, x0 + w, [sh('#a87a48', 1), sh('#8a5c32', 1), sh('#5a3a1c', 1)]); c.fillRect(x0, y0, w, h);
+    c.fillStyle = 'rgba(30,16,6,0.55)'; for (let k = 1; k < 4; k++) c.fillRect(x0, y0 + k * h / 4 - 0.5, w, 1);   // щели между досками
+    c.strokeStyle = sh('#6a4424', 1); c.lineWidth = 3 * s; c.beginPath(); c.moveTo(x0 + 3 * s, y0 + h - 3 * s); c.lineTo(x0 + w - 3 * s, y0 + 3 * s); c.stroke();
+    c.strokeStyle = sh('#3e2610', 1); c.lineWidth = 2.6 * s; c.strokeRect(x0 + 1.3 * s, y0 + 1.3 * s, w - 2.6 * s, h - 2.6 * s);
+    c.fillStyle = 'rgba(255,230,180,0.18)'; c.fillRect(x0, y0, w, 1.4 * s);   // светлая кромка сверху
+    c.fillStyle = '#2a2a2a'; for (const [ax, ay] of [[2, 2], [w - 4, 2], [2, h - 4], [w - 4, h - 4]]) c.fillRect(x0 + ax, y0 + ay, 2 * s, 2 * s);   // гвозди
   },
   barrel(c, g, x, y, s) {
     c.fillStyle = hgrad(c, x - 9 * s, x + 9 * s, ['#a0703f', '#7a4a22', '#4a2a10']);
@@ -788,7 +800,7 @@ function placeDecor(T, theme, map, waterY, tops, mat) {
   if (sl) { sl.canvas = null; sl.ctx = null; }   // 1× уже в слое декора; временный холст не держим
 }
 /** полуширина опоры предметов, которым нужна ровная земля под всем основанием (деревья стоят на склонах и сюда не входят) */
-const DECOR_FOOT = { windmill: 26, well: 15, fence: 28, haystack: 20, column: 9, watertower: 24, pot: 7, igloo: 30, snowman: 9, sled: 13, chest: 14, barrel: 8, cottage: 38, car: 30, planter: 13, bench: 15, billboard: 18, farmhouse: 44, pod: 8 };
+const DECOR_FOOT = { windmill: 26, well: 15, fence: 28, haystack: 20, column: 9, watertower: 24, pot: 7, igloo: 30, snowman: 9, sled: 13, chest: 14, crate: 13, barrel: 8, cottage: 38, car: 30, planter: 13, bench: 15, billboard: 18, farmhouse: 44, pod: 8 };
 /** доля основания [x−w, x+w], под которой земля почти на той же высоте, что и в середине: плоское дно (сундук, скамья,
     машина, стог) не должно висеть одним краем над склоном или обрывом */
 function decorSupport(T, x, y, w) {
