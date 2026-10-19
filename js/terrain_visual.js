@@ -921,6 +921,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
     veinW: G.veins ? G.veins.w : 0, veinGlow: !!(G.veins && G.veins.glow), veinMask: G.veins && G.veins.mask || 0.56, veinHalo: G.veins && G.veins.halo || 5,
     band: G.band, st: 1 - (1 - G.bandSharp) * 0.6, rockBand: G.rockBand || Math.max(26, G.band * 1.2),
     iceA: [226, 246, 255], iceB: [92, 158, 214],
+    sunset: theme.id === 'castle',
   };
   /* глубина для тона, камней и корней грунта — сглаженная по горизонтали (±48 px по твёрдому): под полом туннеля глубина по столбцу
      начинается заново, и у торцов туннеля тон, валуны и корни менялись прямой вертикальной чертой (город x≈300, 4500) */
@@ -1041,6 +1042,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (!o.tex) r += (r - 118) * 0.12, g += (g - 118) * 0.12, bl += (bl - 118) * 0.12;   // S-кривая: глубже тени, ярче свет
         // тон света у освещённой поверхности (тёплый закатный или холодный лунный)
         if (dd < 50) { const kw = (1 - dd / 50) * (1 - shd) * 0.9; r *= 1 + kw * SWR; g *= 1 + kw * SWG; bl *= 1 + kw * SWB; }
+        /* замки на закате (критик r30: «свет плоский»): верх кладки под открытым небом тёплый, +22 % у кромки, спад за 36 px */
+        if (S.sunset && mt === 3 && t < 36 && !o.emit) { const q = (1 - t / 36) * (1 - shd * 0.7), k = q * q * 0.22; r *= 1 + k * 1.15; g *= 1 + k * 0.7; bl *= 1 + k * 0.2; }
         if (o.emit) { r = o.r * 1.05; g = o.g * 1.02; bl = o.b; }                    // светящиеся окна не темнеют от теней и глубины
         if (S.hasWaterline && !o.emit) {
           const dyw = y - S.waterY;
@@ -1381,7 +1384,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
     let nextX = -1;
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
-      if (x < nextX || y > waterY - 20 || !(matAt(x, y + 2) === 5 || matAt(x, y + 2) === 6 || matAt(x, y + 2) === 1) || !flatTop(x, y) || T.isSolid(x, y - 40) || T.isSolid(x + 24, y - 20) || T.isSolid(x - 8, y - 20)) continue;
+      if (x < nextX || y > waterY - 20 || !(matAt(x, y + 2) === 5 || matAt(x, y + 2) === 6) /* только крыши: на асфальте улицы (mat 1) антенны с огоньком смотрелись «розовыми шариками» (r31) */ || !flatTop(x, y) || T.isSolid(x, y - 40) || T.isSolid(x + 24, y - 20) || T.isSolid(x - 8, y - 20)) continue;
       nextX = x + 50 + rng() * 90; const kind = rng();
       if (kind < 0.45) {                                                                     // кондиционер: корпус, решётка, вентилятор
         const w = 22 + rng() * 8, h = 15;

@@ -776,7 +776,13 @@ function placeDecor(T, theme, map, waterY, tops, mat) {
   // из версий ×3 (assets/tex/surface) поверх ландшафта, скрывая там, где земля, — как будто они по-прежнему позади неё
   const sl = typeof TerrainSurface !== 'undefined' ? new TerrainSurface(T, c) : null;
   DECOR_LAYER = sl ? { layer: sl, rec: sl.recorder(), ctx: c } : null;
-  try { placeDecorOn(T, theme, map, waterY, tops, mat, c); } finally { DECOR_LAYER = null; }
+  /* свечение декора (фары, фонари, лава) — на отдельный слой: где объект закрыт передним ландшафтом, его свет тоже скрыт
+     (критик r31: «розовые шарики» — задние фары машин за домами светились сквозь стену) */
+  const g0 = T.gctx, gl = g0 ? makeCanvas(T.W, T.H) : null; if (gl) T.gctx = gl.getContext('2d');
+  try { placeDecorOn(T, theme, map, waterY, tops, mat, c); } finally {
+    DECOR_LAYER = null;
+    if (gl) { T.gctx = g0; const x = gl.getContext('2d'); x.globalCompositeOperation = 'destination-out'; x.drawImage(T.canvas, 0, 0); g0.drawImage(gl, 0, 0); }
+  }
   lightDecorLayer(layer, T); T.dctx.drawImage(layer, 0, 0);
   T.spriteLayer = sl && sl.commands.length ? sl : null;
   if (sl) { sl.canvas = null; sl.ctx = null; }   // 1× уже в слое декора; временный холст не держим
