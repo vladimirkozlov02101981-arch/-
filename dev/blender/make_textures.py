@@ -917,7 +917,40 @@ def _branches(bm, p, d, L, r, depth, rng, tips, spread=0.7, taper=0.62):
     if depth >= 2 and rng.random() < 0.6: tips.append(end)
 
 
-def snow_spruce(name, seed, px=320):
+def _needle_mesh(name, shoots, shades, seed, density=1.0):
+    """настоящая хвоя (v84, просьба «ель как пластилиновая»): вокруг каждого побега — тонкие иглы 1,2–2,4 см шириной
+    1,2 мм, под углом 50–70° вперёд, по кругу; к кончику побега короче и светлее (молодой прирост). Сетка собирается
+    numpy-массивами: сотни тысяч игл за секунды. shoots — [(начало, направление, длина)]"""
+    rs = np.random.default_rng(seed); V = []; C = []
+    sh = np.array([tuple(c[:3]) for c in shades], np.float32)
+    for (p0, d, ln) in shoots:
+        p0 = np.array(p0, np.float32); d = np.array(d, np.float32); d /= np.linalg.norm(d) + 1e-9
+        a1 = np.cross(d, [0, 0, 1]); a1 = a1 / (np.linalg.norm(a1) + 1e-9) if np.linalg.norm(a1) > 1e-3 else np.array([1, 0, 0], np.float32); a2 = np.cross(d, a1)
+        n = max(3, int(ln / 0.0045 * density))
+        t = np.repeat(np.linspace(0.02, 1.0, n), 4) + rs.uniform(-0.01, 0.01, n * 4)
+        ang = rs.uniform(0, 2 * np.pi, n * 4); fw = np.radians(rs.uniform(35, 60, n * 4))
+        rad = np.cos(ang)[:, None] * a1 + np.sin(ang)[:, None] * a2
+        nd = np.cos(fw)[:, None] * d + np.sin(fw)[:, None] * rad
+        lnn = (0.016 + 0.014 * rs.random(n * 4)) * (1 - 0.3 * t)
+        base = p0 + (t * ln)[:, None] * d + rad * 0.0015
+        side = np.cross(nd, d); side /= (np.linalg.norm(side, axis=1)[:, None] + 1e-9); w = 0.0006
+        tip = base + nd * lnn[:, None]
+        V.append(np.stack([base - side * w, base + side * w, tip + side * w * 0.15, tip - side * w * 0.15], 1))
+        k = rs.integers(0, len(sh), n * 4); col = sh[k] * rs.uniform(0.75, 1.15, (n * 4, 1))
+        young = np.clip((t - 0.72) / 0.28, 0, 1)[:, None]; col = col * (1 - young) + np.minimum(1, col * 1.9 + np.array([0.02, 0.05, 0.0])) * young
+        C.append(np.repeat(col[:, None, :], 4, 1))
+    V = np.concatenate(V).reshape(-1, 3).astype(np.float32); C = np.concatenate(C).reshape(-1, 3)
+    nq = len(V) // 4; me = bpy.data.meshes.new(name)
+    me.vertices.add(len(V)); me.vertices.foreach_set('co', V.ravel())
+    me.loops.add(len(V)); me.loops.foreach_set('vertex_index', np.arange(len(V), dtype=np.int32))
+    me.polygons.add(nq); me.polygons.foreach_set('loop_start', np.arange(0, len(V), 4, dtype=np.int32))
+    me.update(calc_edges=True)
+    ca = me.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER'); C4 = np.concatenate([C, np.ones((len(C), 1))], 1).astype(np.float32)
+    ca.data.foreach_set('color', C4.ravel()); print('NEEDLES', name, nq, flush=True)
+    return me
+
+
+def snow_spruce(name, seed, px=320, snow_on=True):
     """заснеженная ель как в эталоне арктики: узкий конус из ~28 мутовок, лапы провисают и загибают кончики вверх,
     хвоя — плоские веера побегов вдоль лап, на верхней стороне каждой лапы — слитный снег (метасферы) с голубой тенью снизу.
     Кадр тот же, что у прежних спрайтов (4 м, основание ствола у низа), поэтому в игре дерево стоит на том же месте"""
@@ -925,7 +958,7 @@ def snow_spruce(name, seed, px=320):
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'
     sc.world.node_tree.nodes['Background'].inputs[1].default_value = 1.1
-    ld = bpy.data.lights['sun']; ld.energy = 5.5; ld.color = (0.92, 0.96, 1.0)            # холодный свет: ночь, северное сияние
+    ld = bpy.data.lights['sun']; ld.energy = 5.5 if snow_on else 5.0; ld.color = (0.92, 0.96, 1.0) if snow_on else (1.0, 0.95, 0.86)   # холодный свет: ночь, северное сияние; без снега (долина, замки) — тёплое солнце
     bpy.data.objects['sun'].rotation_euler = Vector((0.5, 0.55, -0.67)).normalized().to_track_quat('-Z', 'Y').to_euler()   # сверху слева, чуть спереди
     H = 4.0; cam = sc.camera; cam.data.ortho_scale = H
     cam.location = (0, -10, H / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
@@ -934,7 +967,8 @@ def snow_spruce(name, seed, px=320):
     _cone(bm, Vector((0, 0, -0.1)), Vector((0, 0, Ht)), 0.1, 0.01, 12)
     fol = bmesh.new(); cl = fol.loops.layers.float_color.new('Col')
     shades = [lin(c) for c in ((0.08, 0.17, 0.12), (0.11, 0.22, 0.15), (0.15, 0.28, 0.19), (0.20, 0.34, 0.23), (0.09, 0.19, 0.16))]
-    snow = []
+    if not snow_on: shades = [lin(c) for c in ((0.10, 0.20, 0.10), (0.14, 0.26, 0.12), (0.19, 0.33, 0.15), (0.25, 0.40, 0.19), (0.12, 0.23, 0.12))]   # летняя хвоя
+    snow = []; shoots = []
     h = z0
     while h < Ht - 0.1:
         u = (h - z0) / (Ht - z0); nb = rng.randint(5, 7) if u < 0.62 else rng.randint(3, 5); a0 = rng.uniform(0, math.tau)
@@ -949,38 +983,44 @@ def snow_spruce(name, seed, px=320):
                 return Vector((0, 0, h)) + dv * (L * t) + Vector((0, 0, L * (rise * t - droop * t * t + tip * t ** 4)))
             pts = [P(k / 5) for k in range(6)]
             for k in range(5):
-                _cone(bm, pts[k], pts[k + 1], (0.02 * (1 - k / 5) + 0.004) * (0.5 + L), (0.02 * (1 - (k + 1) / 5) + 0.003) * (0.5 + L), 6)
+                _cone(bm, pts[k], pts[k + 1], (0.011 * (1 - k / 5) + 0.003) * (0.5 + L), (0.011 * (1 - (k + 1) / 5) + 0.002) * (0.5 + L), 6)   # v84: лапы тоньше — их закрывает хвоя
             t = 0.1
             while t < 0.98:                                       # побеги веером по обе стороны лапы, к кончику короче
                 p = P(t); tg = (P(min(1.0, t + 0.03)) - P(max(0.0, t - 0.03))).normalized()
                 for sg in (-1, 1):
-                    ls = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.7, 1.1)
+                    ls = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.7, 1.1) * (1.0 if snow_on else 1.7)
                     sd = (tg * 0.8 + pv * sg * 0.6 + Vector((0, 0, -0.22))).normalized()
-                    for q in range(3):
-                        _leaf_cluster(fol, cl, p + sd * ls * (q + 0.6) / 3, 0.04 + 0.02 * (1 - t), 12, rng, shades, 0.45, 0.045, True)
-                t += 0.075 + rng.uniform(0, 0.03)
-            _leaf_cluster(fol, cl, P(1.0), 0.055, 16, rng, shades, 0.5, 0.045, True)
+                    shoots.append((tuple(p), tuple(sd), ls))   # побег: тонкая веточка и хвоя вокруг
+                    _cone(bm, p, p + sd * ls, 0.0035, 0.0012, 4)
+                    for q in range(3):                            # боковые побеги второго порядка
+                        q0 = p + sd * ls * rng.uniform(0.25, 0.7); qd = (sd + pv * sg * rng.uniform(0.3, 0.7) + tg * 0.2).normalized()
+                        shoots.append((tuple(q0), tuple(qd), ls * rng.uniform(0.3, 0.5)))
+                    if not snow_on:                               # «занавес»: свисающие веточки под лапой
+                        q0 = p + sd * ls * rng.uniform(0.2, 0.6); shoots.append((tuple(q0), tuple((sd * 0.4 + Vector((0, 0, -1))).normalized()), ls * rng.uniform(0.35, 0.6)))
+                t += 0.04 + rng.uniform(0, 0.02)   # v84: побеги вдвое чаще — плотная лапа
+            shoots.append((tuple(P(0.94)), tuple((P(1.0) - P(0.9)).normalized()), 0.09))
             t = 0.12                                              # снег на верхней стороне лапы, с разрывами
             while main and t < 0.92:
                 if rng.random() < (0.75 if u < 0.62 else 0.5):
                     w = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.55, 0.95)
                     snow.append((P(t) + Vector((0, 0, 0.045)) + pv * rng.uniform(-0.04, 0.04), w, a, rng.uniform(0.6, 1.3) * (0.45 + 0.55 * min(1.0, L / 0.55))))
                 t += 0.07 + rng.uniform(0, 0.025)
-        h += rng.uniform(0.17, 0.27)
+        h += rng.uniform(0.17, 0.27) * (1.0 if snow_on else 0.72)   # летняя ель гуще: ярусы чаще
     _cone(bm, Vector((0, 0, Ht - 0.15)), Vector((0, 0, Ht + 0.12)), 0.012, 0.003, 6)           # верхушка
-    _leaf_cluster(fol, cl, Vector((0, 0, Ht)), 0.07, 30, rng, shades, 1.4, 0.05, True)
+    shoots.append(((0, 0, Ht - 0.12), (0, 0, 1), 0.2))
     snow.append((Vector((0, 0, Ht + 0.02)), 0.06, 0.0, 1.0))
     tr = bpy.data.meshes.new('trunk'); bm.to_mesh(tr); bm.free()
     tr.materials.append(mat_stone('bark', (0.24, 0.19, 0.15), (0.42, 0.34, 0.26), rough=0.85, spec=0.2, scale=9, bumpk=1.0))
     for pl in tr.polygons: pl.use_smooth = True
     ob = bpy.data.objects.new('trunk', tr); ob['tone'] = 0.0; sc.collection.objects.link(ob)
-    lm = bpy.data.meshes.new('needles'); fol.to_mesh(lm); fol.free()
-    m, nt, b = principled('needles', 0.6, 0.3)
+    fol.free(); lm = _needle_mesh('needles', shoots, shades, seed)
+    m, nt, b = principled('needles', 0.55, 0.25)
     at = nt.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'Col'; nt.links.new(at.outputs['Color'], b.inputs['Base Color'])
     for key in ('Subsurface Weight', 'Subsurface'):
         if key in b.inputs: b.inputs[key].default_value = 0.15; break
     lm.materials.append(m); sc.collection.objects.link(bpy.data.objects.new('needles', lm))
     # снег: метасферы сливаются в мягкие комья вдоль лап
+    if not snow_on: snow = []
     mb = bpy.data.metaballs.new('snow'); mb.resolution = 0.02; mb.render_resolution = 0.012; mb.threshold = 0.6
     for (p, w, a, k) in snow:
         el = mb.elements.new(type='ELLIPSOID'); el.co = p; el.radius = 0.2 * k
@@ -996,6 +1036,7 @@ def snow_spruce(name, seed, px=320):
 
 def tree_sprite(name, seed, kind, px=320):
     if kind == 'pine_snow': return snow_spruce(name, seed, px)
+    if kind == 'pine': return snow_spruce(name, seed, px, snow_on=False)   # v84 (r31–33: «ель — гладкий конус»): ярусы лап с провисанием, как у арктической, без снега
     sc = reset(); rng = random.Random(seed)
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'

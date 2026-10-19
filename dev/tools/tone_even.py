@@ -14,11 +14,11 @@ from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 Image.MAX_IMAGE_PIXELS = None
-ap = argparse.ArgumentParser(); ap.add_argument('name'); ap.add_argument('--k', type=float, default=0.65); ap.add_argument('--sigma', type=float, default=40)
+ap = argparse.ArgumentParser(); ap.add_argument('name'); ap.add_argument('--k', type=float, default=0.65); ap.add_argument('--sigma', type=float, default=40); ap.add_argument('--src', default=None)
 a = ap.parse_args()
 nat = ROOT / 'assets/tex/native' / f'{a.name}.webp'; bak = ROOT / 'dev/tex-backup' / f'{a.name}_native.webp'
 if not bak.exists(): bak.parent.mkdir(parents=True, exist_ok=True); shutil.copy(nat, bak)
-img = np.asarray(Image.open(bak).convert('RGB')).astype(np.float32); H, W, _ = img.shape
+img = np.asarray(Image.open(a.src or bak).convert('RGB')).astype(np.float32); H, W, _ = img.shape
 small = img.reshape(H // 4, 4, W // 4, 4, 3).mean((1, 3)) + 1
 rg, bg = small[..., 0] / small[..., 1], small[..., 2] / small[..., 1]
 srg, sbg = (ndimage.gaussian_filter(v, a.sigma, mode='wrap') for v in (rg, bg))

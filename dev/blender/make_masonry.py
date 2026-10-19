@@ -77,7 +77,7 @@ STYLES = {
     # r31 → v75 (критик: «рваные лоскуты 150×45 с пятнами»): длинные непрерывные пласты 36–80 ед., глыбы 220–700, швы тоньше,
     # почти горизонтальные трещины, пятнистость тона вдвое меньше — как в эталоне canyon.png
     'sandstone': dict(name='rock_canyon', seed=81, T=1024, TY=1024, hr=(36, 80), wr=(220, 700), joint=1.7, bev=2.6, recess=2.0, tilt=0.5,
-                      slant=(2, 10), ledge=3.0, mottk=0.11,
+                      slant=(2, 10), ledge=3.0, mottk=0.11, streakK=0.06,
                       stone=[(176, 118, 76), (160, 102, 64), (190, 134, 90), (146, 92, 58), (170, 112, 70), (184, 128, 86)],
                       mortar=(92, 56, 34), lichen=0.0, moss=0.0, wob=1.8, rough=1.3, warp=(3.0, 2.5),
                       light=dict(col=(1.0, 0.86, 0.66), elev=30, energy=4.6)),
@@ -162,7 +162,7 @@ def field(st):
         lk = np.clip((lich[rows] - 0.55) * 2.2, 0, 1) * has_l[b] * (0.6 + 0.4 * (1 - Y / bh)) * (0.75 + 0.25 * np.clip(lich2[rows], -1, 1))
         lcol = np.where((kind[b] % 2 == 0)[..., None], np.array([206, 176, 118], np.float32), np.array([168, 176, 140], np.float32))
         base = base * (1 - lk[..., None] * 0.5) + lcol * lk[..., None] * 0.5
-        base = base * (1 - np.clip(streak[rows] - 1.1, 0, 1) * 0.22)[..., None]
+        base = base * (1 - np.clip(streak[rows] - 1.1, 0, 1) * st.get('streakK', 0.22))[..., None]   # вертикальные потёки (у песчаника слабее: r33)
         base = base * (1 + (1 - t) * 0.05)[..., None]                       # стёртые светлые кромки
         mc = np.array(st['mortar'], np.float32) * (0.88 + 0.12 * mortn[rows])[..., None]
         mk = np.clip((mossn[rows] - (1.6 - st['moss'] * 4)) * 1.5, 0, 1) * (Y > bh * 0.5) * (st['moss'] > 0)   # мох в нижних швах

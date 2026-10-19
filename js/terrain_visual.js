@@ -601,7 +601,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
             // свет каждого окна свой (ячейка окна в координатах здания, а не плитки): часть гаснет, у остальных — разная яркость и тон
             const wc = Math.floor((x - prm.x0) / 32), wr = Math.floor((y - prm.y0) / 40), hw = hash3(wc, wr, info.idx * 7 + 11), ht = hash3(wc, wr, info.idx * 7 + 12);
             if (hw < 0.3) { r *= 0.16; g *= 0.17; bl *= 0.2; }
-            else { const k = 0.72 + hw * 0.42, warmW = ht < 0.68; r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
+            else { const k = 0.72 + hw * 0.42, warmW = ht < 0.86;   /* r33: тёплых окон ~60 %, холодных ~10 % */ r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
               o.emit = true; o.emitTex = true; o.ga = (isBack ? 150 : 230) * (0.6 + hw * 0.4); o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           }
           else { r *= S.tgR; g *= S.tgG; bl *= S.tgB; }                                              // стены: яркость по эталону (gain темы)
@@ -1381,13 +1381,13 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       if (x - lastP < 150 || py < 0 || matAt(x, py) !== 4) continue;
       let ok = true; for (const [dx, dy] of [[-12, 0], [12, 0], [0, -12], [0, 12]]) if (!T.isSolid(x + dx, py + dy) || matAt(x + dx, py + dy) !== 4) ok = false;
       if (!ok) continue; lastP = x;
-      c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.arc(x + 1.5, py + 2, 9, 0, TAU); c.fill();
-      const br = c.createLinearGradient(x - 9, py - 9, x + 9, py + 9); br.addColorStop(0, '#d8b068'); br.addColorStop(0.5, '#b08a40'); br.addColorStop(1, '#5a3c16');
-      c.fillStyle = br; c.beginPath(); c.arc(x, py, 8.5, 0, TAU); c.fill();
-      const gl = c.createRadialGradient(x - 2, py - 2, 1, x, py, 6); gl.addColorStop(0, '#4a6a70'); gl.addColorStop(0.6, '#1a2a30'); gl.addColorStop(1, '#0a1216');
-      c.fillStyle = gl; c.beginPath(); c.arc(x, py, 5.8, 0, TAU); c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(x - 2.2, py - 2.4, 2, 1, -0.6, 0, TAU); c.fill();
-      c.fillStyle = '#3a2410'; for (let q = 0; q < 6; q++) { const a = q / 6 * TAU; c.beginPath(); c.arc(x + Math.cos(a) * 7.2, py + Math.sin(a) * 7.2, 0.8, 0, TAU); c.fill(); }
+      c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.arc(x + 1.5, py + 2, 11.7, 0, TAU); c.fill();   /* r33: иллюминаторы ×1,3 (эталон ~22 px) */
+      const br = c.createLinearGradient(x - 11, py - 11, x + 11, py + 11); br.addColorStop(0, '#d8b068'); br.addColorStop(0.5, '#b08a40'); br.addColorStop(1, '#5a3c16');
+      c.fillStyle = br; c.beginPath(); c.arc(x, py, 11, 0, TAU); c.fill();
+      const gl = c.createRadialGradient(x - 2.6, py - 2.6, 1, x, py, 7.8); gl.addColorStop(0, '#4a6a70'); gl.addColorStop(0.6, '#1a2a30'); gl.addColorStop(1, '#0a1216');
+      c.fillStyle = gl; c.beginPath(); c.arc(x, py, 7.5, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.ellipse(x - 2.9, py - 3.1, 2.6, 1.3, -0.6, 0, TAU); c.fill();
+      c.fillStyle = '#3a2410'; for (let q = 0; q < 6; q++) { const a = q / 6 * TAU; c.beginPath(); c.arc(x + Math.cos(a) * 9.3, py + Math.sin(a) * 9.3, 0.9, 0, TAU); c.fill(); }
     }
   }
   // крыши и карнизы ночного города: кондиционеры, трубы, антенны
