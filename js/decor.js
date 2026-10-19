@@ -528,6 +528,9 @@ const DECOR = {
       for (let gi = 0; gi < 16; gi++) { const gx = cx - R * 0.85 + gi * R * 0.11; c.beginPath(); c.moveTo(gx, cy + 3 * s); c.lineTo(cx, cy); c.stroke(); }
       c.restore();
     }
+    /* r30–31: «гриб засвечен в бело-розовый» — поверх Blender-спрайта больше не рисуются векторные огоньки и нити,
+       только мягкое свечение шляпки в слое свечения */
+    if (hasSprite) { if (g) { const gr = g.createRadialGradient(cx, cy - R * 0.3, 0, cx, cy - R * 0.3, R * 1.3); gr.addColorStop(0, 'rgba(255,170,240,0.28)'); gr.addColorStop(1, 'rgba(255,170,240,0)'); g.fillStyle = gr; circ(g, cx, cy - R * 0.3, R * 1.3); } return; }
     c.save();
     for (let i = 0; i < 11; i++) {
       const sx = cx + r.range(-R * 0.75, R * 0.75), sy = cy - r.range(R * 0.12, R * 0.65), sr = r.range(2, 4.8) * s;

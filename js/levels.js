@@ -486,28 +486,20 @@ function drawTacticalRoutes(c, map, T) {
       const ok = fixtureState(T, f, nodes, (p) => deckAt(T, p[0], p[1] - 2, thick + 4), (p) => fixtureHit(T, p[0], p[1] + thick + trussDepth * 0.5, 3));
       const span = (s) => ok[s] && ok[s + 1] && !fixtureHit(T, (nodes[s][0] + nodes[s + 1][0]) / 2, (nodes[s][1] + nodes[s + 1][1]) / 2 + thick + trussDepth * 0.5, 3);
       const spans = []; for (let s = 0; s < segs; s++) spans.push(span(s));
-      c.save();
-      c.lineWidth = 2.2; c.strokeStyle = 'rgba(70,85,110,0.85)';
-      c.beginPath();
-      for (let s = 0; s < segs; s++) if (spans[s]) { const [px0, py0] = nodes[s], [px1, py1] = nodes[s + 1]; c.moveTo(px0, py0 + thick); c.lineTo(px1, py1 + thick); c.moveTo(px0, py0 + thick + trussDepth); c.lineTo(px1, py1 + thick + trussDepth); }
-      c.stroke();
-      c.lineWidth = 1.6; c.strokeStyle = 'rgba(95,120,150,0.78)';
-      c.beginPath();
-      for (let s = 0; s < segs; s++) {
-        if (!spans[s]) continue;
-        const [px0, py0] = nodes[s], [px1, py1] = nodes[s + 1];
-        const top0 = py0 + thick, bot0 = top0 + trussDepth, top1 = py1 + thick, bot1 = top1 + trussDepth;
-        c.moveTo(px0, top0); c.lineTo(px0, bot0); c.moveTo(px1, top1); c.lineTo(px1, bot1);
-        if (s % 2 === 0) { c.moveTo(px0, top0); c.lineTo(px1, bot1); }
-        else { c.moveTo(px0, bot0); c.lineTo(px1, top1); }
+      c.save(); c.lineCap = 'round';
+      /* r31: «голубые линии фермы — векторный каркас»: стальные балки — тёмный контур, тело, блик сверху */
+      const chords = (k) => { for (let s = 0; s < segs; s++) if (spans[s]) { const [px0, py0] = nodes[s], [px1, py1] = nodes[s + 1]; k.moveTo(px0, py0 + thick); k.lineTo(px1, py1 + thick); k.moveTo(px0, py0 + thick + trussDepth); k.lineTo(px1, py1 + thick + trussDepth); } };
+      const webs = (k) => { for (let s = 0; s < segs; s++) { if (!spans[s]) continue; const [px0, py0] = nodes[s], [px1, py1] = nodes[s + 1]; const top0 = py0 + thick, bot0 = top0 + trussDepth, top1 = py1 + thick, bot1 = top1 + trussDepth;
+        k.moveTo(px0, top0); k.lineTo(px0, bot0); k.moveTo(px1, top1); k.lineTo(px1, bot1); if (s % 2 === 0) { k.moveTo(px0, top0); k.lineTo(px1, bot1); } else { k.moveTo(px0, bot0); k.lineTo(px1, top1); } } };
+      for (const [fn, w] of [[webs, 2.6], [chords, 3.8]]) {
+        for (const [col, ww, oy] of [['rgba(12,14,22,0.92)', w + 2, 0.4], ['#566074', w, 0], ['rgba(185,200,222,0.55)', 0.9, -w * 0.3]]) {
+          c.save(); c.translate(0, oy); c.strokeStyle = col; c.lineWidth = ww; c.beginPath(); fn(c); c.stroke(); c.restore();
+        }
       }
-      c.stroke();
-      c.fillStyle = 'rgba(160,200,240,0.9)';
       for (let s = 0; s <= segs; s++) {
         if (!((s > 0 && spans[s - 1]) || (s < segs && spans[s]))) continue;
         const [px, py] = nodes[s];
-        c.beginPath(); c.arc(px, py + thick, 1.8, 0, TAU); c.fill();
-        c.beginPath(); c.arc(px, py + thick + trussDepth, 1.8, 0, TAU); c.fill();
+        for (const yy of [py + thick, py + thick + trussDepth]) { c.fillStyle = '#2a303c'; c.beginPath(); c.arc(px, yy, 3, 0, TAU); c.fill(); c.fillStyle = 'rgba(200,215,235,0.7)'; c.beginPath(); c.arc(px - 0.8, yy - 0.8, 1.1, 0, TAU); c.fill(); }   // узловые косынки с заклёпкой
       }
       c.restore();
     }
