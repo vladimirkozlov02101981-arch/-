@@ -999,8 +999,9 @@ def tree_sprite(name, seed, kind, px=320):
     sc = reset(); rng = random.Random(seed)
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'
-    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 1.0
-    bpy.data.lights['sun'].energy = 4.5
+    # v79 (критик r31–32: «крона облачком без тени внутри»): лиственным — сильнее солнце и слабее рассеянный фон: объём кроны
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.55 if kind in ('oak', 'birch') else 1.0
+    bpy.data.lights['sun'].energy = 6.5 if kind in ('oak', 'birch') else 4.5
     H = 4.0                                                    # высота кадра в метрах (дерево ~3.5 м)
     cam = sc.camera; cam.data.ortho_scale = H
     cam.location = (0, -10, H / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
@@ -1035,7 +1036,7 @@ def tree_sprite(name, seed, kind, px=320):
             mx += rng.uniform(-0.08, 0.08)
             _cone(bm, Vector((0, 0, mz - 0.3)), Vector((mx, 0, mz)), 0.03, 0.012, 6)
             dome(mx, mz, rx, rz, round(n_ * 1.5), Vector((mx * 0.5, 0, mz - 0.15)), 0.012)
-        shades = [lin(c) for c in ((0.42, 0.58, 0.18), (0.55, 0.70, 0.24), (0.68, 0.78, 0.32), (0.48, 0.62, 0.20))]
+        shades = [lin(c) for c in ((0.30, 0.44, 0.14), (0.40, 0.54, 0.18), (0.50, 0.62, 0.24), (0.34, 0.47, 0.15))]   # v79: спокойнее, без «салатового»
         leaf = dict(R=0.21, n=300, size=0.028, flat=0.9)
     elif kind == 'bush':
         H = 1.6; cam.data.ortho_scale = H; cam.location = (0, -10, H / 2 - 0.05)

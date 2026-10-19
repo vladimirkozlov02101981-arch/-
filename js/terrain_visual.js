@@ -1125,7 +1125,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       if (m[i]) { if (!m[i - W]) tops.push(x, y); if (!m[i + W]) ceils.push(x, y); }
     }
   }
-  drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat);
+  drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, back);
   placeDecor(T, theme, map, waterY, tops, mat);
   T.version++;
 }
@@ -1152,7 +1152,7 @@ function icicle(c, x, y, w, L, tip) {
   if (L > 7) { c.fillStyle = 'rgba(235,246,255,0.85)'; c.beginPath(); c.arc(x + tip, y + L - 0.2, Math.max(0.35, w * 0.12), 0, TAU); c.fill(); }
 }
 
-function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
+function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
   // растения в собственном слое: при приближении они перерисовываются в родном разрешении (TerrainSurface.replay), а не
   // растягиваются из кадра 1:1 — у Alien столбики травы иначе превращались в полосы
   const surface = theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' || theme.id === 'arctic' || theme.id === 'tropical' ? (T.surface = new TerrainSurface(T)) : null;
@@ -1337,13 +1337,13 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat) {
       if (surface) surface.sprite(IV.canvas, 'ivy');
       ivShadow = makeCanvas(IV.w, IV.h); const sx = ivShadow.getContext('2d'); sx.drawImage(IV.canvas, 0, 0); sx.globalCompositeOperation = 'source-in'; sx.fillStyle = '#0c0a08'; sx.fillRect(0, 0, IV.w, IV.h);
     }
-    const IS = 1.2, freeBelow = (x, y) => { let f = 0; for (let q = 3; q <= 96; q += 2) { if (!T.isSolid(x, y + q) || matAt(x, y + q) !== 3) break; f = q; } return f; };   // IS — масштаб плетей
+    const castle = theme.id === 'castle', IS = castle ? 1.55 : 1.2, freeBelow = (x, y) => { let f = 0; for (let q = 3; q <= 140; q += 2) { const yy = y + q, solid = T.isSolid(x, yy); if (solid ? matAt(x, yy) !== 3 : !(castle && backArr && backArr[yy * W + x] === 3)) break; f = q; } return f; };   /* у замков плеть свисает и по задней каменной стене помещений */   // IS — масштаб плетей
     for (let k = 0; IV && k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
       if (matAt(x, y + 2) !== 3 || y > waterY - 8 || x - lastX < gap) continue;
       const dense = fbm1(x / 150, seed + 71, 2); lastX = x;
-      if (dense < -0.25 && rng() < 0.75) { gap = 40 + rng() * 120; continue; }   // голые участки стены
-      const n = 1 + (rng() * (dense > 0.2 ? 4 : 2) | 0);
+      if (dense < (castle ? -0.55 : -0.25) && rng() < 0.75) { gap = (castle ? 20 : 40) + rng() * (castle ? 60 : 120); continue; }   // голые участки стены (у замков реже: критик r32 — плющ на ~20 % стены)
+      const n = 1 + (rng() * (dense > 0.2 || castle ? 5 : 2) | 0);
       for (let j = 0, xx = x; j < n; j++, xx += 4 + rng() * 9) {
         const fr = freeBelow(Math.round(xx), y); let top = -1; for (let i = 0; i < IVY_LEN.length; i++) if (IVY_LEN[i] * IS + 4 <= fr) top = i;
         if (top < 0) continue;
