@@ -27,12 +27,13 @@ def main():
     ap.add_argument('--core', type=float, default=0.34)
     ap.add_argument('--dark', type=float, default=1.0)
     ap.add_argument('--seed', type=int, default=5)
+    ap.add_argument('--src', default=None, help='исходная родная (по умолчанию — резервная копия dev/tex-backup/<имя>_native.webp)')
     a = ap.parse_args()
     nat = ROOT / 'assets/tex/native' / f'{a.name}.webp'
     bak = ROOT / 'dev/tex-backup' / f'{a.name}_native.webp'
     if not bak.exists():
         bak.parent.mkdir(parents=True, exist_ok=True); shutil.copy(nat, bak)
-    img = np.asarray(Image.open(bak).convert('RGB')).astype(np.float32)
+    img = np.asarray(Image.open(a.src or bak).convert('RGB')).astype(np.float32)
     H, W, _ = img.shape
     R, G, B = img[..., 0], img[..., 1], img[..., 2]
     lava = (R > 140) & (R - B > 55) & (G > 70)

@@ -1337,7 +1337,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       if (surface) surface.sprite(IV.canvas, 'ivy');
       ivShadow = makeCanvas(IV.w, IV.h); const sx = ivShadow.getContext('2d'); sx.drawImage(IV.canvas, 0, 0); sx.globalCompositeOperation = 'source-in'; sx.fillStyle = '#0c0a08'; sx.fillRect(0, 0, IV.w, IV.h);
     }
-    const castle = theme.id === 'castle', IS = castle ? 1.55 : 1.2, freeBelow = (x, y) => { let f = 0; for (let q = 3; q <= 140; q += 2) { const yy = y + q, solid = T.isSolid(x, yy); if (solid ? matAt(x, yy) !== 3 : !(castle && backArr && backArr[yy * W + x] === 3)) break; f = q; } return f; };   /* у замков плеть свисает и по задней каменной стене помещений */   // IS — масштаб плетей
+    const castle = theme.id === 'castle' || theme.id === 'valley', IS = castle ? 1.55 : 1.2,   /* r32: и башня долины (эталон — плющ ~15 % кладки) */ freeBelow = (x, y) => { let f = 0; for (let q = 3; q <= 140; q += 2) { const yy = y + q, solid = T.isSolid(x, yy); if (solid ? matAt(x, yy) !== 3 : !(castle && backArr && backArr[yy * W + x] === 3)) break; f = q; } return f; };   /* у замков плеть свисает и по задней каменной стене помещений */   // IS — масштаб плетей
     for (let k = 0; IV && k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
       if (matAt(x, y + 2) !== 3 || y > waterY - 8 || x - lastX < gap) continue;
