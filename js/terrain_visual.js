@@ -382,6 +382,17 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (dot > 0.93 && br > S.glowMin) { o.ga = Math.min(255, (br - S.glowMin) * 2.4);   /* светятся только раскалённые сердцевины */ o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, q = 1 - sd / 10, k = S.snowy ? 1 - 0.45 * q * q : sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
     { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.08 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
+    /* r31: «лавовые трещины — короткие чёрточки, нужна связная сеть 1–3 px с ореолом»: у вулкана поверх фото-плит — та же
+       ветвистая сеть раскалённых трещин, что в процедурной породе (veinDist), на ~45 % площади, с отсветом на камень */
+    if (S.hotCore && S.veinGlow && t - capT > 8 && tileAt(tl.t3, x, y, 5, 61) > 0.55) {
+      const dv = veinDist(tl, x, y, n2), W2 = S.veinW * 0.9;
+      if (dv < W2) {
+        const vc = n3 > 0.5 ? S.veinC : S.veinC2, k = 1 - dv / W2, kk = k * 0.85 + 0.15;
+        r += (vc[0] - r) * kk; g += (vc[1] - g) * kk; bl += (vc[2] - bl) * kk;
+        if (k > 0.55) { const q = (k - 0.55) / 0.45; r += (255 - r) * q; g += (228 - g) * q; bl += (150 - bl) * q; }
+        if (!isBack) { o.ga = Math.max(o.ga, 255 * k); o.gr = vc[0]; o.gg = vc[1]; o.gb = vc[2]; o.emit = true; }
+      } else if (dv < W2 * S.veinHalo) { const vc = n3 > 0.5 ? S.veinC : S.veinC2, q = 1 - dv / (W2 * S.veinHalo), k = q * q * 0.36; r += (vc[0] - r) * k; g += (vc[1] - g) * k * 0.7; bl += (vc[2] - bl) * k * 0.5; }
+    }
   } else if (mt === 2) {
     // скала: пласты осадочной породы разной толщины, волнистые; пласт разбит вертикальными трещинами
     // на глыбы; у глыб — объёмная фаска (светлый верх/левый край, тёмный низ), выветренные карнизы и потёки
