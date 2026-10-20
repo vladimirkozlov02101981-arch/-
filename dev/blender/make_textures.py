@@ -879,11 +879,11 @@ def facade(name, seed, n=512, cols=16, rows=12, wall=(0.44, 0.44, 0.47), lit=0.4
 
 
 # ---------------------------------------------------------------- деревья (спрайты с прозрачным фоном)
-def _cone(bm, p0, p1, r0, r1, seg=10):
-    """сужающийся цилиндр ветки от p0 до p1"""
+def _cone(bm, p0, p1, r0, r1, seg=10, caps=True):
+    """сужающийся цилиндр ветки от p0 до p1 (caps=False — без торцов: при сглаживании торцы дают светлые кольца на стыках)"""
     d = (p1 - p0); L = d.length
     q = d.normalized().to_track_quat('Z', 'Y')
-    ret = bmesh.ops.create_cone(bm, cap_ends=True, segments=seg, radius1=r0, radius2=r1, depth=L)
+    ret = bmesh.ops.create_cone(bm, cap_ends=caps, segments=seg, radius1=r0, radius2=r1, depth=L)
     for v in ret['verts']:
         v.co = q @ v.co + p0 + d / 2
 
@@ -988,14 +988,14 @@ def snow_spruce(name, seed, px=320, snow_on=True):
             while t < 0.98:                                       # побеги веером по обе стороны лапы, к кончику короче
                 p = P(t); tg = (P(min(1.0, t + 0.03)) - P(max(0.0, t - 0.03))).normalized()
                 for sg in (-1, 1):
-                    ls = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.7, 1.1) * (1.0 if snow_on else 1.7)
+                    ls = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.7, 1.1) * (1.35 if snow_on else 1.7)   # v86: и заснеженная — плотная тёмная хвоя (эталон)
                     sd = (tg * 0.8 + pv * sg * 0.6 + Vector((0, 0, -0.22))).normalized()
                     shoots.append((tuple(p), tuple(sd), ls))   # побег: тонкая веточка и хвоя вокруг
                     _cone(bm, p, p + sd * ls, 0.0035, 0.0012, 4)
                     for q in range(3):                            # боковые побеги второго порядка
                         q0 = p + sd * ls * rng.uniform(0.25, 0.7); qd = (sd + pv * sg * rng.uniform(0.3, 0.7) + tg * 0.2).normalized()
                         shoots.append((tuple(q0), tuple(qd), ls * rng.uniform(0.3, 0.5)))
-                    if not snow_on:                               # «занавес»: свисающие веточки под лапой
+                    if True:                                      # «занавес»: свисающие веточки под лапой
                         q0 = p + sd * ls * rng.uniform(0.2, 0.6); shoots.append((tuple(q0), tuple((sd * 0.4 + Vector((0, 0, -1))).normalized()), ls * rng.uniform(0.35, 0.6)))
                 t += 0.04 + rng.uniform(0, 0.02)   # v84: побеги вдвое чаще — плотная лапа
             shoots.append((tuple(P(0.94)), tuple((P(1.0) - P(0.9)).normalized()), 0.09))
@@ -1003,9 +1003,9 @@ def snow_spruce(name, seed, px=320, snow_on=True):
             while main and t < 0.92:
                 if rng.random() < (0.75 if u < 0.62 else 0.5):
                     w = (0.3 * L * (1 - 0.6 * t) + 0.05) * rng.uniform(0.55, 0.95)
-                    snow.append((P(t) + Vector((0, 0, 0.045)) + pv * rng.uniform(-0.04, 0.04), w, a, rng.uniform(0.6, 1.3) * (0.45 + 0.55 * min(1.0, L / 0.55))))
+                    snow.append((P(t) + Vector((0, 0, 0.06)) + pv * rng.uniform(-0.04, 0.04), w, a, rng.uniform(0.6, 1.3) * (0.45 + 0.55 * min(1.0, L / 0.55))))
                 t += 0.07 + rng.uniform(0, 0.025)
-        h += rng.uniform(0.17, 0.27) * (1.0 if snow_on else 0.72)   # летняя ель гуще: ярусы чаще
+        h += rng.uniform(0.17, 0.27) * (0.8 if snow_on else 0.72)   # ярусы чаще — крона плотная
     _cone(bm, Vector((0, 0, Ht - 0.15)), Vector((0, 0, Ht + 0.12)), 0.012, 0.003, 6)           # верхушка
     shoots.append(((0, 0, Ht - 0.12), (0, 0, 1), 0.2))
     snow.append((Vector((0, 0, Ht + 0.02)), 0.06, 0.0, 1.0))
@@ -1021,22 +1021,164 @@ def snow_spruce(name, seed, px=320, snow_on=True):
     lm.materials.append(m); sc.collection.objects.link(bpy.data.objects.new('needles', lm))
     # снег: метасферы сливаются в мягкие комья вдоль лап
     if not snow_on: snow = []
-    mb = bpy.data.metaballs.new('snow'); mb.resolution = 0.02; mb.render_resolution = 0.012; mb.threshold = 0.6
+    # v86 (жалоба «как пластилин»): снег — объёмные подушки с комьями (а не плоские гладкие «блины»): на каждом месте
+    # основной эллипсоид потолще и 2–3 кома вокруг; сетка из метасфер получает неровность (Displace по облачному шуму),
+    # материал — матовый, с подповерхностным рассеянием (голубая тень снизу) и мелким зерном
+    sr = random.Random(seed * 31 + 7)
+    mb = bpy.data.metaballs.new('snow'); mb.resolution = 0.012; mb.render_resolution = 0.012; mb.threshold = 0.6
     for (p, w, a, k) in snow:
-        el = mb.elements.new(type='ELLIPSOID'); el.co = p; el.radius = 0.2 * k
-        el.size_x = 1.0; el.size_y = max(0.4, min(1.2, w / 0.2)); el.size_z = 0.3
-        el.rotation = Quaternion((0, 0, 1), a)
-        el.stiffness = 2.0
-    ms, nts, bs = principled('snow', 0.55, 0.4); bs.inputs['Base Color'].default_value = (0.9, 0.94, 1.0, 1)
-    for key in ('Subsurface Weight', 'Subsurface'):
-        if key in bs.inputs: bs.inputs[key].default_value = 0.35; break
-    mb.materials.append(ms); sc.collection.objects.link(bpy.data.objects.new('snow', mb))
+        dv = Vector((math.cos(a), math.sin(a), 0)); pv = Vector((-math.sin(a), math.cos(a), 0))
+        if sr.random() < 0.3: continue                           # часть мест без снега — между подушками видна хвоя (эталон)
+        el = mb.elements.new(type='ELLIPSOID'); el.co = p; el.radius = 0.17 * k
+        el.size_x = 1.25; el.size_y = max(0.4, min(1.1, w / 0.2)); el.size_z = 0.36
+        el.rotation = Quaternion((0, 0, 1), a); el.stiffness = 2.0
+        if sr.random() < 0.6:                                     # один вытянутый ком вдоль лапы — неровный верх подушки
+            e2 = mb.elements.new(type='ELLIPSOID'); e2.radius = 0.17 * k * sr.uniform(0.45, 0.65); e2.stiffness = 1.8
+            e2.size_x = 1.4; e2.size_y = 0.8; e2.size_z = 0.55; e2.rotation = Quaternion((0, 0, 1), a)
+            e2.co = p + dv * (0.17 * k * sr.uniform(-0.6, 0.6)) + Vector((0, 0, 0.17 * k * sr.uniform(0.08, 0.2)))
+    ms, nts, bs = principled('snow', 0.88, 0.18); bs.inputs['Base Color'].default_value = (0.78, 0.83, 0.93, 1)
+    for key, v in (('Subsurface Weight', 0.6), ('Subsurface Scale', 0.05)):
+        if key in bs.inputs: bs.inputs[key].default_value = v
+    if 'Subsurface Radius' in bs.inputs: bs.inputs['Subsurface Radius'].default_value = (0.35, 0.55, 1.0)
+    N = nts.nodes; tc = N.new('ShaderNodeTexCoord')
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 70.0; nz.inputs['Detail'].default_value = 10.0; nz.inputs['Roughness'].default_value = 0.7
+    nts.links.new(tc.outputs['Object'], nz.inputs['Vector'])
+    bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.35; bp.inputs['Distance'].default_value = 0.01
+    nts.links.new(nz.outputs['Fac'], bp.inputs['Height']); nts.links.new(bp.outputs['Normal'], bs.inputs['Normal'])
+    mb.materials.append(ms); so = bpy.data.objects.new('snow', mb); sc.collection.objects.link(so)
+    try:                                                          # метасферы → сетка с рыхлой неровной поверхностью
+        dg = bpy.context.evaluated_depsgraph_get(); sm = bpy.data.meshes.new_from_object(so.evaluated_get(dg))
+        if len(sm.vertices):
+            sm.materials.clear(); sm.materials.append(ms); smo = bpy.data.objects.new('snow_mesh', sm); sc.collection.objects.link(smo)
+            for pl in sm.polygons: pl.use_smooth = True
+            tx = bpy.data.textures.new('snowlump', 'CLOUDS'); tx.noise_scale = 0.035; tx.noise_depth = 3
+            dm = smo.modifiers.new('lumps', 'DISPLACE'); dm.texture = tx; dm.strength = 0.022; dm.mid_level = 0.5; dm.texture_coords = 'GLOBAL'
+            bpy.data.objects.remove(so); print('SNOWMESH', len(sm.vertices), flush=True)
+    except Exception as e:
+        print('SNOWMESH fallback', e, flush=True)
+    render(sc, name)
+
+
+def _leaf_mesh(name, clumps, pal, size, seed, light=(0.62, 0.70, 0.30)):
+    """листья (v86): отдельные яйцевидные листья (6 вершин, слегка изогнуты) гроздьями вокруг концов веток. Лист смотрит
+    лицом вверх с разбросом — верх грозди ловит солнце, низ в тени; верхние листья грозди светлее (молодые). numpy-сетка.
+    clumps — [(центр, радиус, число листьев)]"""
+    rs = np.random.default_rng(seed); V = []; C = []
+    pal = np.array([lin(c) for c in pal], np.float32); lt = np.array(lin(light), np.float32)
+    shape = np.array([(0, 0), (0.28, -0.5), (0.7, -0.42), (1, 0), (0.7, 0.42), (0.28, 0.5)], np.float32)
+    for (c, R, n) in clumps:
+        c = np.array(c, np.float32); d = rs.normal(size=(n, 3)); d /= np.linalg.norm(d, axis=1)[:, None]
+        r = R * rs.random(n) ** 0.4; pos = c + d * r[:, None] * np.array([1.0, 0.85, 0.8], np.float32)
+        ax = d + rs.normal(size=(n, 3)) * 0.6; ax /= np.linalg.norm(ax, axis=1)[:, None]
+        nr = np.array([0, 0, 1], np.float32) * 0.9 + rs.normal(size=(n, 3)) * 0.7
+        nr -= ax * (nr * ax).sum(1)[:, None]; nr /= np.linalg.norm(nr, axis=1)[:, None] + 1e-9
+        sd = np.cross(ax, nr); L = size * rs.uniform(0.7, 1.3, n); Wd = L * rs.uniform(0.45, 0.6, n)
+        u, v = shape[:, 0][None, :, None], shape[:, 1][None, :, None]
+        base = pos - ax * (L * 0.5)[:, None]
+        curl = (u * (1 - u) * 0.25 + np.abs(v) * 0.15) * L[:, None, None]
+        verts = base[:, None, :] + ax[:, None, :] * (u * L[:, None, None]) + sd[:, None, :] * (v * Wd[:, None, None]) + nr[:, None, :] * curl
+        V.append(verts)
+        k = rs.integers(0, len(pal), n); col = pal[k] * rs.uniform(0.8, 1.15, (n, 1))
+        top = np.clip(((pos - c)[:, 2] / max(R, 1e-6) - 0.2) / 0.8, 0, 1)[:, None] * rs.uniform(0.3, 0.8, (n, 1))
+        col = col * (1 - top) + lt * top
+        dry = rs.random(n) < 0.02; col[dry] = np.array(lin((0.55, 0.42, 0.18)), np.float32)
+        C.append(np.repeat(col[:, None, :], 6, 1))
+    V = np.concatenate(V).reshape(-1, 3).astype(np.float32); C = np.concatenate(C).reshape(-1, 3)
+    nq = len(V) // 6; me = bpy.data.meshes.new(name)
+    me.vertices.add(len(V)); me.vertices.foreach_set('co', V.ravel())
+    me.loops.add(len(V)); me.loops.foreach_set('vertex_index', np.arange(len(V), dtype=np.int32))
+    me.polygons.add(nq); me.polygons.foreach_set('loop_start', np.arange(0, len(V), 6, dtype=np.int32))
+    me.update(calc_edges=True)
+    ca = me.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER')
+    ca.data.foreach_set('color', np.concatenate([C, np.ones((len(C), 1))], 1).astype(np.float32).ravel())
+    print('LEAVES', name, nq, flush=True)
+    return me
+
+
+def broadleaf_tree(name, seed, kind, px=320):
+    """дуб и берёза (v86, критик r30–33: «крона — плоский тёмный силуэт облачком»): настоящий скелет — ствол, развилка,
+    ветви 3–4 порядков с изгибом и боковыми ответвлениями; на концах и по ветвям — гроздья отдельных листьев с просветами
+    неба, сквозь просветы видны ветви. Солнце сверху слева спереди (у прежних деревьев светило из-за кроны — контровой
+    силуэт), листья слегка просвечивают. Кадр тот же: 4 м, основание ствола внизу посередине"""
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.7
+    sun = bpy.data.lights['sun']; sun.energy = 5.5; sun.color = (1.0, 0.93, 0.8); sun.angle = math.radians(3)
+    bpy.data.objects['sun'].rotation_euler = Vector((0.55, 0.5, -0.67)).normalized().to_track_quat('-Z', 'Y').to_euler()
+    H = 4.0; cam = sc.camera; cam.data.ortho_scale = H
+    cam.location = (0, -10, H / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
+    birch = kind == 'birch'
+    segs = []; tips = []; mids = []
+
+    def grow(p, d, L, r, depth, droop=0.0):
+        pts = [p]; dd = d.copy()
+        for k in range(3):
+            dd = (dd + Vector((rng.uniform(-0.18, 0.18), rng.uniform(-0.18, 0.18), rng.uniform(-0.04, 0.12) - droop))).normalized()
+            pts.append(pts[-1] + dd * (L / 3))
+        for k in range(3): segs.append((pts[k], pts[k + 1], r * (1 - 0.22 * k / 3), r * (1 - 0.22 * (k + 1) / 3)))
+        if depth == 0: tips.append((pts[-1], dd)); return
+        if depth <= 2: mids.append(pts[2])
+        n = rng.choice((2, 3, 3))
+        for j in range(n):
+            start = pts[-1] if j == 0 else pts[rng.randint(1, 3)]
+            perp = dd.cross(Vector((rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)))).normalized()
+            ang = math.radians(rng.uniform(25, 50))
+            nd = (dd * math.cos(ang) + perp * math.sin(ang) + Vector((0, 0, 0.12 if not birch else -0.05))).normalized()
+            grow(start, nd, L * rng.uniform(0.62, 0.8), r * 0.62, depth - 1, droop * 1.6 if birch else 0.0)
+
+    if not birch:
+        top = Vector((rng.uniform(-0.06, 0.06), 0, 1.05))
+        segs.append((Vector((0, 0, -0.1)), Vector((0, 0, 0.12)), 0.25, 0.18))          # корневой наплыв
+        segs.append((Vector((0, 0, 0.1)), top + Vector((0, 0, 0.14)), 0.18, 0.11))     # ствол заходит внутрь ветвей — без видимого стыка
+        nl = rng.choice((3, 4)); sides = [(-1) ** i for i in range(nl)]; rng.shuffle(sides)
+        for i in range(nl):                                       # раскидистые ветви — в основном влево и вправо (вид сбоку)
+            az = (0 if sides[i] > 0 else math.pi) + rng.uniform(-0.7, 0.7); el = math.radians(rng.uniform(22, 50) if i else rng.uniform(55, 75))
+            d = Vector((math.cos(az) * math.cos(el), math.sin(az) * math.cos(el) * 0.6, math.sin(el))).normalized()
+            grow(top + Vector((0, 0, rng.uniform(-0.12, 0.08))), d, rng.uniform(0.85, 1.05), 0.11, 4)
+        pal = ((0.20, 0.30, 0.08), (0.28, 0.38, 0.10), (0.36, 0.46, 0.13), (0.46, 0.55, 0.17), (0.30, 0.36, 0.11))
+        leaf_size, clump_r, clump_n, light = 0.075, 0.27, 135, (0.66, 0.72, 0.30)
+        bark = ((0.30, 0.24, 0.18), (0.52, 0.44, 0.34))
+    else:
+        segs.append((Vector((0, 0, -0.1)), Vector((0.03, 0, 3.4)), 0.09, 0.025))
+        z = 1.3
+        while z < 3.35:
+            az = rng.uniform(0, math.tau); el = math.radians(rng.uniform(35, 60)); L = 0.95 * (1 - (z - 1.3) / 2.6) + 0.25
+            d = Vector((math.cos(az) * math.cos(el), math.sin(az) * math.cos(el) * 0.6, math.sin(el))).normalized()
+            grow(Vector((0.03 * z / 3.4, 0, z)), d, L, 0.03, 3, droop=0.05)
+            z += rng.uniform(0.14, 0.26)
+        pal = ((0.30, 0.44, 0.13), (0.40, 0.54, 0.17), (0.50, 0.62, 0.22), (0.36, 0.48, 0.15))
+        leaf_size, clump_r, clump_n, light = 0.045, 0.15, 62, (0.70, 0.76, 0.36)
+        bark = ((0.55, 0.53, 0.50), (0.93, 0.92, 0.88))
+    # вписать дерево в кадр: ширина ≤ 3,5 м, верх ≤ 3,85 м (масштаб от основания ствола)
+    xs = [abs(q.x) for (a_, b_, *_ ) in segs for q in (a_, b_)]; zs = [q.z for (a_, b_, *_ ) in segs for q in (a_, b_)]
+    k = min(1.0, (1.85 - clump_r) / max(xs), (3.85 - clump_r) / max(zs))
+    bm = bmesh.new()
+    for (a_, b_, r0, r1) in segs: _cone(bm, a_ * k, b_ * k, max(0.004, r0 * k), max(0.003, r1 * k), 12 if r0 > 0.04 else 6, caps=False)
+    tr = bpy.data.meshes.new('trunk'); bm.to_mesh(tr); bm.free()
+    tr.materials.append(mat_stone('bark', bark[0], bark[1], rough=0.85, spec=0.2, scale=9 if not birch else 3, bumpk=1.0))
+    for pl in tr.polygons: pl.use_smooth = True
+    ob = bpy.data.objects.new('trunk', tr); ob['tone'] = 0.0; sc.collection.objects.link(ob)
+    clumps = [(tuple(t * k + dd * clump_r * 0.4), clump_r * rng.uniform(0.8, 1.25), clump_n) for (t, dd) in tips]
+    clumps += [(tuple(m_ * k), clump_r * rng.uniform(0.6, 0.95), int(clump_n * 0.7)) for m_ in mids if rng.random() < 0.85]
+    lm = _leaf_mesh('leaves', clumps, pal, leaf_size, seed, light)
+    m = bpy.data.materials.new('leaf'); m.use_nodes = True; nt = m.node_tree; N = nt.nodes; Lk = nt.links
+    b = N['Principled BSDF']; b.inputs['Roughness'].default_value = 0.5
+    for key in ('Specular IOR Level', 'Specular'):
+        if key in b.inputs: b.inputs[key].default_value = 0.45; break
+    at = N.new('ShaderNodeAttribute'); at.attribute_name = 'Col'; Lk.new(at.outputs['Color'], b.inputs['Base Color'])
+    tl = N.new('ShaderNodeBsdfTranslucent'); Lk.new(at.outputs['Color'], tl.inputs['Color'])
+    mx = N.new('ShaderNodeMixShader'); mx.inputs['Fac'].default_value = 0.25
+    out = N['Material Output']; Lk.new(b.outputs['BSDF'], mx.inputs[1]); Lk.new(tl.outputs['BSDF'], mx.inputs[2]); Lk.new(mx.outputs['Shader'], out.inputs['Surface'])
+    lm.materials.append(m); sc.collection.objects.link(bpy.data.objects.new('leaves', lm))
+    print('TREE', name, 'tips', len(tips), 'clumps', len(clumps), 'scale', round(k, 3), flush=True)
     render(sc, name)
 
 
 def tree_sprite(name, seed, kind, px=320):
     if kind == 'pine_snow': return snow_spruce(name, seed, px)
-    if kind == 'pine': return snow_spruce(name, seed, px, snow_on=False)   # v84 (r31–33: «ель — гладкий конус»): ярусы лап с провисанием, как у арктической, без снега
+    if kind == 'pine': return snow_spruce(name, seed, px, snow_on=False)
+    if kind in ('oak', 'birch'): return broadleaf_tree(name, seed, kind, px)   # v84 (r31–33: «ель — гладкий конус»): ярусы лап с провисанием, как у арктической, без снега
     sc = reset(); rng = random.Random(seed)
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'
