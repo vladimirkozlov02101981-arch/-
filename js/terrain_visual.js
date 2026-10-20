@@ -1452,8 +1452,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
         for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
           const j = ((yy - y0) * iw + (xx - x0)) * 4; if (!px[j + 3]) continue;
           const dd = Math.hypot(xx - x, (yy - ly - 8) * 1.15) / RL; if (dd >= 1) continue;
-          const q = (1 - dd) * (1 - dd), kl = q * 1.35 + (dd < 0.18 ? (0.18 - dd) * 2.6 : 0);
-          px[j] = Math.min(255, px[j] * (1 + kl * 0.95) + kl * 34); px[j + 1] = Math.min(255, px[j + 1] * (1 + kl * 0.55) + kl * 16); px[j + 2] = Math.min(255, px[j + 2] * (1 + kl * 0.12) + kl * 3);
+          const q = (1 - dd) * (1 - dd), kl = q * 0.85;   /* v88: мягче — у самого фонаря торцы досок перегорали в оранжевый (r34) */
+          px[j] = Math.min(255, px[j] * (1 + kl * 0.8) + kl * 18); px[j + 1] = Math.min(255, px[j + 1] * (1 + kl * 0.45) + kl * 8); px[j + 2] = Math.min(255, px[j + 2] * (1 + kl * 0.1) + kl * 2);
         }
         T.ctx.putImageData(id, x0, y0); }
     }

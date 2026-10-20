@@ -132,10 +132,10 @@ function rasterizeMap(def) {
 
 /* ---------- строители сооружений ---------- */
 const PAL = {
-  castleStone: { base: '#a89684', alt: '#8a7a6c', mortar: '#2a221c', w: 28, h: 14, var: 0.13, tex: 'stone_castle', texK: [0.89, 0.92, 0.83], world: true },   /* тёсаный камень на закате: dev/blender/make_masonry.py castle */
+  castleStone: { base: '#a89684', alt: '#8a7a6c', mortar: '#2a221c', w: 28, h: 14, var: 0.13, tex: 'stone_castle', texK: [0.79, 0.91, 0.93], world: true }   /* v88: насыщенность кладки по эталону (была 0,40 против 0,29) */,   /* тёсаный камень на закате: dev/blender/make_masonry.py castle */
   sandBrick: { base: '#e2b077', alt: '#cf9a62', mortar: '#8a5a32', w: 22, h: 11, var: 0.08, tex: 'stone_sand', texK: 1.2, world: true },
   darkStone: { base: '#4a4040', alt: '#3c3434', mortar: '#1a1414', w: 20, h: 10, var: 0.1, tex: 'stone_dark', texK: 1.45, world: true },   /* базальт: make_masonry.py dark */
-  shipWood: { base: '#7a4a2a', gap: '#2a160a', plank: 8, var: 0.18, tex: 'wood_hull', texK: 1.2 },   /* обшивка рядами досок 24 px: dev/tools/make_hull_planks.py */
+  shipWood: { base: '#7a4a2a', gap: '#2a160a', plank: 8, var: 0.18, tex: 'wood_hull', texK: 0.94 },   /* v88: замер r34 — обшивка была на 28 % светлее эталона (L 37 против 29); было 1.2 */   /* обшивка рядами досок 24 px: dev/tools/make_hull_planks.py */
   lightWood: { base: '#a0703f', gap: '#3a220e', plank: 7, var: 0.16, tex: 'wood_light' },
   ufoMetal: { base: '#9aa3b5', rust: '#6a7080', plate: [34, 18], tex: 'metal_ufo', texK: [1.08, 1.02, 0.82], world: true },   /* металл из Blender: make_metal.py */
   steel: { base: '#7a8290', rust: '#8a4a2a', plate: [30, 16], tex: 'metal_steel', world: true },

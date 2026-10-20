@@ -79,9 +79,9 @@ function buildLevel(def, fn) {
   return Object.assign(def, { shapes: L.shapes.concat(L.late), ladders: L.ladders, decor: L.decor, props: L.props, fixtures: L.fixtures });
 }
 
-const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1, tex: 'stone_valley', texK: 0.8, world: true };   /* v76: −13 % — критик r31: «башня слишком чистая и светлая» */   /* тёсаный гранит из Blender: dev/blender/make_masonry.py */
+const P_STONE = { base: '#a09c96', alt: '#b4aea6', mortar: '#2a2b2e', w: 32, h: 16, var: 0.1, tex: 'stone_valley', texK: [0.85, 0.83, 0.79], world: true };   /* v88: по замеру мост эталона valley_house 90/79/66 (было 0.8 — 85/76/67) */   /* тёсаный гранит из Blender: dev/blender/make_masonry.py */
 const P_TRIM = { base: '#8a8c90', alt: '#7e8084', mortar: '#2a2b2e', w: 32, h: 16, var: 0.06, tex: 'stone_valley', texK: 0.84, world: true };
-const P_KEEP = { base: '#5c5f64', alt: '#666a6f', mortar: '#1e1f22', w: 32, h: 16, var: 0.05, tex: 'brick_keep' };
+const P_KEEP = { base: '#5c5f64', alt: '#666a6f', mortar: '#1e1f22', w: 32, h: 16, var: 0.05, tex: 'brick_keep', texK: [1.17, 1.06, 0.96] };   /* v88: башня долины по замеру r34 (117/109/95 против эталона 91/80/63; было 1.22) */
 const P_BARN = { base: '#8f4a2e', gap: '#3a1a0e', plank: 9, var: 0.16, tex: 'wood_ship' };
 
 /* =========================================================

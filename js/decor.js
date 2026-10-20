@@ -786,6 +786,7 @@ function lightDecorLayer(cv, T = null) {
     x.putImageData(img, 0, ya);
   }
 }
+const DECOR_TREES = new Set(['oak', 'pine', 'birch', 'pineSnow', 'palm', 'alientree', 'deadtree', 'cactus']);
 const SCATTER_CAVE_OK = new Set(['rock', 'rockSnow', 'bones', 'skull', 'obsidian', 'lavarock', 'crystal', 'shell', 'trash', 'iceCrystal']);
 function placeDecor(T, theme, map, waterY, tops, mat, back) {
   // объекты рисуются на отдельный слой, освещаются одним солнцем и переносятся на слой декора
@@ -825,16 +826,23 @@ function placeDecorOn(T, theme, map, waterY, tops, mat, c, back) {
     const fn = DECOR[kind]; if (!fn) continue;
     // дерево с домиком: ствол растёт с земли (opts.ground — откуда искать землю), а площадка и лестницы остаются как были
     const from = opts && opts.ground != null ? opts.ground : y0 == null ? 0 : y0 - 40;
-    let x = x0, y = DECOR_EXACT.has(kind) ? y0 : T.findTop(x, from) + 2;
+    /* деревья растут с земли: тонкий дощатый настил (помост лазаемого дуба, мостки) пропускается — иначе люк помоста
+       принимался за яму и дерево переставлялось на сам помост (v22–v87: «дуб растёт из досок») */
+    const top = !DECOR_TREES.has(kind) ? (xx) => T.findTop(Math.round(xx), from) : (xx) => {
+      const xi = Math.round(xx); let yy = T.findTop(xi, from);
+      for (let k = 0; k < 4 && yy < T.H - 1 && mat[(yy + 1) * T.W + xi] === 4; k++) { let th = 0; while (th < 12 && T.isSolid(xi, yy + th)) th++; if (th >= 12) break; yy = T.findTop(xi, yy + th); }
+      return yy;
+    };
+    let x = x0, y = DECOR_EXACT.has(kind) ? y0 : top(x) + 2;
     if (y >= T.H) continue;
     /* предмет попал в узкую шахту или люк (земля слева и справа намного выше) — дерево росло бы сквозь грунт;
        сдвигаем к ближайшему месту, где поверхность ровная по обе стороны */
     if (!DECOR_EXACT.has(kind)) {
-      const inPit = (xx, yy) => { const l = T.findTop(Math.round(xx) - 22, from) + 2, r = T.findTop(Math.round(xx) + 22, from) + 2; return yy - l > 24 || yy - r > 24; };
+      const inPit = (xx, yy) => { const l = top(xx - 22) + 2, r = top(xx + 22) + 2; return yy - l > 24 || yy - r > 24; };
       if (inPit(x, y)) {
         for (let dx = 8; dx <= 160; dx += 8) {
           let done = false;
-          for (const sg of [-1, 1]) { const xx = x0 + sg * dx, yy = T.findTop(xx, from) + 2; if (yy < T.H && !inPit(xx, yy)) { x = xx; y = yy; done = true; break; } }
+          for (const sg of [-1, 1]) { const xx = x0 + sg * dx, yy = top(xx) + 2; if (yy < T.H && !inPit(xx, yy)) { x = xx; y = yy; done = true; break; } }
           if (done) break;
         }
       }
