@@ -50,8 +50,9 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     // Keep the network active while preventing guest rendering for >90 snapshots.
     await guest.evaluate(()=>{window.savedRemoteUpdate=App.remote.update;App.remote.update=()=>{};});
     await host.evaluate(()=>{const g=App.game;g.carve(1200,1450,27);const s=g.soldiers.find(s=>s.team===1);s.drown(g);});
-    await host.waitForTimeout(4500);await guest.evaluate(()=>{App.remote.update=window.savedRemoteUpdate;});await host.waitForTimeout(500);
-    assert.equal(await mapHash(host),await mapHash(guest));
+    await host.waitForTimeout(4500);await guest.evaluate(()=>{App.remote.update=window.savedRemoteUpdate;});
+    /* восстановление после скрытой вкладки: ждём синхронизации до 10 с (под нагрузкой 500 мс не хватало) */
+    {let hh=0,hg=1;for(let i=0;i<40&&hh!==hg;i++){await host.waitForTimeout(250);hh=await mapHash(host);hg=await mapHash(guest);}assert.equal(hh,hg);}
     const goneHost=await host.evaluate(()=>App.game.soldiers.filter(s=>s.gone).map(s=>s.id));
     const goneGuest=await guest.evaluate(()=>App.remote.soldiers.filter(s=>s.gone).map(s=>s.id));assert.deepEqual(goneGuest,goneHost);
     await host.screenshot({path:'test-results/online-host.png'});await guest.screenshot({path:'test-results/online-guest.png'});
