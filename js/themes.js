@@ -62,7 +62,7 @@ const THEMES = {
     clouds: { n: 5, color: '#dfe7f7', shade: '#98a9c9', alpha: 0.55 },
     liquid: { kind: 'ice', top: '#86bbe0', mid: '#3f78a8', deep: '#0e2b4d', foam: '#ffffff', alpha: 0.8 },
     ground: {
-      cap: { cols: ['#ffffff', '#eef5ff', '#b8cbe6'], thick: 20, blades: null, snow: true },
+      cap: { cols: ['#ffffff', '#eef5ff', '#b8cbe6'], thick: 28, blades: null, snow: true },   /* r33: шапка на склоне была 6–8 px, в эталоне 18–25 */
       soil: '#c0cee0', soilDepth: 16, pebDensity: 0.55,
       strata: ['#b0c1d6', '#a3b5cc', '#bccbdd', '#98abc3', '#c3d0e0'], band: 30, bandSharp: 0.2,
       rock: ['#7c8cac', '#6e7e9e', '#8898b6', '#647494', '#9aa8c2'], rockDirt: true, rockBand: 62, rim: '#b0c8ff',
