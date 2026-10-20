@@ -300,7 +300,7 @@ const DECOR = {
     c.fillStyle = '#7a4a2a'; c.beginPath(); c.moveTo(x - tw / 2 - 5 * s, ty); c.lineTo(x, ty - 20 * s); c.lineTo(x + tw / 2 + 5 * s, ty); c.closePath(); c.fill();
   },
   column(c, g, x, y, s, r) {
-    if (r && treeSprite(c, ['column1', 'column2'], x, y, s, r, 96)) return;   // мраморная колонна из Blender (каннелюры, излом)
+    if (r && treeSprite(c, DECOR_THEME === 'valley' || DECOR_THEME === 'castle' ? ['column_ruin1', 'column_ruin2'] : ['column1', 'column2'], x, y, s, r, 96)) return;   // колонна из Blender: мрамор каньона; в долине и замках — выветренный известняк с мхом (v89, r34)
     const w = 18 * s, h = 70 * s;
     c.fillStyle = hgrad(c, x - w / 2, x + w / 2, ['#f4d6a6', '#dcb07a', '#a87a4a']); c.fillRect(x - w / 2, y - h, w, h + 4);
     c.strokeStyle = 'rgba(120,80,40,0.4)'; c.lineWidth = 1; for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(x + i * w / 6, y - h + 2); c.lineTo(x + i * w / 6, y); c.stroke(); }
@@ -532,7 +532,15 @@ const DECOR = {
     }
     /* r30–31: «гриб засвечен в бело-розовый» — поверх Blender-спрайта больше не рисуются векторные огоньки и нити,
        только мягкое свечение шляпки в слое свечения */
-    if (hasSprite) { if (g) { const gr = g.createRadialGradient(cx, cy - R * 0.3, 0, cx, cy - R * 0.3, R * 1.3); gr.addColorStop(0, 'rgba(255,170,240,0.28)'); gr.addColorStop(1, 'rgba(255,170,240,0)'); g.fillStyle = gr; circ(g, cx, cy - R * 0.3, R * 1.3); } return; }
+    if (hasSprite) {
+      /* верх шляпки освещён: в слое света (он поднимает множитель ночного освещения Alien) — эллипс по шляпке спрайта
+         (кадр 3 м: центр шляпки ≈ 0,59 высоты спрайта, полуширина ≈ 0,23), ярче сверху; без него купол был плоским тёмным */
+      if (g) { const D0 = 150 * s, hx = x, hy = y + 3 - D0 * 0.67, rx = D0 * 0.22, ry = D0 * 0.06;
+        g.save(); g.translate(hx, hy); g.scale(1, ry / rx); const gr = g.createRadialGradient(-rx * 0.25, -rx * 0.35, 0, 0, 0, rx);
+        gr.addColorStop(0, 'rgba(255,225,250,0.85)'); gr.addColorStop(0.5, 'rgba(255,190,240,0.35)'); gr.addColorStop(1, 'rgba(255,170,240,0)');
+        g.fillStyle = gr; circ(g, 0, 0, rx); g.restore(); }
+      return;
+    }
     c.save();
     for (let i = 0; i < 11; i++) {
       const sx = cx + r.range(-R * 0.75, R * 0.75), sy = cy - r.range(R * 0.12, R * 0.65), sr = r.range(2, 4.8) * s;
@@ -612,6 +620,13 @@ const DECOR = {
     if (g) { g.fillStyle = 'rgba(255,240,170,0.7)'; circ(g, x + 34 * s, y - 14 * s, 8 * s); g.fillStyle = 'rgba(255,40,40,0.7)'; circ(g, x - 34 * s, y - 14 * s, 6 * s); }
   },
   planter(c, g, x, y, s, r) {
+    /* r34: «дерево-игрушка из шаров на палке» — в кадке молодое деревце из Blender (тот же спрайт, что берёза долины), кадка бетонная */
+    if (r && TexLib.data.tree_birch1) {
+      treeSprite(c, ['tree_birch1'], x, y - 10 * s, s, r, 92);
+      c.fillStyle = hgrad(c, x - 15 * s, x + 15 * s, ['#7c8088', '#5e626a', '#3c4048']); c.fillRect(x - 15 * s, y - 13 * s, 30 * s, 15 * s);
+      c.fillStyle = '#8c9098'; c.fillRect(x - 16 * s, y - 14 * s, 32 * s, 2.5 * s); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(x - 15 * s, y - 11.5 * s, 30 * s, 1.2 * s);
+      return;
+    }
     c.fillStyle = '#6a6e76'; c.fillRect(x - 14 * s, y - 12 * s, 28 * s, 14 * s);
     c.fillStyle = '#4a3020'; c.fillRect(x - 1.5 * s, y - 40 * s, 3 * s, 30 * s);
     const blobs = []; for (let i = 0; i < 9; i++) blobs.push({ x: x + r.range(-12, 12) * s, y: y - 46 * s + r.range(-8, 8) * s, r: r.range(7, 10) * s });

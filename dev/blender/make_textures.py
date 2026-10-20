@@ -1059,6 +1059,29 @@ def snow_spruce(name, seed, px=320, snow_on=True):
     render(sc, name)
 
 
+def mat_bark(name, dark, light, birch=False):
+    """кора (v87, r34: «ствол гладкий, без коры»): продольные борозды (полосы вдоль ствола, искажённые шумом), трещины
+    поперёк у берёзы, сильный рельеф; цвет — между dark и light по глубине борозды"""
+    m, nt, b = principled(name, 0.88, 0.15); N = nt.nodes; L = nt.links
+    tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping')
+    mp.inputs['Scale'].default_value = (16.0, 16.0, 2.5) if not birch else (10.0, 10.0, 30.0)   # 5–7 борозд на видимой ширине ствола
+    L.new(tc.outputs['Object'], mp.inputs['Vector'])
+    wv = N.new('ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = 'X' if not birch else 'Z'
+    wv.inputs['Scale'].default_value = 1.0; wv.inputs['Distortion'].default_value = 9.0 if not birch else 4.0
+    wv.inputs['Detail'].default_value = 6.0; wv.inputs['Detail Scale'].default_value = 1.5
+    L.new(mp.outputs['Vector'], wv.inputs['Vector'])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 140.0; nz.inputs['Detail'].default_value = 8.0
+    L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    mx = N.new('ShaderNodeMath'); mx.operation = 'MULTIPLY'; L.new(wv.outputs['Fac'], mx.inputs[0]); L.new(nz.outputs['Fac'], mx.inputs[1])
+    ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+    if not birch: E[0].position = 0.08; E[0].color = (*lin(dark), 1); E[1].position = 0.42; E[1].color = (*lin(light), 1)
+    else: E[0].position = 0.42; E[0].color = (*lin(light), 1); E[1].position = 0.5; E[1].color = (*lin(dark), 1)   # берёза: белая, тёмные чечевички и трещины
+    L.new(mx.outputs['Value'], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.9; bp.inputs['Distance'].default_value = 0.01
+    L.new(mx.outputs['Value'], bp.inputs['Height']); L.new(bp.outputs['Normal'], b.inputs['Normal'])
+    return m
+
+
 def _leaf_mesh(name, clumps, pal, size, seed, light=(0.62, 0.70, 0.30)):
     """листья (v86): отдельные яйцевидные листья (6 вершин, слегка изогнуты) гроздьями вокруг концов веток. Лист смотрит
     лицом вверх с разбросом — верх грозди ловит солнце, низ в тени; верхние листья грозди светлее (молодые). numpy-сетка.
@@ -1079,7 +1102,11 @@ def _leaf_mesh(name, clumps, pal, size, seed, light=(0.62, 0.70, 0.30)):
         verts = base[:, None, :] + ax[:, None, :] * (u * L[:, None, None]) + sd[:, None, :] * (v * Wd[:, None, None]) + nr[:, None, :] * curl
         V.append(verts)
         k = rs.integers(0, len(pal), n); col = pal[k] * rs.uniform(0.8, 1.15, (n, 1))
-        top = np.clip(((pos - c)[:, 2] / max(R, 1e-6) - 0.2) / 0.8, 0, 1)[:, None] * rs.uniform(0.3, 0.8, (n, 1))
+        rel = (pos - c) / max(R, 1e-6)
+        # самозатенение (v87, r34: «брокколи без самозатенения»): глубже в грозди, снизу и с дальней стороны — темнее
+        occl = np.clip(0.55 + 0.45 * np.linalg.norm(rel, axis=1) + 0.35 * rel[:, 2] - 0.25 * rel[:, 1], 0.25, 1.0)
+        col = col * (0.35 + 0.65 * occl)[:, None]
+        top = np.clip((rel[:, 2] - 0.2) / 0.8, 0, 1)[:, None] * rs.uniform(0.3, 0.8, (n, 1))
         col = col * (1 - top) + lt * top
         dry = rs.random(n) < 0.02; col[dry] = np.array(lin((0.55, 0.42, 0.18)), np.float32)
         C.append(np.repeat(col[:, None, :], 6, 1))
@@ -1103,8 +1130,8 @@ def broadleaf_tree(name, seed, kind, px=320):
     sc = reset(); rng = random.Random(seed)
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'
-    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.7
-    sun = bpy.data.lights['sun']; sun.energy = 5.5; sun.color = (1.0, 0.93, 0.8); sun.angle = math.radians(3)
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.45
+    sun = bpy.data.lights['sun']; sun.energy = 6.0; sun.color = (1.0, 0.93, 0.8); sun.angle = math.radians(3)
     bpy.data.objects['sun'].rotation_euler = Vector((0.55, 0.5, -0.67)).normalized().to_track_quat('-Z', 'Y').to_euler()
     H = 4.0; cam = sc.camera; cam.data.ortho_scale = H
     cam.location = (0, -10, H / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
@@ -1137,8 +1164,8 @@ def broadleaf_tree(name, seed, kind, px=320):
             d = Vector((math.cos(az) * math.cos(el), math.sin(az) * math.cos(el) * 0.6, math.sin(el))).normalized()
             grow(top + Vector((0, 0, rng.uniform(-0.12, 0.08))), d, rng.uniform(0.85, 1.05), 0.11, 4)
         pal = ((0.20, 0.30, 0.08), (0.28, 0.38, 0.10), (0.36, 0.46, 0.13), (0.46, 0.55, 0.17), (0.30, 0.36, 0.11))
-        leaf_size, clump_r, clump_n, light = 0.075, 0.27, 135, (0.66, 0.72, 0.30)
-        bark = ((0.30, 0.24, 0.18), (0.52, 0.44, 0.34))
+        leaf_size, clump_r, clump_n, light = 0.075, 0.25, 100, (0.66, 0.72, 0.30)   # v87: реже — просветы неба в кроне
+        bark = ((0.16, 0.12, 0.09), (0.50, 0.42, 0.33))
     else:
         segs.append((Vector((0, 0, -0.1)), Vector((0.03, 0, 3.4)), 0.09, 0.025))
         z = 1.3
@@ -1149,18 +1176,18 @@ def broadleaf_tree(name, seed, kind, px=320):
             z += rng.uniform(0.14, 0.26)
         pal = ((0.30, 0.44, 0.13), (0.40, 0.54, 0.17), (0.50, 0.62, 0.22), (0.36, 0.48, 0.15))
         leaf_size, clump_r, clump_n, light = 0.045, 0.15, 62, (0.70, 0.76, 0.36)
-        bark = ((0.55, 0.53, 0.50), (0.93, 0.92, 0.88))
+        bark = ((0.14, 0.13, 0.12), (0.90, 0.89, 0.85))
     # вписать дерево в кадр: ширина ≤ 3,5 м, верх ≤ 3,85 м (масштаб от основания ствола)
     xs = [abs(q.x) for (a_, b_, *_ ) in segs for q in (a_, b_)]; zs = [q.z for (a_, b_, *_ ) in segs for q in (a_, b_)]
     k = min(1.0, (1.85 - clump_r) / max(xs), (3.85 - clump_r) / max(zs))
     bm = bmesh.new()
     for (a_, b_, r0, r1) in segs: _cone(bm, a_ * k, b_ * k, max(0.004, r0 * k), max(0.003, r1 * k), 12 if r0 > 0.04 else 6, caps=False)
     tr = bpy.data.meshes.new('trunk'); bm.to_mesh(tr); bm.free()
-    tr.materials.append(mat_stone('bark', bark[0], bark[1], rough=0.85, spec=0.2, scale=9 if not birch else 3, bumpk=1.0))
+    tr.materials.append(mat_bark('bark', bark[0], bark[1], birch))
     for pl in tr.polygons: pl.use_smooth = True
     ob = bpy.data.objects.new('trunk', tr); ob['tone'] = 0.0; sc.collection.objects.link(ob)
     clumps = [(tuple(t * k + dd * clump_r * 0.4), clump_r * rng.uniform(0.8, 1.25), clump_n) for (t, dd) in tips]
-    clumps += [(tuple(m_ * k), clump_r * rng.uniform(0.6, 0.95), int(clump_n * 0.7)) for m_ in mids if rng.random() < 0.85]
+    clumps += [(tuple(m_ * k), clump_r * rng.uniform(0.6, 0.9), int(clump_n * 0.6)) for m_ in mids if rng.random() < 0.5]
     lm = _leaf_mesh('leaves', clumps, pal, leaf_size, seed, light)
     m = bpy.data.materials.new('leaf'); m.use_nodes = True; nt = m.node_tree; N = nt.nodes; Lk = nt.links
     b = N['Principled BSDF']; b.inputs['Roughness'].default_value = 0.5
@@ -1168,7 +1195,7 @@ def broadleaf_tree(name, seed, kind, px=320):
         if key in b.inputs: b.inputs[key].default_value = 0.45; break
     at = N.new('ShaderNodeAttribute'); at.attribute_name = 'Col'; Lk.new(at.outputs['Color'], b.inputs['Base Color'])
     tl = N.new('ShaderNodeBsdfTranslucent'); Lk.new(at.outputs['Color'], tl.inputs['Color'])
-    mx = N.new('ShaderNodeMixShader'); mx.inputs['Fac'].default_value = 0.25
+    mx = N.new('ShaderNodeMixShader'); mx.inputs['Fac'].default_value = 0.14
     out = N['Material Output']; Lk.new(b.outputs['BSDF'], mx.inputs[1]); Lk.new(tl.outputs['BSDF'], mx.inputs[2]); Lk.new(mx.outputs['Shader'], out.inputs['Surface'])
     lm.materials.append(m); sc.collection.objects.link(bpy.data.objects.new('leaves', lm))
     print('TREE', name, 'tips', len(tips), 'clumps', len(clumps), 'scale', round(k, 3), flush=True)
@@ -1318,98 +1345,117 @@ def haystack_sprite(name, seed, px=200):
 
 
 def alien_mushroom(name, seed, px=560):
-    """инопланетное грибное дерево сбоку: изогнутая мясистая ножка, шляпка с чешуйками и подсвеченной изнутри
-    мякотью (подповерхностное рассеяние), светящиеся пятна и нити-щупальца с огоньками"""
+    """инопланетное грибное дерево (v89, критик r34: «плюш — ножка одной ширины с кольцами, шляпка — войлочный диск»), как
+    в эталоне alien.png: ножка расширяется книзу (корневое утолщение), продольные волокна; шляпка — светлый розово-сиреневый
+    купол с бликом и подповерхностным свечением, снизу — радиальные пластинки; с края свисают изогнутые светящиеся нити.
+    Солнце сверху слева спереди (у прежнего спрайта свет шёл из-за гриба — тёмный силуэт)"""
+    import mathutils
     sc = reset(); rng = random.Random(seed)
     sc.render.resolution_x = px; sc.render.resolution_y = px; sc.render.film_transparent = True
     sc.render.image_settings.color_mode = 'RGBA'
-    sc.world.node_tree.nodes['Background'].inputs[0].default_value = (0.35, 0.3, 0.6, 1)
-    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.8
+    sc.world.node_tree.nodes['Background'].inputs[0].default_value = (0.42, 0.36, 0.62, 1)
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.4
+    sun = bpy.data.lights['sun']; sun.energy = 6.0; sun.color = (1.0, 0.9, 0.85); sun.angle = math.radians(4)
+    bpy.data.objects['sun'].rotation_euler = Vector((0.55, 0.55, -0.62)).normalized().to_track_quat('-Z', 'Y').to_euler()
     H = 3.0; cam = sc.camera; cam.data.ortho_scale = H
     cam.location = (0, -10, H / 2 - 0.08); cam.rotation_euler = (math.radians(90), 0, 0)
-    def fleshy(nm, col, sss, emit=None, es=0.0):
-        m, nt, b = principled(nm, 0.45, 0.4); b.inputs['Base Color'].default_value = (*lin(col), 1)
+
+    def tissue(nm, col, dark, sss, rough=0.5, fibers=False, emit=None, es=0.0, sss_rad=(0.5, 0.2, 0.6), zgrad=False):
+        m, nt, b = principled(nm, rough, 0.35); N = nt.nodes; Lk = nt.links
         for key in ('Subsurface Weight', 'Subsurface'):
             if key in b.inputs: b.inputs[key].default_value = sss; break
-        if 'Subsurface Radius' in b.inputs: b.inputs['Subsurface Radius'].default_value = (0.3, 0.1, 0.4)
+        if 'Subsurface Radius' in b.inputs: b.inputs['Subsurface Radius'].default_value = sss_rad
         if emit:
             for key in ('Emission Color', 'Emission'):
                 if key in b.inputs: b.inputs[key].default_value = (*lin(emit), 1); break
             if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = es
-        nz = nt.nodes.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 40; nz.inputs['Detail'].default_value = 8
-        bp = nt.nodes.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.35
-        nt.links.new(nz.outputs['Fac'], bp.inputs['Height']); nt.links.new(bp.outputs['Normal'], b.inputs['Normal'])
-        # пятнистость и прожилки: цвет смешивается с тёмным и светлым вариантом по шуму и по «волокнам»
-        N = nt.nodes; Lk = nt.links
-        tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (1, 1, 8)
+        tc = N.new('ShaderNodeTexCoord'); mp = N.new('ShaderNodeMapping')
+        mp.inputs['Scale'].default_value = (34.0, 34.0, 0.7) if fibers else (2.2, 2.2, 2.2)
         Lk.new(tc.outputs['Object'], mp.inputs['Vector'])
-        vn = N.new('ShaderNodeTexNoise'); vn.inputs['Scale'].default_value = 6; vn.inputs['Detail'].default_value = 10
-        Lk.new(mp.outputs['Vector'], vn.inputs['Vector'])
-        ramp = N.new('ShaderNodeValToRGB')
-        ramp.color_ramp.elements[0].position = 0.3; ramp.color_ramp.elements[0].color = (*lin(tuple(c * 0.45 for c in col)), 1)
-        ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (*lin(tuple(min(1, c * 1.25) for c in col)), 1)
-        Lk.new(vn.outputs['Fac'], ramp.inputs['Fac'])
-        geo = N.new('ShaderNodeNewGeometry'); sep = N.new('ShaderNodeSeparateXYZ'); Lk.new(geo.outputs['Normal'], sep.inputs[0])
-        mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.6; mr.inputs['From Max'].default_value = 0.1
-        mr.inputs['To Min'].default_value = 0.25; mr.inputs['To Max'].default_value = 1.0; Lk.new(sep.outputs['Z'], mr.inputs['Value'])
-        mx = N.new('ShaderNodeMix'); mx.data_type = 'RGBA'; mx.blend_type = 'MULTIPLY'; sock(mx.inputs, 'Factor_Float').default_value = 1
-        Lk.new(ramp.outputs['Color'], sock(mx.inputs, 'A_Color'))
-        cmb = N.new('ShaderNodeCombineXYZ'); [Lk.new(mr.outputs['Result'], cmb.inputs[i]) for i in range(3)]
-        Lk.new(cmb.outputs[0], sock(mx.inputs, 'B_Color'))                  # нижняя сторона (пластинки) темнее
-        Lk.new(sock(mx.outputs, 'Result_Color'), b.inputs['Base Color'])
+        if fibers:   # продольные волокна: полосы вокруг ножки, искажённые шумом
+            src = N.new('ShaderNodeTexWave'); src.wave_type = 'BANDS'; src.bands_direction = 'X'
+            src.inputs['Scale'].default_value = 1.0; src.inputs['Distortion'].default_value = 14.0; src.inputs['Detail'].default_value = 9.0; src.inputs['Detail Roughness'].default_value = 0.7
+        else:
+            src = N.new('ShaderNodeTexNoise'); src.inputs['Scale'].default_value = 4.0; src.inputs['Detail'].default_value = 9.0
+        Lk.new(mp.outputs['Vector'], src.inputs['Vector'])
+        ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+        E[0].position = 0.2; E[0].color = (*lin(dark), 1); E[1].position = 0.8; E[1].color = (*lin(col), 1)
+        Lk.new(src.outputs['Fac'], ramp.inputs['Fac']); colsock = ramp.outputs['Color']
+        if zgrad:   # верх шляпки светлее, край и низ темнее — объём купола
+            geo = N.new('ShaderNodeNewGeometry'); sep = N.new('ShaderNodeSeparateXYZ'); Lk.new(geo.outputs['Normal'], sep.inputs[0])
+            mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.4; mr.inputs['From Max'].default_value = 1.0
+            mr.inputs['To Min'].default_value = 0.35; mr.inputs['To Max'].default_value = 1.15; Lk.new(sep.outputs['Z'], mr.inputs['Value'])
+            mul = N.new('ShaderNodeVectorMath'); mul.operation = 'SCALE'; Lk.new(colsock, mul.inputs[0]); Lk.new(mr.outputs['Result'], mul.inputs['Scale'])
+            colsock = mul.outputs['Vector']
+        Lk.new(colsock, b.inputs['Base Color'])
+        nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 60; nz.inputs['Detail'].default_value = 8
+        Lk.new(tc.outputs['Object'], nz.inputs['Vector'])
+        bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.45 if fibers else 0.25
+        h = N.new('ShaderNodeMath'); h.operation = 'ADD'; Lk.new(src.outputs['Fac'], h.inputs[0]); Lk.new(nz.outputs['Fac'], h.inputs[1])
+        Lk.new(h.outputs['Value'], bp.inputs['Height']); Lk.new(bp.outputs['Normal'], b.inputs['Normal'])
         return m
-    # ножка: изогнутая, сужается кверху, с кольцами
-    bm = bmesh.new(); bend = rng.uniform(-0.25, 0.25); hgt = rng.uniform(1.5, 1.8)
-    pts = [Vector((bend * 2 * t * (1 - t) + bend * t * t, 0, t * hgt)) for t in [i / 10 for i in range(11)]]
-    bm.free()
-    # гладкая трубка вдоль изогнутой оси: кольца вершин, радиус плавно убывает, у основания — утолщение
-    N, SEG = 40, 20; verts = []; faces = []
-    for i in range(N + 1):
-        t = i / N; c0 = Vector((bend * 2 * t * (1 - t) + bend * t * t, 0, t * hgt))
-        rad = 0.12 - 0.045 * t + 0.07 * max(0.0, 0.15 - t) / 0.15 + 0.006 * math.sin(t * 40)
+
+    # ножка: ось с изгибом; радиус от корневого утолщения (0,24) к шейке под шляпкой (0,075)
+    bend = rng.uniform(-0.18, 0.18) * (1 if seed % 2 else -1); hgt = rng.uniform(1.55, 1.8)
+    axis = lambda t: Vector((bend * (2 * t * (1 - t) + t * t), 0, t * hgt))
+    NR, SEG = 60, 28; verts = []; faces = []
+    for i in range(NR + 1):
+        t = i / NR; c0 = axis(t)
+        rad = 0.075 + 0.07 * (1 - t) ** 1.6 + 0.10 * max(0.0, 0.12 - t) / 0.12
         for k in range(SEG):
-            a = k / SEG * math.tau; verts.append((c0.x + math.cos(a) * rad, c0.y + math.sin(a) * rad * 0.9, c0.z))
-    for i in range(N):
+            a = k / SEG * math.tau; wob = 1 + 0.06 * noise.noise(Vector((math.cos(a) * 2, math.sin(a) * 2, t * 6 + seed)))
+            verts.append((c0.x + math.cos(a) * rad * wob, c0.y + math.sin(a) * rad * 0.92 * wob, c0.z - 0.05))
+    for i in range(NR):
         for k in range(SEG):
             a0 = i * SEG + k; a1 = i * SEG + (k + 1) % SEG; faces.append((a0, a1, a1 + SEG, a0 + SEG))
     st = bpy.data.meshes.new('stalk'); st.from_pydata(verts, [], faces); st.update()
     for pl in st.polygons: pl.use_smooth = True
-    st.materials.append(fleshy('stalk', (0.62, 0.50, 0.78), 0.5)); so = bpy.data.objects.new('stalk', st); sc.collection.objects.link(so)
-    top = pts[-1]
-    # шляпка
-    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=1.0)
-    off = Vector((seed, 3, 7)); R = rng.uniform(0.62, 0.72)
+    # цвета с поправкой на ночной свет Alien (theme.ambient #8474b0 умножает декор: R×0,52 G×0,45 B×0,69) — в игре ножка
+    # выходит серо-сиреневой, как в эталоне (61/58/78), а не синей
+    st.materials.append(tissue('stalk', (0.78, 0.82, 0.72), (0.42, 0.43, 0.38), 0.3, rough=0.65, fibers=True))
+    sc.collection.objects.link(bpy.data.objects.new('stalk', st))
+    top = axis(1.0)
+    # шляпка: купол (верх полусферы ×0,5), край слегка завёрнут вниз, низ — неглубокая вогнутость
+    R = rng.uniform(0.66, 0.76); off = Vector((seed, 3, 7))
+    bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=96, v_segments=48, radius=1.0)
     for v in bm.verts:
-        p = v.co.copy(); z = p.z
-        zz = z * 0.55 if z > 0 else z * 0.12
-        d = 1 + 0.035 * noise.noise(p * 5 + off) + 0.012 * noise.noise(p * 18 + off)
-        v.co = Vector((p.x * R * d, p.y * R * 0.9 * d, zz * R * d)) + top + Vector((0, 0, 0.02))
+        p = v.co.copy(); rr = math.hypot(p.x, p.y)
+        if p.z >= 0: zz = p.z * 0.5 - 0.06 * max(0.0, rr - 0.85) / 0.15
+        else: zz = -0.03 - 0.10 * (1 - rr) * 0.6 + p.z * 0.05
+        d = 1 + 0.03 * noise.noise(p * 4 + off) + 0.01 * noise.noise(p * 16 + off)
+        v.co = Vector((p.x * R * d, p.y * R * 0.92 * d, zz * R)) + top + Vector((0, 0, 0.03))
     cap = bpy.data.meshes.new('cap'); bm.to_mesh(cap); bm.free()
     for pl in cap.polygons: pl.use_smooth = True
-    cap.materials.append(fleshy('cap', (0.78, 0.26, 0.66), 0.6, (0.9, 0.3, 0.8), 0.25))
-    co = bpy.data.objects.new('cap', cap); sc.collection.objects.link(co)
-    # светящиеся пятна на шляпке
-    spot = fleshy('spot', (1.0, 0.95, 0.6), 0.2, (1.0, 0.92, 0.5), 6.0)
-    for i in range(16):
-        a = rng.uniform(0, math.tau); u = rng.uniform(0.2, 0.85)
-        pz = math.sqrt(max(0, 1 - u * u)) * 0.55 * R
-        p = top + Vector((math.cos(a) * u * R, math.sin(a) * u * R * 0.9, pz + 0.02))
-        bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=rng.uniform(0.04, 0.075))
-        me = bpy.data.meshes.new('sp'); bm.to_mesh(me); bm.free(); me.materials.append(spot)
-        o = bpy.data.objects.new('sp', me); o.location = p; o.scale = (1, 1, 0.5); sc.collection.objects.link(o)
-    # нити-щупальца снизу с огоньками на концах
-    thread = fleshy('thread', (0.85, 0.5, 0.9), 0.4, (0.9, 0.5, 1.0), 0.8)
+    cap.materials.append(tissue('cap', (0.86, 0.66, 0.84), (0.42, 0.28, 0.48), 0.4, rough=0.36, emit=(0.85, 0.35, 0.9), es=0.06, sss_rad=(0.8, 0.3, 0.9), zgrad=True))
+    sc.collection.objects.link(bpy.data.objects.new('cap', cap))
+    # пластинки снизу: тонкие радиальные лопасти от шейки до края
     bm = bmesh.new()
-    for i in range(14):
-        a = rng.uniform(0, math.tau); u = rng.uniform(0.35, 0.95)
-        p0 = top + Vector((math.cos(a) * u * R, math.sin(a) * u * R * 0.9, -0.02)); L = rng.uniform(0.15, 0.45)
-        p1 = p0 + Vector((rng.uniform(-0.05, 0.05), 0, -L))
-        _cone(bm, p0, p1, 0.008, 0.004, 6)
-        bmesh.ops.create_uvsphere(bm, u_segments=8, v_segments=6, radius=0.018, matrix=__import__('mathutils').Matrix.Translation(p1))
-    th = bpy.data.meshes.new('thr'); bm.to_mesh(th); bm.free(); th.materials.append(thread)
-    to = bpy.data.objects.new('thr', th); sc.collection.objects.link(to)
+    for i in range(120):
+        a = i / 120 * math.tau + rng.uniform(-0.01, 0.01); dv = Vector((math.cos(a), math.sin(a) * 0.92, 0))
+        r0, r1 = 0.09, R * rng.uniform(0.88, 0.97); h0 = 0.06
+        vs = [bm.verts.new(top + dv * r0 + Vector((0, 0, 0.0))), bm.verts.new(top + dv * r1 + Vector((0, 0, -0.012))),
+              bm.verts.new(top + dv * r1 + Vector((0, 0, -0.012 - h0 * 0.3))), bm.verts.new(top + dv * r0 + Vector((0, 0, -h0)))]
+        bm.faces.new(vs)
+    gl = bpy.data.meshes.new('gills'); bm.to_mesh(gl); bm.free()
+    gl.materials.append(tissue('gills', (0.62, 0.36, 0.70), (0.30, 0.12, 0.38), 0.3, rough=0.7, emit=(0.7, 0.3, 0.9), es=0.25))
+    sc.collection.objects.link(bpy.data.objects.new('gills', gl))
+    # нити с края: изогнутые, разной длины, тонкие, на концах — капли-огоньки
+    thread = tissue('thread', (0.92, 0.6, 1.0), (0.6, 0.3, 0.8), 0.4, rough=0.3, emit=(0.95, 0.55, 1.0), es=1.2)
+    glow = tissue('glowdrop', (1.0, 0.8, 1.0), (0.9, 0.6, 1.0), 0.2, rough=0.2, emit=(1.0, 0.7, 1.0), es=6.0)
+    bm = bmesh.new(); bmg = bmesh.new()
+    for i in range(22):
+        a = rng.uniform(0, math.tau); u = rng.uniform(0.82, 0.97)
+        p = top + Vector((math.cos(a) * u * R, math.sin(a) * u * R * 0.92, -0.01)); L = rng.uniform(0.08, 0.42); sw = rng.uniform(-0.06, 0.06)
+        pts = [p + Vector((sw * (k / 4) ** 2, 0, -L * k / 4)) for k in range(5)]
+        for k in range(4): _cone(bm, pts[k], pts[k + 1], 0.009 * (1 - k * 0.18), 0.009 * (1 - (k + 1) * 0.18), 6)
+        bmesh.ops.create_uvsphere(bmg, u_segments=10, v_segments=8, radius=rng.uniform(0.009, 0.016), matrix=mathutils.Matrix.Translation(pts[-1]))
+    th = bpy.data.meshes.new('thr'); bm.to_mesh(th); bm.free(); th.materials.append(thread); sc.collection.objects.link(bpy.data.objects.new('thr', th))
+    dr = bpy.data.meshes.new('drops'); bmg.to_mesh(dr); bmg.free(); dr.materials.append(glow); sc.collection.objects.link(bpy.data.objects.new('drops', dr))
+    for o in bpy.data.objects:
+        if o.type == 'MESH':
+            for pl in o.data.polygons: pl.use_smooth = True
+    print('MUSHROOM', name, 'R', round(R, 2), 'h', round(hgt, 2), flush=True)
     render(sc, name)
-
 
 # ---------------------------------------------------------------- набор (цвета в sRGB)
 LIB = {

@@ -585,6 +585,37 @@ def mat_marble(name, seed):
     return m
 
 
+def mat_weathered(name, seed):
+    """выветренный известняк руин долины (v89, r34: «белый цилиндр» — мраморная колонна каньона в долине выбивалась):
+    серо-бурый камень с тёмными потёками вниз, лишайник пятнами и мох в нижней трети и в каннелюрах"""
+    m, nt, b = mt.principled(name, 0.82, 0.22)
+    N, L = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); sep = N.new('ShaderNodeSeparateXYZ'); L.new(tc.outputs['Object'], sep.inputs[0])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 30; nz.inputs['Detail'].default_value = 10; L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+    E[0].position = 0.3; E[0].color = (*mt.lin((0.36, 0.34, 0.30)), 1); E[1].position = 0.72; E[1].color = (*mt.lin((0.66, 0.62, 0.55)), 1)
+    L.new(nz.outputs['Fac'], ramp.inputs['Fac'])
+    # потёки: вытянутый по вертикали шум, темнит
+    mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (40, 40, 3); L.new(tc.outputs['Object'], mp.inputs['Vector'])
+    st = N.new('ShaderNodeTexNoise'); st.inputs['Scale'].default_value = 1.5; st.inputs['Detail'].default_value = 4; L.new(mp.outputs['Vector'], st.inputs['Vector'])
+    sk = N.new('ShaderNodeMapRange'); sk.inputs['From Min'].default_value = 0.45; sk.inputs['From Max'].default_value = 0.7
+    sk.inputs['To Min'].default_value = 1.0; sk.inputs['To Max'].default_value = 0.55; L.new(st.outputs['Fac'], sk.inputs['Value'])
+    dk = N.new('ShaderNodeVectorMath'); dk.operation = 'SCALE'; L.new(ramp.outputs['Color'], dk.inputs[0]); L.new(sk.outputs['Result'], dk.inputs['Scale'])
+    # мох и лишайник: пятна по шуму, гуще внизу
+    mn = N.new('ShaderNodeTexNoise'); mn.inputs['Scale'].default_value = 9; mn.inputs['Detail'].default_value = 8; L.new(tc.outputs['Object'], mn.inputs['Vector'])
+    hz = N.new('ShaderNodeMapRange'); hz.inputs['From Min'].default_value = 0.0; hz.inputs['From Max'].default_value = 0.6
+    hz.inputs['To Min'].default_value = 0.25; hz.inputs['To Max'].default_value = -0.15; L.new(sep.outputs['Z'], hz.inputs['Value'])
+    ad = N.new('ShaderNodeMath'); ad.operation = 'ADD'; L.new(mn.outputs['Fac'], ad.inputs[0]); L.new(hz.outputs['Result'], ad.inputs[1])
+    mm = N.new('ShaderNodeMapRange'); mm.inputs['From Min'].default_value = 0.68; mm.inputs['From Max'].default_value = 0.8; L.new(ad.outputs['Value'], mm.inputs['Value'])
+    mix = N.new('ShaderNodeMix'); mix.data_type = 'RGBA'; L.new(mm.outputs['Result'], mix.inputs['Factor'])
+    L.new(dk.outputs['Vector'], mix.inputs['A']); mix.inputs['B'].default_value = (*mt.lin((0.20, 0.24, 0.11)), 1)
+    L.new(mix.outputs['Result'], b.inputs['Base Color'])
+    chips = N.new('ShaderNodeTexNoise'); chips.inputs['Scale'].default_value = 160; chips.inputs['Detail'].default_value = 12; L.new(tc.outputs['Object'], chips.inputs['Vector'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.45; bu.inputs['Distance'].default_value = 0.003
+    L.new(chips.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    return m
+
+
 def column(name, seed):
     """мраморная колонна каньона (как в эталоне): 20 каннелюр, лёгкое сужение кверху, обломанный зубчатый верх с изломом,
     база — тор и плинт, наполовину в земле; выветренный мрамор с прожилками и сколами"""
@@ -617,7 +648,7 @@ def column(name, seed):
     for v in bm.verts:   # мелкая неровность скола и выветривание кромок
         p = Vector(v.co) / U; d = noise.noise(p * 0.12 + Vector((seed, seed * 2, 0))) * 0.12
         v.co = Vector(v.co) + Vector((p.x, p.y, 0)).normalized() * d * U if (p.x * p.x + p.y * p.y) > 1 else v.co
-    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); obj(name, me, mat_marble('marble', seed), sc)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); obj(name, me, mat_weathered('limestone', seed) if name.startswith('column_ruin') else mat_marble('marble', seed), sc)
     return sc
 
 
@@ -984,7 +1015,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'deadtree_char1': (lambda n, s: deadtree(n, s, True), 43, 130), 'deadtree_char2': (lambda n, s: deadtree(n, s, True), 44, 130),
     'igloo1': (igloo, 51, 90), 'icecrystal1': (icecrystal, 61, 48), 'icecrystal2': (icecrystal, 62, 48),
     'watertower1': (watertower, 71, 180),
-    'column1': (column, 121, 96), 'column2': (column, 122, 96),
+    'column1': (column, 121, 96), 'column2': (column, 122, 96), 'column_ruin1': (column, 123, 96), 'column_ruin2': (column, 124, 96),
     'pot1': (potjar, 131, 36), 'pot2': (potjar, 132, 36),
     'drygrass1': (drygrass, 141, 36), 'drygrass2': (drygrass, 142, 36), 'drygrass3': (drygrass, 143, 36), 'drygrass4': (drygrass, 144, 36),
     'crystal_c1': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 81, 56), 'crystal_c2': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 82, 56),

@@ -302,7 +302,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
     const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
-    if (sd < 70) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70); if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
+    if (sd < 70 && (S.grassy || S.sod)) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70);   /* корни — только под травой (r34: в песчанике каньона — «V-царапины») */ if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
     { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
   } else if (mt === 1) {
     const sd = t - capT, sdS = S.TDs ? Math.max(0, S.TDs[y * S.W + x] - capT) : sd;   /* sdS — плавная глубина (без черты у торцов туннеля); sd — до ближайшей поверхности: кромка, губа, почва */
@@ -345,7 +345,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (V.rnd[id] > 0.78) { const q2 = V.rnd2[id]; stoneAt(S, o, -V.vx[vi] * 0.5, -V.vy[vi] * 0.56, 12 + q2 * 10, id * 1.7, S.pebs[(id * 3) % S.pebs.length], n1, n2, r, g, bl); r = o.r; g = o.g; bl = o.b; }
     }
     // разрез как иллюстрация: корни у поверхности, крупные валуны в глубине, порода темнее с глубиной
-    if (sdS < 70) {
+    if (sdS < 70 && (S.grassy || S.sod)) {   /* корни — только под травой */
       const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.016 * (1 - sdS / 70);
       if (dvr < wr) { const k = (1 - dvr / wr) * 0.8; r += (58 - r) * k; g += (36 - g) * k; bl += (24 - bl) * k; }
     }
