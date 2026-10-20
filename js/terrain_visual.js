@@ -993,7 +993,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
       const occ = (OCC[oyR + ox0] * (1 - fx) + OCC[oyR + ox1] * fx) * (1 - fy) + (OCC[oyR1 + ox0] * (1 - fx) + OCC[oyR1 + ox1] * fx) * fy;
       if (isSolid) {
         const mt0 = mat[i] || 1, mt = mt0 === 1 && S.rockDirt ? 2 : mt0; const dd = D[i], d = dd / 3, t = TD[i];
-        const capT = !capMat[mt] ? 0 : snowLip ? T.snowCapT[x]
+        /* пол пещеры или подземного хода (над ним задняя стена) — без травы, снега и песка: шапка только под открытым небом */
+        const capT = !capMat[mt] || (back && y - t - 1 >= 0 && back[(y - t - 1) * W + x] > 0) ? 0 : snowLip ? T.snowCapT[x]
           : capThick * (S.grassy ? 0.78 + 0.44 * capN[x] : 0.5 + capN[x] * capN[x] * 1.3) + capS[x] * 2.6 + (t2[ty2 | ((x >> 1) & 255)] - 0.5) * 4 + fringe[x];
         /* у шапки — сглаженная глубина (capDepth): нижняя граница и тон дёрна/снега/песка идут по склону ровной линией */
         const tc = capT > 0 && t < capT + 12 ? capDepth(TD, m, i, x, y, t, W, H) : t;
@@ -1126,7 +1127,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
     }
   }
   drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, back);
-  placeDecor(T, theme, map, waterY, tops, mat);
+  placeDecor(T, theme, map, waterY, tops, mat, back);
   T.version++;
 }
 
@@ -1164,7 +1165,10 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
   const beachY = G.cap.beach ? waterY - G.cap.beach.range : 1e9;
   const flatTop = (x, y) => T.isSolid(x - 2, y + 3) && T.isSolid(x + 2, y + 3);
   const matAt = (x, y) => mat[y * W + x];
-  const isCaveAt = (x, y) => y > 0 && !T.isSolid(x, y - 1) && T.back && T.back[(y - 1) * W + x] > 0;
+  /* задняя стена (пещеры, помещения): до v87 здесь проверялся T.back, которого у ландшафта нет — трава, цветы и кусты росли
+     в подземных ходах, снег и сосульки — внутри построек, а отделка пещер (сколы, гравий, мох) не рисовалась вовсе */
+  const BK = backArr || null;
+  const isCaveAt = (x, y) => y > 0 && !T.isSolid(x, y - 1) && BK && BK[(y - 1) * W + x] > 0;
   const grassTex = G.tex && G.tex.grass && TexLib.data[G.tex.grass];
   if (grassTex) {
     // Отдельные пучки разной высоты; низкая светлая кромка долины и замков.
@@ -1215,7 +1219,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       }
     }
     // высокие пучки через 20–40 px: травяной край не ровной полосой
-    { let nx = -1; for (let k = 0; k < tops.length; k += 2) { const x = tops[k], y = tops[k + 1]; anchor(x, y); if (x < nx || y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y)) continue; nx = x + 20 + rng() * 20;
+    { let nx = -1; for (let k = 0; k < tops.length; k += 2) { const x = tops[k], y = tops[k + 1]; anchor(x, y); if (x < nx || y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y)) continue; nx = x + 20 + rng() * 20;
       for (let j = 0, nb = 6 + (rng() * 6 | 0); j < nb; j++) { const h = 18 + rng() * 14, lean = (rng() - 0.5) * 14, w = 1.2 + rng() * 1.2, bx = x + (rng() - 0.5) * 7, L = layers[(rng() * 3) | 0];
         L.moveTo(bx - w, y + 2.5); L.quadraticCurveTo(bx - w * 0.2 + lean * 0.35, y - h * 0.55, bx + lean, y - h); L.quadraticCurveTo(bx + w * 0.4 + lean * 0.35, y - h * 0.45, bx + w, y + 2.5); L.closePath(); } } }
     const pick = (i) => cols[Math.min(cols.length - 1, i)];
@@ -1225,14 +1229,14 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     c.fillStyle = pick(0); c.fill(layers[1]);
     c.fillStyle = css(shadec(pick(2), 1.08)); c.fill(layers[2]);
     c.restore();
-    if (G.cap.glowBlades && gc) { gc.save(); gc.globalAlpha = 0.9; gc.fillStyle = pick(2); for (let k = 0; k < tops.length; k += 2) { if (rng() > 0.05) continue; const x = tops[k], y = tops[k + 1]; anchor(x, y); if (matAt(x, y) !== 1) continue; gc.beginPath(); gc.arc(x + (rng() - 0.5) * 6, y - 8 - rng() * 12, 1.4 + rng() * 1.2, 0, TAU); gc.fill(); } gc.restore(); }
+    if (G.cap.glowBlades && gc) { gc.save(); gc.globalAlpha = 0.9; gc.fillStyle = pick(2); for (let k = 0; k < tops.length; k += 2) { if (rng() > 0.05) continue; const x = tops[k], y = tops[k + 1]; anchor(x, y); if (matAt(x, y) !== 1 || isCaveAt(x, y)) continue; gc.beginPath(); gc.arc(x + (rng() - 0.5) * 6, y - 8 - rng() * 12, 1.4 + rng() * 1.2, 0, TAU); gc.fill(); } gc.restore(); }
   }
   // кусты: объёмные кроны из нескольких шаров с бликом и тенью у земли
   if (G.cap.blades && !G.cap.snow) {
     const leaf = G.cap.blades; let lastX = -999;
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
-      if (x - lastX < 110 || y > waterY - 8 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || rng() > 0.03) continue;
+      if (x - lastX < 110 || y > waterY - 8 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y) || rng() > 0.03) continue;   /* в пещерах кустов нет */
       lastX = x; const R = 13 + rng() * 9, n = 4 + ((rng() * 3) | 0);
       c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(x, y + 1.5, R * 1.5, R * 0.3, 0, 0, TAU); c.fill();
       const blobs = [];
@@ -1301,7 +1305,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     // россыпь мелких полевых цветов по всей траве: цветные точки-головки на коротких стеблях
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
-      if (y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || rng() > 0.16 || !flatTop(x, y)) continue;
+      if (y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || rng() > 0.16 || !flatTop(x, y) || isCaveAt(x, y)) continue;
       const h = 8 + rng() * 14, fx = x + (rng() - 0.5) * 3, col = rng.pick(G.cap.flowers), rr = 1.6 + rng() * 1.4;
       c.strokeStyle = '#3e6e1e'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(fx, y + 1); c.lineTo(fx + (rng() - 0.5) * 2, y - h); c.stroke();
       c.fillStyle = css(shadec(col, 0.7)); c.beginPath(); c.arc(fx + 0.4, y - h + 0.4, rr, 0, TAU); c.fill();
@@ -1311,7 +1315,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     let nextX = -1;
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
-      if (x < nextX || y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y)) continue;
+      if (x < nextX || y > waterY - 6 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y)) continue;   /* цветы — только под открытым небом */
       nextX = x + 40 + rng() * 60; if (rng() < 0.3) continue;
       const col = rng.pick(G.cap.flowers), n = 3 + (rng() * 5 | 0); if (sprites) bunch.push({ n: 0, x: 0, y: -1e9, col });
       for (let j = 0; j < n; j++) { const fx = x + (rng() - 0.5) * 16; if (!T.isSolid(fx, y + 3) || T.isSolid(fx, y - 3)) continue; flower(fx, y + (rng() - 0.5) * 2, 7 + rng() * 11, rng() < 0.75 ? col : rng.pick(G.cap.flowers), 0.9 + rng() * 0.4); }
@@ -1517,7 +1521,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
   }
   if (G.cap.snow) {
     // сугробы: на пологом верху — комья 6–20 px высотой 2–5, группами; на склонах снег гладкий (без «бусин»)
-    const indoor = (x, y) => T.back && y > 1 && T.back[(y - 2) * W + x] > 0;                       // пол внутри постройки — без снега и сосулек
+    const indoor = (x, y) => BK && y > 1 && BK[(y - 2) * W + x] > 0;                       // пол внутри постройки — без снега и сосулек
     const lastLump = new Map();
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; if (y > waterY - 2 || !flatTop(x, y) || indoor(x, y)) continue;
@@ -1593,7 +1597,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     if (y > waterY - 4) continue;
     const cm = matAt(x, y);
     if (!(cm === 1 || cm === 2 || cm === 9 || cm === 7)) continue;
-    if (T.back && T.back[Math.min(T.H - 1, y + 2) * W + x] >= 3) continue;   // под перекрытиями построек — без корней, лиан и сталактитов
+    if (BK && BK[Math.min(T.H - 1, y + 2) * W + x] >= 3) continue;   // под перекрытиями построек — без корней, лиан и сталактитов
     if (kind === 'roots' && cm === 1 && rng() < 0.035) {
       const len = 6 + rng() * 18, RT = ['roots1', 'roots2', 'roots3'].map((n) => TexLib.data[n]).filter(Boolean);
       if (RT.length) {   // корни из Blender (сужающиеся плети с отростками) — чёткие при приближении; случайных чисел столько же
@@ -1623,7 +1627,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
         const u = tt / len; const lx = x + sw * 2 * u * (1 - u) * 1.2 + sw * 0.3 * u * u;
         c.fillStyle = (tt / 5) % 2 ? '#4caf3a' : '#63c24a'; c.beginPath(); c.ellipse(lx + ((tt / 5) % 2 ? 2.2 : -2.2), y + tt, 2.6, 1.3, (tt / 5) % 2 ? 0.5 : -0.5, 0, TAU); c.fill();
       }
-    } else if (kind === 'icicles' && x - lastX > 2 + rng() * 5 && rng() < (fbm1(x / 60, seed + 41, 2) > 0.1 ? 0.55 : 0) && !(T.back && T.back[(y + 2) * W + x] > 0)) {
+    } else if (kind === 'icicles' && x - lastX > 2 + rng() * 5 && rng() < (fbm1(x / 60, seed + 41, 2) > 0.1 ? 0.55 : 0) && !(BK && BK[(y + 2) * W + x] > 0)) {
       lastX = x; const q = rng(), len = rng() < 0.06 ? 18 + rng() * 8 : 3 + 15 * Math.pow(q, 2.2), w = Math.min(2 + rng() * 3, 1.3 + len * 0.35);
       if (surface) anchor(x, y - 1);
       icicle(cs, x, y - 0.6, w, len, (rng() - 0.5) * w * 0.5); if (surface) anchor(null);
@@ -1647,8 +1651,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     }
   }
   // --- Декоративная отделка пещер: кромка ±4 px, сколы углов, гравий и редкая трава/мох ---
-  if (T.back) {
-    const isCaveFloor = (x, y) => y > 0 && !T.isSolid(x, y - 1) && T.back[(y - 1) * W + x] > 0;
+  if (BK) {
+    const isCaveFloor = (x, y) => y > 0 && !T.isSolid(x, y - 1) && BK[(y - 1) * W + x] > 0;
     // 1. Сколы углов и микро-кромка ±4 px на уступах и полу пещер
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];

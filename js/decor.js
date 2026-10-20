@@ -786,7 +786,8 @@ function lightDecorLayer(cv, T = null) {
     x.putImageData(img, 0, ya);
   }
 }
-function placeDecor(T, theme, map, waterY, tops, mat) {
+const SCATTER_CAVE_OK = new Set(['rock', 'rockSnow', 'bones', 'skull', 'obsidian', 'lavarock', 'crystal', 'shell', 'trash', 'iceCrystal']);
+function placeDecor(T, theme, map, waterY, tops, mat, back) {
   // объекты рисуются на отдельный слой, освещаются одним солнцем и переносятся на слой декора
   const layer = makeCanvas(T.W, T.H), c = layer.getContext('2d', { willReadFrequently: true });
   // спрайты из Blender (деревья, кусты, стога) записываются командами: при приближении Renderer.drawSpriteLayer рисует их
@@ -796,7 +797,7 @@ function placeDecor(T, theme, map, waterY, tops, mat) {
   /* свечение декора (фары, фонари, лава) — на отдельный слой: где объект закрыт передним ландшафтом, его свет тоже скрыт
      (критик r31: «розовые шарики» — задние фары машин за домами светились сквозь стену) */
   const g0 = T.gctx, gl = g0 ? makeCanvas(T.W, T.H) : null; if (gl) T.gctx = gl.getContext('2d');
-  try { placeDecorOn(T, theme, map, waterY, tops, mat, c); } finally {
+  try { placeDecorOn(T, theme, map, waterY, tops, mat, c, back); } finally {
     DECOR_LAYER = null;
     if (gl) { T.gctx = g0; const x = gl.getContext('2d'); x.globalCompositeOperation = 'destination-out'; x.drawImage(T.canvas, 0, 0); g0.drawImage(gl, 0, 0); }
   }
@@ -816,7 +817,7 @@ function decorSupport(T, x, y, w) {
   }
   return n ? ok / n : 1;
 }
-function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
+function placeDecorOn(T, theme, map, waterY, tops, mat, c, back) {
   const g = T.gctx; const r = makeRng((map.seed || 1) * 7919 + 13);
   DECOR_THEME = theme.id; DECOR_T = T;
   for (const d of map.decor || []) {
@@ -873,7 +874,10 @@ function placeDecorOn(T, theme, map, waterY, tops, mat, c) {
     if (r() > (theme.id === 'alien' ? 0.55 : 0.3)) continue;
     if (occupied.some(ox => Math.abs(ox - x) < 45)) continue;
     lastX = x;
-    const fn = DECOR[r.pick(kinds)]; if (fn) drawDecorItem(fn, c, g, x, y + 2, r.range(0.75, 1.1), r, r() < 0.5);
+    const kind = r.pick(kinds), fn = DECOR[kind];
+    /* в пещерах и подземных ходах (над полом задняя стена) — только камни, кости, ракушки, мусор: без кустов, цветов и травы */
+    if (back && y > 2 && back[(y - 2) * T.W + x] > 0 && !theme.scatterRock && !SCATTER_CAVE_OK.has(kind)) continue;
+    if (fn) drawDecorItem(fn, c, g, x, y + 2, r.range(0.75, 1.1), r, r() < 0.5);
   }
 }
 
