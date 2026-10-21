@@ -191,6 +191,26 @@ function sharpen(d, W, H, k) {
     for (let c = 0; c < 3; c++) { const v = src[j + c], a = (src[j - 4 + c] + src[j + 4 + c] + src[j - R + c] + src[j + R + c]) * 0.25; d[j + c] = v + (v - a) * k; }
   }
 }
+/** светящиеся тексели (лава в швах, кристаллы): тон близок к glowTex (или glowTex2) и max(r,g,b) выше glowMin — пишет свечение
+    в o (ga/gr/gg/gb, emit) и итоговый цвет в o.r/o.g/o.b: с усилением темы или, при glowRaw, исходный насыщенный цвет кристалла
+    (усиление темы Alien G×1.8 обесцвечивало пурпур). Возвращает true, если тексель светится */
+function texGlow(S, o, r, g, bl) {
+  const br = Math.max(o.r, o.g, o.b); if (br <= S.glowMin || (br - Math.min(o.r, o.g, o.b)) / br < 0.3) return false;   /* серые блики мокрого камня — не свечение (их тон проходит проверку и бирюзы, и пурпура) */
+  const L = Math.hypot(o.r, o.g, o.b) + 1;
+  let G2 = S.glowTex, dot = (o.r * G2[0] + o.g * G2[1] + o.b * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * L);
+  if (S.glowTex2) { const G3 = S.glowTex2, d3 = (o.r * G3[0] + o.g * G3[1] + o.b * G3[2]) / (Math.hypot(G3[0], G3[1], G3[2]) * L); if (d3 > dot) { dot = d3; G2 = G3; } }
+  if (dot <= 0.93) return false;
+  o.ga = Math.min(255, (br - S.glowMin) * 2.4); o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true;   /* светятся только сердцевины */
+  if (!S.glowRaw) { o.r = r; o.g = g; o.b = bl; }
+  return true;
+}
+/** вид кучки цветов (спрайт Blender) по цвету палитры темы, если он не из прежних четырёх (мак, лютик, ромашка, василёк) */
+const FLOWER_KIND = { '#ff5d8f': 'flower5', '#ff7a9a': 'flower5', '#ff4f7b': 'flower5', '#9a5cf0': 'flower6', '#ff8a3d': 'flower7' };
+/** длина свисающей пряди мха под кромкой (Alien) в столбце x: скопления прядей по 2 px шириной, между ними — короткий край */
+function mossDrip(tl, x) {
+  const cl = tileAt(tl.t2, x, 37, 3, 75), h = tileAt(tl.t1, x, 11, 1, 91);   /* скопления ~16–30 px; пряди ~3 px, длина меняется плавно */
+  return cl > 0.5 ? 1 + (cl - 0.5) * 30 * h * h : h > 0.85 ? (h - 0.85) * 24 : 0;
+}
 /** средняя сумма r+g+b текстуры (для модуляции яркостью) */
 function texMean(T) {
   if (!T) return 1; if (T.mean) return T.mean;
@@ -247,7 +267,18 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     else { const q = (k - 0.45) / 0.55; r = cc[1][0] + (cc[2][0] - cc[1][0]) * q; g = cc[1][1] + (cc[2][1] - cc[1][1]) * q; bl = cc[1][2] + (cc[2][2] - cc[1][2]) * q; }
     // стебли: вертикальные прожилки разной яркости, чуть светлее кончики
     let f;
-    if (S.sod) {
+    if (S.mossLip) {
+      /* v90: мох Alien как в эталоне — пушистая оливково-жёлтая кромка (эталон: медиана 52/47/33, светлые пряди до 105), а не
+         гладкая бурая полоса: пряди в 1–2 px разной яркости, светлые кончики, тёмные просветы между пучками. Цвет — до фонового
+         света темы (×0.52/0.45/0.69): на экране выходит оливковый */
+      const kk = Math.min(1, k), sx = x + Math.round(Math.sin(y * 0.45 + hash3(x >> 2, 7, 81) * 6) * 0.8);
+      if (kk < 0.4) { const q = kk / 0.4; r = 205 + (172 - 205) * q; g = 236 + (194 - 236) * q; bl = 92 + (77 - 92) * q; }
+      else { const q = (kk - 0.4) / 0.6; r = 172 + (99 - 172) * q; g = 194 + (103 - 194) * q; bl = 77 + (53 - 77) * q; }
+      const clump = tileAt(tl.t2, x, y * 0.5, 2, 85);                                          // пучки 4–8 px: светлые и в тени
+      f = 0.5 + 0.7 * clump + (hash3(sx, 0, 83) - 0.5) * 0.3 + (n1 - 0.5) * 0.08;
+      if (clump < 0.32 && hash3(sx >> 1, 1, 87) < 0.5) f *= 0.6;                               // просветы между пучками
+      if (t < 1.6 + clump * 2) f *= 1.16;                                                      // светлые кончики
+    } else if (S.sod) {
       // Под настоящими травинками — живой пятнистый дерн: нерегулярные пятна почвы, корневые волокна и мягкий переход к грунту
       const broadTone = (tileAt(tl.t2, x, y, 4, 83) - 0.5) * 0.20;
       const fineGrain = (n1 - 0.5) * 0.05;
@@ -301,7 +332,12 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   } else if (mt === 1 && S.tx.dirt) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
     const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
+    if (S.glowTex && S.glowDirt && !isBack && texGlow(S, o, r, g, bl)) { r = o.r; g = o.g; bl = o.b; }   /* v91: кристаллы в насыпи Alien светятся */
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
+    if (S.mossLip && capT > 0 && sd < 16) {                                                   /* v90: свисающие пряди мха (эталон Alien) */
+      const dl = mossDrip(tl, x);
+      if (sd < dl) { const q = sd / dl, f = (0.55 + 0.45 * tileAt(tl.t1, x, sd, 1, 89)) * (1 - q * 0.55); r = 140 * f; g = 165 * f; bl = 62 * f; o.tT = null; o.tex = false; }
+    }
     if (sd < 70 && (S.grassy || S.sod)) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70);   /* корни — только под травой (r34: в песчанике каньона — «V-царапины») */ if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
     { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
   } else if (mt === 1) {
@@ -378,8 +414,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   } else if (mt === 2 && S.tx.rock) {
     // пласты породы из Blender; светящиеся швы (лава, кристаллы) идут в слой свечения
     texAt(S.tx.rock, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
-    if (S.glowTex && !isBack) { const G2 = S.glowTex, dot = (o.r * G2[0] + o.g * G2[1] + o.b * G2[2]) / (Math.hypot(G2[0], G2[1], G2[2]) * (Math.hypot(o.r, o.g, o.b) + 1)), br = Math.max(o.r, o.g, o.b);   /* свечение — по исходной текстуре, без усиления яркости */
-      if (dot > 0.93 && br > S.glowMin) { o.ga = Math.min(255, (br - S.glowMin) * 2.4);   /* светятся только раскалённые сердцевины */ o.gr = G2[0]; o.gg = G2[1]; o.gb = G2[2]; o.emit = true; o.r = r; o.g = g; o.b = bl; } }
+    if (S.glowTex && !isBack && texGlow(S, o, r, g, bl)) { r = o.r; g = o.g; bl = o.b; }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, q = 1 - sd / 10, k = S.snowy ? 1 - 0.45 * q * q : sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
     { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.08 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
     /* r31: «лавовые трещины — короткие чёрточки, нужна связная сеть 1–3 px с ореолом»: у вулкана поверх фото-плит — та же
@@ -538,14 +573,15 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
             const wet = Math.max(0, Math.min(1, 1 - dw / 70)); r *= 1 - 0.35 * wet; g *= 1 - 0.3 * wet; bl *= 1 - 0.3 * wet;
             // водоросли свисают вертикальными прядями; край пятна — плавный переход, а не порог по пикселю:
             // при сильном приближении (hires) нет квадратных ступенек
-            if (dw < 30) {
-              const nv = tileAt(tl.t1, x * 1.6, y * 0.45, 2, 71), thr = 0.45 - (26 - dw) / 60, patchy = Math.max(0, Math.min(1, (tileAt(tl.t2, x * 0.35, y * 0.2, 3, 23) - 0.3) / 0.3));
-              let ak = Math.max(0, Math.min(1, (nv - thr) / 0.12 + 0.5)) * Math.max(0, Math.min(1, (30 - dw - (1 - patchy) * 14) / 5)) * (0.55 + 0.35 * patchy); ak = ak * ak * (3 - 2 * ak);   /* пятнами: верхний край рваный, а не «пила» */
+            if (dw < 46) {
+              const nv = tileAt(tl.t1, x * 1.6, y * 0.45, 2, 71), thr = 0.45 - (42 - dw) / 90, patchy = Math.max(0, Math.min(1, (tileAt(tl.t2, x * 0.35, y * 0.2, 3, 23) - 0.3) / 0.3));
+              let ak = Math.max(0, Math.min(1, (nv - thr) / 0.12 + 0.5)) * Math.max(0, Math.min(1, (46 - dw - (1 - patchy) * 22) / 6)) * (0.55 + 0.35 * patchy); ak = ak * ak * (3 - 2 * ak);   /* пятнами: верхний край рваный, а не «пила» */
               if (ak > 0) {
-                // пряди разного тона: от тёмной зелени к оливковой, у самой воды — темнее и мокрее
-                const st = tileAt(tl.t2, x * 2.4, y * 0.3, 1, 17), wk = Math.max(0, 1 - dw / 26), k = (0.72 + n2 * 0.42) * (1 - wk * 0.18);
-                const ar = (30 + st * 30) * k, ag = (40 + st * 30) * k, ab = (22 + st * 14) * k;
-                r += (ar - r) * ak; g += (ag - g) * ak; bl += (ab - bl) * ak;
+                /* v91 (эталон: золотисто-оливковые обрастания крапинами по двум нижним рядам досок, критик r34 — «водоросли у
+                   ватерлинии»): налёт лишайника и водорослей мелкими крапинами, у самой воды — темнее и мокрее */
+                const st = tileAt(tl.t2, x * 2.4, y * 0.3, 1, 17), wk = Math.max(0, 1 - dw / 26), k = (0.72 + n2 * 0.42) * (1 - wk * 0.3), sp = tileAt(tl.t1, x * 0.8, y * 0.8, 1, 29) * 0.7 + tileAt(tl.t1, x * 2.3, y * 2.3, 0, 31) * 0.3;
+                const ar = (62 + st * 84) * k, ag = (55 + st * 62) * k, ab = (20 + st * 14) * k, a2 = ak * Math.max(0.1, Math.min(1, (sp - 0.38) * 3));   /* крапины 2–6 px */
+                r += (ar - r) * a2; g += (ag - g) * a2; bl += (ab - bl) * a2;
               }
             }
           }
@@ -922,7 +958,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, glowMin: G.tex && G.tex.glowMin || 150, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', bury: theme.id === 'valley' || theme.id === 'castle', soilBand: theme.id === 'valley' || theme.id === 'castle' ? (() => { const a = new Float32Array(H); for (let yy = 0; yy < H; yy++) a[yy] = 1 + 0.12 * fbm1(yy / 46, seed + 401, 2); return a; })() : null, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : theme.id === 'alien' ? [[70, 66, 40], [52, 50, 30], [40, 34, 24]] /* мох Alien как в эталоне: тёмный оливково-бурый (медиана 65/54/34), а не салатовая полоса */ : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, glowTex2: G.tex && G.tex.glowTex2, glowRaw: !!(G.tex && G.tex.glowRaw), glowDirt: !!(G.tex && G.tex.glowDirt), glowMin: G.tex && G.tex.glowMin || 150, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', mossLip: theme.id === 'alien', bury: theme.id === 'valley' || theme.id === 'castle', soilBand: theme.id === 'valley' || theme.id === 'castle' ? (() => { const a = new Float32Array(H); for (let yy = 0; yy < H; yy++) a[yy] = 1 + 0.12 * fbm1(yy / 46, seed + 401, 2); return a; })() : null, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : theme.id === 'alien' ? [[70, 66, 40], [52, 50, 30], [40, 34, 24]] /* мох Alien как в эталоне: тёмный оливково-бурый (медиана 65/54/34), а не салатовая полоса */ : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, hotCore: !!(G.veins && G.veins.hot), rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -1247,6 +1283,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
         if (isDruze) {
           const cols = rng() < 0.5 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];
           const numCryst = 3 + ((rng() * 4) | 0);
+          /* v91: друза — гранёные кристаллы из Blender (crystal_c*, crystal_m*), насыщенные, чёткие при приближении; вектор
+             ниже рисуется вхолостую (числа rng те же — остальной декор на прежних местах) */
+          const DN = cols[1] === '#5ff4ff' ? ['crystal_c1', 'crystal_c2'] : ['crystal_m1', 'crystal_m2'], dn = DN[(x >> 3) & 1], DR = TexLib.data[dn];
+          const realC = c; let gq = gc;   /* gq — слой свечения для векторных кристаллов (у спрайта — своё мягкое свечение) */
+          if (DR) {
+            const D = R * 2.4; if (surface) surface.sprite(DR.canvas, dn);
+            c.save(); c.translate(x, y + 3); if ((x >> 4) & 1) c.scale(-1, 1); c.drawImage(DR.canvas, -D / 2, -D, D, D); c.restore();
+            if (gc) { const gx = x, gy = y - D * 0.3, gR = D * 0.42, gr = gc.createRadialGradient(gx, gy, 0, gx, gy, gR), rgb = cols[1] === '#5ff4ff' ? '95,244,255' : '255,110,246';
+              gr.addColorStop(0, `rgba(${rgb},0.32)`); gr.addColorStop(0.5, `rgba(${rgb},0.12)`); gr.addColorStop(1, `rgba(${rgb},0)`); gc.fillStyle = gr; gc.beginPath(); gc.arc(gx, gy, gR, 0, TAU); gc.fill(); }
+            c = NULL_CTX; gq = null;
+          }
           for (let ci = 0; ci < numCryst; ci++) {
             const a = -Math.PI / 2 + (ci - (numCryst - 1) / 2) * 0.35 + (rng() - 0.5) * 0.2;
             const clen = (8 + rng() * 16) * (R / 16), cw = 2.5 + rng() * 2.2;
@@ -1255,8 +1302,9 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
             c.fillStyle = cols[1]; c.beginPath(); c.moveTo(x + nx * 0.5, y + 2); c.lineTo(ex + nx, ey + ny); c.lineTo(ex + Math.cos(a) * 4, ey + Math.sin(a) * 4); c.lineTo(ex - nx, ey - ny); c.lineTo(x - nx * 0.5, y + 2); c.closePath(); c.fill();
             c.fillStyle = cols[0]; c.beginPath(); c.moveTo(x + nx * 0.5, y + 2); c.lineTo(ex + nx, ey + ny); c.lineTo(ex + Math.cos(a) * 4, ey + Math.sin(a) * 4); c.lineTo(x, y + 2); c.closePath(); c.fill();
             c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ex + Math.cos(a) * 3, ey + Math.sin(a) * 3, 0.9, 0, TAU); c.fill();
-            if (gc) { gc.save(); gc.fillStyle = cols[1]; gc.globalAlpha = 0.35; gc.beginPath(); gc.arc((x + ex) / 2, (y + ey) / 2, clen * 0.45, 0, TAU); gc.fill(); gc.restore(); }   // свой контур слоя свечения: иначе кружки всех друз сливались в огромные залитые треугольники
+            if (gq) { gq.save(); gq.fillStyle = cols[1]; gq.globalAlpha = 0.35; gq.beginPath(); gq.arc((x + ex) / 2, (y + ey) / 2, clen * 0.45, 0, TAU); gq.fill(); gq.restore(); }   // свой контур слоя свечения: иначе кружки всех друз сливались в огромные залитые треугольники
           }
+          c = realC;
         } else {
           // как в эталоне: пышный пурпурный кустик-соцветие (объёмная крона с общим светом), по верху — мелкие светлые
           // цветки; без плоского купола и без пятна свечения (светятся только кристаллы)
@@ -1324,9 +1372,11 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       if (!b.n) continue;
       const x = b.x / b.n, y = b.y, h = (((x * 73856093) ^ (y * 19349663)) >>> 0) / 4294967296;
       const r = parseInt(b.col.slice(1, 3), 16), g = parseInt(b.col.slice(3, 5), 16), bl = parseInt(b.col.slice(5, 7), 16);   // вид — по цвету прежней кучки
-      const k = bl > r && bl > g ? 'flower4' : r > 200 && g > 200 && bl > 200 ? 'flower3' : r > 200 && g > 150 && bl < 120 ? 'flower2' : 'flower1';
+      const k0 = bl > r && bl > g ? 'flower4' : r > 200 && g > 200 && bl > 200 ? 'flower3' : r > 200 && g > 150 && bl < 120 ? 'flower2' : 'flower1';
+      /* v91 (критик r34: «одни красные цветы»): розовые — флокс, фиолетовые — астра, оранжевые — календула */
+      const k1 = FLOWER_KIND[b.col], k = k1 && TexLib.data[k1] ? k1 : k0;
       const S = TexLib.data[k]; if (!S) continue;
-      const D = 28 * (0.75 + Math.min(7, b.n) * 0.05) * (0.9 + h * 0.2);
+      const D = 28 * 1.4 * (0.75 + Math.min(7, b.n) * 0.05) * (0.9 + h * 0.2);   /* v91: в 1,4 раза крупнее — в эталоне кучки цветов видны над травой */
       if (surface) surface.sprite(S.canvas, k);
       c.save(); c.translate(x, y + 3); if (h < 0.5) c.scale(-1, 1); c.drawImage(S.canvas, -D / 2, -D, D, D); c.restore();
     }
@@ -1638,7 +1688,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       if (gc && rng() < 0.12) { gc.fillStyle = 'rgba(255,110,20,0.7)'; gc.beginPath(); gc.arc(x, y + len - 1, 1.6, 0, TAU); gc.fill(); c.fillStyle = '#ff9a3a'; c.beginPath(); c.arc(x, y + len - 1, 0.7, 0, TAU); c.fill(); }   /* угольки редкие и мелкие (r23: «гирлянда») */
     } else if (kind === 'crystals' && rng() < 0.035) {
       const len = 5 + rng() * 10, cyan = rng() < 0.5, col = cyan ? '#5ff4ff' : '#ff6ef6';
-      const CN = cyan ? ['crystal_c1', 'crystal_c2'] : ['crystal_m1', 'crystal_m2'], cn = CN[(x * 7 + y) & 1], CR = TexLib.data[cn];
+      /* v90: тонкие гранёные призмы остриём вниз (эталон); прежний перевёрнутый веер с каменным основанием выглядел «медузой» */
+      const CN = cyan ? ['crystal_h1', 'crystal_h2'] : ['crystal_h3', 'crystal_h4'], cn = CN[(x * 7 + y) & 1], CR = TexLib.data[cn];
       if (CR) {   // кристаллы из Blender остриём вниз (как в эталоне свисают со свода) — чёткие при приближении
         const D = (len + 6) * 1.9; if (surface) { surface.sprite(CR.canvas, cn); anchor(x, y - 1); }
         cs.save(); cs.translate(x, y + 2); cs.scale((x & 2) ? -1 : 1, -1); cs.drawImage(CR.canvas, -D / 2, -D, D, D); cs.restore();
@@ -1647,7 +1698,11 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
         c.fillStyle = col; c.beginPath(); c.moveTo(x - 2, y); c.lineTo(x + 2, y); c.lineTo(x + 1.5, y + len * 0.7); c.lineTo(x, y + len); c.lineTo(x - 1.5, y + len * 0.7); c.closePath(); c.fill();
         c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillRect(x - 1, y, 0.8, len * 0.6);
       }
-      if (gc) { gc.fillStyle = col; gc.globalAlpha = 0.32; gc.beginPath(); gc.arc(x, y + len * 0.5, 4, 0, TAU); gc.fill(); gc.globalAlpha = 1; }
+      if (gc) {   /* v91: свечение вытянуто вдоль кристалла (круглое пятно у основания выглядело «леденцом на палочке») */
+        const gy = y + 2 + (len + 6) * 0.75, gR = (len + 6) * 0.8; gc.save(); gc.translate(x, gy); gc.scale(0.3, 1);
+        const gr = gc.createRadialGradient(0, 0, 0, 0, 0, gR), rgb = cyan ? '95,244,255' : '255,110,246';
+        gr.addColorStop(0, `rgba(${rgb},0.3)`); gr.addColorStop(0.5, `rgba(${rgb},0.1)`); gr.addColorStop(1, `rgba(${rgb},0)`); gc.fillStyle = gr; gc.beginPath(); gc.arc(0, 0, gR, 0, TAU); gc.fill(); gc.restore();
+      }
     }
   }
   // --- Декоративная отделка пещер: кромка ±4 px, сколы углов, гравий и редкая трава/мох ---

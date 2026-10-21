@@ -27,12 +27,17 @@ hf = importlib.util.module_from_spec(spec2)
 spec2.loader.exec_module(hf)
 STYLES = {
     'alien': dict(name='dirt_alien', seed=7, T=1024, TY=512,
-                  layers=[(32, 0.75, (0.36, 0.62), 0.55), (16, 0.8, (0.34, 0.6), 0.5), (8, 0.85, (0.32, 0.58), 0.45), (4, 0.9, (0.3, 0.55), 0.35)],
-                  # r26 → v53: глыбы светлее и контрастнее (эталон: медиана ~30, разброс ~47 — светлые грани на тёмной крошке)
-                  rock=[(104, 96, 100), (86, 79, 85), (120, 110, 112), (76, 70, 78), (96, 88, 90), (112, 100, 106)],
-                  matrix=(26, 23, 29), moss=(66, 76, 40), moss_k=0.16,
-                  crystals=90, crystal_size=2.3, crystal_cols=[(150, 110, 255), (90, 210, 255), (210, 120, 255)],
-                  light=dict(col=(0.86, 0.88, 1.0), elev=30, energy=4.6)),
+                  # v90 (критик r34: «порода плоская, камни одного размера, нет кристаллов в толще»): как в эталоне — редкие крупные
+                  # валуны 40–60 ед. среди камней и щебня (слои 64 и 2 ед.), между ними видна тёмная крошка; мокрый блеск граней
+                  # (шероховатость 0.4, сиреневое небо в отражениях), кристаллы — объёмные гранёные призмы пучками
+                  # пятое число слоя — тон камней слоя: щебень и камешки темнее глыб (в эталоне глыбы светлее тёмной крошки)
+                  layers=[(64, 0.3, (0.32, 0.46), 0.5, 1.0), (32, 0.42, (0.32, 0.56), 0.5, 0.95), (16, 0.55, (0.3, 0.56), 0.46, 0.8),
+                          (8, 0.72, (0.3, 0.56), 0.42, 0.62), (4, 0.88, (0.3, 0.55), 0.36, 0.45), (2, 0.92, (0.3, 0.52), 0.3, 0.36)],
+                  facet=((0.6, 0.86), (0.66, 0.92)), flat=(0.55, 1.0), planes=4, fslope=(0.45, 1.15),   # глубже срезы, 4 грани — угловатые глыбы, не галька
+                  rock=[(92, 86, 94), (76, 71, 80), (108, 101, 108), (68, 63, 70), (86, 80, 88), (100, 93, 100), (60, 56, 62)],
+                  matrix=(12, 11, 15), moss=(78, 86, 36), moss_k=0.2,
+                  crystals=56, crystal_size=2.4, crystal_3d=True, crystal_cols=[(150, 90, 255), (60, 200, 255), (220, 90, 255), (90, 235, 255)],
+                  light=dict(col=(0.9, 0.88, 1.0), elev=26, energy=5.2), rough=0.4, spec=0.55, world=(0.52, 0.5, 0.72, 0.3), emit=0.7),
 }
 
 
@@ -53,18 +58,22 @@ def field(st):
     ID = np.full(SH, -1, np.int32); TONE = np.zeros(SH, np.int32); DD = np.ones(SH, np.float32)
     rockc = np.array(st['rock'], np.float32); nid = 0
     Xr = ((np.arange(NX, dtype=np.float32) + 0.5) / R)[None, :]
-    for (G, p, rr, hk) in st['layers']:
+    TK = np.ones(SH, np.float32); fa, fb = st.get('facet', ((0.72, 0.95), (0.75, 1.0)))
+    for lay in st['layers']:
+        G, p, rr, hk = lay[:4]; tkl = lay[4] if len(lay) > 4 else 1.0
         nx_, ny_ = T // G, TY // G; S2 = (ny_, nx_)
         jx = rng.uniform(0.15, 0.85, S2); jy = rng.uniform(0.15, 0.85, S2); pres = rng.random(S2) < p
         rad = rng.uniform(*rr, S2) * G; sx = rng.uniform(0.75, 1.35, S2); ang = rng.uniform(0, math.pi, S2)
-        hgt = rng.uniform(0.7, 1.1, S2) * hk; tone = rng.integers(0, len(rockc), S2); flat = rng.uniform(0.3, 0.75, S2)
-        f1a = rng.uniform(0, math.tau, S2); f1s = rng.uniform(0.25, 0.8, S2); f1k = rng.uniform(0.72, 0.95, S2)
-        f2a = rng.uniform(0, math.tau, S2); f2s = rng.uniform(0.25, 0.8, S2); f2k = rng.uniform(0.75, 1.0, S2)
+        hgt = rng.uniform(0.7, 1.1, S2) * hk; tone = rng.integers(0, len(rockc), S2); flat = rng.uniform(*st.get('flat', (0.3, 0.75)), S2)
+        f1a = rng.uniform(0, math.tau, S2); f1s = rng.uniform(0.25, 0.8, S2); f1k = rng.uniform(*fa, S2)
+        f2a = rng.uniform(0, math.tau, S2); f2s = rng.uniform(0.25, 0.8, S2); f2k = rng.uniform(*fb, S2)
+        # ещё грани (v90, Alien): круче срезы с разных сторон — угловатые колотые глыбы вместо гладкой гальки
+        extra = [(rng.uniform(0, math.tau, S2), rng.uniform(*st.get('fslope', (0.4, 1.1)), S2), rng.uniform(*fa, S2)) for _ in range(st.get('planes', 2) - 2)]
         cx = np.floor(Xr / G).astype(np.int32)
         for y0 in range(0, NY, 256):
             y1 = min(NY, y0 + 256); Yb = ((np.arange(y0, y1, dtype=np.float32) + 0.5) / R)[:, None]
             cy = np.floor(Yb / G).astype(np.int32)
-            Hb = H[y0:y1]; IDb = ID[y0:y1]; DDb = DD[y0:y1]; TOb = TONE[y0:y1]; rb = rough[y0:y1]
+            Hb = H[y0:y1]; IDb = ID[y0:y1]; DDb = DD[y0:y1]; TOb = TONE[y0:y1]; rb = rough[y0:y1]; TKb = TK[y0:y1]
             for oy in (-1, 0, 1):
                 for ox in (-1, 0, 1):
                     ix = (cx + ox) % nx_; iy = (cy + oy) % ny_
@@ -80,17 +89,19 @@ def field(st):
                     p1 = top * (f1k[iyb, ixb] - f1s[iyb, ixb] * (u * np.cos(f1a[iyb, ixb]) + v * np.sin(f1a[iyb, ixb])) / rd)
                     p2 = top * (f2k[iyb, ixb] - f2s[iyb, ixb] * (u * np.cos(f2a[iyb, ixb]) + v * np.sin(f2a[iyb, ixb])) / rd)
                     h = np.minimum(np.minimum(dome, p1), p2)
+                    for (ea, es, ek) in extra:
+                        h = np.minimum(h, top * (ek[iyb, ixb] - es[iyb, ixb] * (u * np.cos(ea[iyb, ixb]) + v * np.sin(ea[iyb, ixb])) / rd))
                     h = np.where(pr & (d < 1), np.maximum(h, 0) + rb * np.minimum(1, rd / 6), -1e9).astype(np.float32)
                     take = h > Hb
-                    Hb[take] = h[take]; IDb[take] = (nid + iyb * nx_ + ixb)[take]; DDb[take] = d[take]; TOb[take] = tone[iyb, ixb][take]
+                    Hb[take] = h[take]; IDb[take] = (nid + iyb * nx_ + ixb)[take]; DDb[take] = d[take]; TOb[take] = tone[iyb, ixb][take]; TKb[take] = tkl
         nid += nx_ * ny_
     # цвет: тон глыбы, светлее к середине грани, темнее у основания; мелкое зерно
     grain = gnoise(SH, 0.45 * R, rng)
     C = rockc[TONE % len(rockc)] * (1.0 + 0.12 * (1 - DD))[..., None] * (1 + grain * 0.06)[..., None]
     jitter = ((np.sin(ID.astype(np.float32) * 12.9898) * 43758.5453) % 1.0).astype(np.float32)
-    C *= (0.85 + 0.3 * jitter)[..., None]
+    C *= ((0.85 + 0.3 * jitter) * TK)[..., None]
     C = np.where((ID < 0)[..., None], np.array(st['matrix'], np.float32) * (1 + grain * 0.08)[..., None], C).astype(np.float32)
-    del grain, jitter, TONE, DD
+    del grain, jitter, TONE, DD, TK
     # мох на верхних гранях (высота растёт вниз по кадру — грань смотрит вверх)
     gy = np.roll(H, -1, 0) - np.roll(H, 1, 0)
     mn = gnoise(SH, 6 * R, rng)
@@ -101,8 +112,30 @@ def field(st):
     E = np.zeros((NY, NX, 3), np.float32)
     for k in range(st['crystals']):
         x0, y0 = rng.uniform(0, T), rng.uniform(0, TY); col = np.array(st['crystal_cols'][rng.integers(0, len(st['crystal_cols']))], np.float32)
+        cz = st.get('crystal_size', 1.0)
+        if st.get('crystal_3d'):
+            # v90: пучок из 3–7 гранёных призм (заострённый конец), выступает над породой: гребень вдоль оси даёт светлую и тёмную
+            # грани; сердцевина светится ярче краёв
+            base = float(H[int(y0 * R) % NY, int(x0 * R) % NX]); a0 = rng.uniform(0, math.tau)
+            for j in range(int(rng.integers(3, 8))):
+                a = a0 + rng.normal(0, 0.55); L = rng.uniform(3, 8) * cz * (1.3 if j == 0 else 1); w = rng.uniform(0.6, 1.1) * cz
+                ax, ay = math.cos(a), math.sin(a); xc, yc = x0 + rng.normal(0, 0.7 * cz), y0 + rng.normal(0, 0.7 * cz)
+                ext = int((L + w + 2) * R) + 2
+                yy, xx = np.mgrid[int(yc * R) - ext:int(yc * R) + ext, int(xc * R) - ext:int(xc * R) + ext]
+                wx = (xx + 0.5) / R - xc; wy = (yy + 0.5) / R - yc
+                t = (wx * ax + wy * ay) / L; q = -wx * ay + wy * ax
+                wt = w * np.clip(np.minimum(t / 0.15, (1 - t) / 0.4), 0, 1) ** 0.6
+                m = (t > 0) & (t < 1) & (np.abs(q) < wt)
+                if not m.any(): continue
+                yi, xi = yy[m] % NY, xx[m] % NX; tt = t[m]; qq = np.abs(q[m]) / np.maximum(wt[m], 1e-3)
+                hr = base + 0.5 + (1.0 + 1.4 * rng.random()) * cz * (1 - qq) * (1 - 0.45 * tt)
+                up = hr > H[yi, xi]; yi, xi, tt, qq, hr = yi[up], xi[up], tt[up], qq[up], hr[up]
+                H[yi, xi] = hr
+                C[yi, xi] = col * (0.16 + 0.4 * (1 - qq))[:, None]   # AgX: при ярком свечении насыщенный цвет уходит в белый — свечение слабее, альбедо темнее
+                E[yi, xi] = col / 255.0 * ((0.2 + 1.0 * (1 - qq) ** 2) * (1.1 - 0.5 * tt))[:, None]
+            continue
         for j in range(rng.integers(3, 6)):
-            a = rng.uniform(0, math.tau); cz = st.get('crystal_size', 1.0); L = rng.uniform(2.5, 7) * cz; w = rng.uniform(0.8, 1.6) * cz   # r28: крупнее и заметнее
+            a = rng.uniform(0, math.tau); L = rng.uniform(2.5, 7) * cz; w = rng.uniform(0.8, 1.6) * cz   # r28: крупнее и заметнее
             ax, ay = math.cos(a), math.sin(a)
             xs = int((x0 - 9) * R); ys = int((y0 - 9) * R); sz = int(18 * R)
             yy, xx = np.mgrid[ys:ys + sz, xs:xs + sz]; wx = (xx + 0.5) / R - x0; wy = (yy + 0.5) / R - y0
@@ -158,7 +191,8 @@ def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     for key in (argv or list(STYLES)):
         st = STYLES[key]; H, C, E = field(st)
-        hf.render_blocks(mt, st['name'], H, C, E, R2=R, up=1, light=st.get('light'), samples=128, rough=0.86, spec=0.22, emit=1.6, hgrain=0.25, cgrain=0.5, speck=0.004)
+        hf.render_blocks(mt, st['name'], H, C, E, R2=R, up=1, light=st.get('light'), samples=128, rough=st.get('rough', 0.86), spec=st.get('spec', 0.22),
+                         emit=st.get('emit', 1.6), hgrain=0.25, cgrain=0.5, speck=0.004, world=st.get('world'))
         print('RUBBLE', st['name'], flush=True)
 
 

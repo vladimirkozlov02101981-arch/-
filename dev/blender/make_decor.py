@@ -389,12 +389,29 @@ def crystals(name, seed, col):
         prism(bm, Vector((rng.uniform(-5, 5), rng.uniform(-3, 3), -1)) * U, d, L * U, w * U, 6, 0.24, rng)
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
     for p in me.polygons: p.use_smooth = False
-    deep = tuple(c * 0.55 for c in col)
-    o = obj(name, me, mat_glow('crystal', deep, col, 0.55, 0.06, 0.25), sc)
+    deep = tuple(c * 0.34 for c in col)   # v91: насыщеннее (эталон) — прежние 0.55 и свечение 0.55 давали пастельные «леденцы»
+    o = obj(name, me, mat_glow('crystal', deep, col, 0.32, 0.04, 0.3), sc)
     for p in me.polygons: p.use_smooth = False
     base = lumpy_sphere('base', Vector((0, 0, -2 * U)), 9 * U, seed, 0.25, 0.45); obj('base', base, mt.mat_stone('rockb', (0.12, 0.10, 0.14), (0.30, 0.27, 0.32), rough=0.85, spec=0.2, scale=60, bumpk=1.3), sc)
     return sc
 
+
+
+def crystals_hang(name, seed, col):
+    """v90: кристаллы под сводом острова (эталон Alien: тонкие гранёные призмы остриём вниз, бирюза и пурпур) — 1–3 вытянутые
+    призмы почти параллельно, без каменного основания (перевёрнутый веер с основанием выглядел «медузой» с щупальцами).
+    Рисуются в игре вверх ногами; цвет насыщенный, сердцевина светится, грани с бликами"""
+    sc, rng = scene(56, ((0.85, 0.85, 1.0), 3.6), seed)
+    bm = bmesh.new(); n = rng.choice((1, 2, 2, 3))
+    for i in range(n):
+        a = (i - (n - 1) / 2) * 0.22 + rng.uniform(-0.08, 0.08); L = rng.uniform(26, 44) * (1 if i == n // 2 else rng.uniform(0.5, 0.8)); w = rng.uniform(2.4, 3.8)
+        d = Vector((math.sin(a), rng.uniform(-0.25, 0.25), math.cos(a))).normalized()
+        prism(bm, Vector(((i - (n - 1) / 2) * 3.2 + rng.uniform(-0.8, 0.8), rng.uniform(-1.5, 1.5), -2)) * U, d, L * U, w * U, 6, 0.2, rng, 0.8)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    deep = tuple(c * 0.32 for c in col)
+    obj(name, me, mat_glow('crystal', deep, col, 0.38, 0.05, 0.3), sc)
+    for p in me.polygons: p.use_smooth = False
+    return sc
 
 def obsidian(name, seed):
     """обсидиан: 3–4 острых осколка вулканического стекла, чёрные с лиловым отливом и бликами"""
@@ -500,30 +517,77 @@ def bones(name, seed):
 
 
 def alienplant(name, seed):
-    """светящиеся побеги Alien: 3–5 изогнутых стеблей с полупрозрачными бутонами-фонариками"""
-    sc, rng = scene(40, ((0.85, 0.85, 1.0), 3.6), seed)
-    bm = bmesh.new(); bb = bmesh.new()
-    for i in range(rng.randint(3, 5)):
-        h = rng.uniform(14, 28); a = rng.uniform(-0.5, 0.5); x0 = rng.uniform(-4, 4)
-        pts = [Vector(((x0 + math.sin(a) * h * t * t) * U, rng.uniform(-1, 1) * U * 0, (h * t - 1) * U)) for t in [k / 10 for k in range(11)]]
-        rib_tube(bm, pts, [(0.9 - 0.4 * k / 10) * U for k in range(11)], 0, 0, 8, False)
-        bmesh.ops.create_uvsphere(bb, u_segments=16, v_segments=12, radius=rng.uniform(2.2, 3.2) * U, matrix=Matrix.Translation(pts[-1] + Vector((0, 0, 1.5 * U))) @ Matrix.Diagonal((1, 1, 1.25, 1)))
-    me = bpy.data.meshes.new('stems'); bm.to_mesh(me); bm.free(); obj('stems', me, mat_col('stem', (0.12, 0.42, 0.38), 0.6, 0.3), sc)
-    me = bpy.data.meshes.new('buds'); bb.to_mesh(me); bb.free(); obj('buds', me, mat_glow('bud', (0.12, 0.62, 0.56), (0.3, 1.0, 0.85), 0.7, 0.3, 0.2), sc)
+    """v91: светящийся папоротник Alien: 5–8 изогнутых вай с листочками по обе стороны, часть вай закручена «улиткой», на 1–3 —
+    маленький светящийся бутон (прежние толстые стебли с большими бледными шарами выглядели игрушечными)"""
+    sc, rng = scene(40, ((1.0, 0.88, 0.76), 4.2), seed)
+    st = bmesh.new(); lv = bmesh.new(); bb = bmesh.new()
+    glow_n = rng.randint(1, 3)
+    for i in range(rng.randint(5, 8)):
+        h = rng.uniform(12, 26); a = rng.uniform(-0.75, 0.75); x0 = rng.uniform(-3, 3); y0 = rng.uniform(-3, 3)
+        curl = rng.random() < 0.45 and i >= glow_n
+        pts = []
+        for k in range(15):
+            t = k / 14; bend = math.sin(a) * h * t * t * 0.9
+            pts.append(Vector(((x0 + bend) * U, y0 * U, (h * t * (1 - 0.15 * t * t) - 1) * U)))
+        if curl:                                                             # «улитка» на конце вайи
+            p = pts[-1]; d = (pts[-1] - pts[-2]).normalized(); sgn = 1 if a >= 0 else -1
+            for k in range(1, 9):
+                ang = k / 8 * math.pi * 1.6; r_ = 2.2 * (1 - k / 11)
+                pts.append(p + Vector((sgn * (1 - math.cos(ang)) * r_, 0, math.sin(ang) * r_)) * U)
+        rib_tube(st, pts, [(0.42 * (1 - 0.7 * k / len(pts))) * U for k in range(len(pts))], 0, 0, 8, False)
+        for k in range(2, 13):                                               # листочки парами
+            t = k / 14; c = pts[k]; d = (pts[k + 1] - pts[k]).normalized()
+            for sd in (-1, 1):
+                side = d.cross(Vector((0, 1, 0))).normalized() * sd
+                dd = (side * 0.8 + d * 0.5).normalized()
+                L = (2.8 - 1.6 * t) * rng.uniform(0.85, 1.15)
+                leaf_strip(lv, c, dd, d.cross(dd).normalized() if d.cross(dd).length > 1e-6 else Vector((0, 1, 0)), L * U, L * 0.28 * U, 0.25, 4, 0.1)
+        if i < glow_n:
+            bmesh.ops.create_uvsphere(bb, u_segments=14, v_segments=10, radius=rng.uniform(0.9, 1.3) * U, matrix=Matrix.Translation(pts[-1] + Vector((0, 0, 0.8 * U))) @ Matrix.Diagonal((1, 1, 1.3, 1)))
+    me = bpy.data.meshes.new('stems'); st.to_mesh(me); st.free(); obj('stems', me, mat_col('fstem', (0.14, 0.30, 0.20), 0.55, 0.3), sc)
+    me = bpy.data.meshes.new('fronds'); lv.to_mesh(me); lv.free()
+    m = mat_col('frond', (0.16, 0.36, 0.24), 0.5, 0.35); b = m.node_tree.nodes['Principled BSDF']
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.3; break
+    obj('fronds', me, m, sc)
+    me = bpy.data.meshes.new('buds'); bb.to_mesh(me); bb.free(); obj('buds', me, mat_glow('bud', (0.2, 0.75, 0.68), (0.35, 1.0, 0.88), 1.2, 0.3, 0.2), sc)
     return sc
-
 
 def pod(name, seed):
-    """светящийся стручок Alien: ребристая капля с подповерхностным свечением"""
-    sc, rng = scene(36, ((0.85, 0.85, 1.0), 3.6), seed)
-    bm = bmesh.new(); n = 14
-    pts = [Vector((0, 0, (13 * (1 - math.cos(math.pi * t)) - 1) * U)) for t in [k / n for k in range(n + 1)]]
-    rad = [max(0.4, 9 * math.sin(math.pi * min(0.999, t * 0.98 + 0.01)) ** 0.8) * U for t in [k / n for k in range(n + 1)]]
-    rib_tube(bm, pts, rad, 8, 0.08, 40, True)
-    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
-    obj(name, me, mat_glow('pod', (0.42, 0.07, 0.38), (1.0, 0.35, 0.85), 0.35, 0.35, 0.0), sc)
+    """v91: вместо светящегося «яйца» (в эталоне его нет) — куртинка люпина: 4–7 цветоносов с колосом мелких цветков (лиловые,
+    к верхушке светлее и мельче), у основания пальчатые тёмно-зелёные листья"""
+    sc, rng = scene(36, ((1.0, 0.88, 0.76), 4.4), seed)
+    st = bmesh.new(); lv = bmesh.new(); fl = [bmesh.new() for _ in range(3)]
+    hue = rng.choice(((0.62, 0.32, 0.95), (0.85, 0.35, 0.92), (0.50, 0.40, 1.0)))
+    for i in range(rng.randint(4, 7)):
+        h = rng.uniform(15, 28); x0 = rng.uniform(-6, 6); y0 = rng.uniform(-3, 3); lean = rng.uniform(-3, 3)
+        pts = [Vector(((x0 + lean * t * t) * U, y0 * U, (h * t - 1) * U)) for t in [k / 10 for k in range(11)]]
+        rib_tube(st, pts, [(0.42 - 0.2 * k / 10) * U for k in range(11)], 0, 0, 8, False)
+        n = int(h * 2.2)
+        for f in range(n):                                                   # колос: мутовки цветков по спирали
+            t = 0.5 + 0.5 * f / n; ang = f * 2.39996; zr = (1 - (t - 0.5) * 1.5)
+            c = Vector(((x0 + lean * t * t) * U, y0 * U, (h * t - 1) * U)); r_ = (1.3 * zr + 0.25) * U
+            off = Vector((math.cos(ang), math.sin(ang) * 0.9, 0)) * r_
+            k = 0 if t < 0.66 else 1 if t < 0.86 else 2
+            M = Matrix.Translation(c + off) @ Matrix.Diagonal(Vector(((0.95 * zr + 0.35) * 1.1 * U, (0.8 * zr + 0.3) * 1.1 * U, (0.7 * zr + 0.3) * 1.1 * U, 1)))
+            bmesh.ops.create_icosphere(fl[k], subdivisions=1, radius=1.0, matrix=M)
+    for i in range(rng.randint(5, 8)):                                       # пальчатые листья у земли
+        cx = rng.uniform(-7, 7); cz = rng.uniform(0.5, 3.0); base = Vector((cx, rng.uniform(-3, 2), cz)) * U
+        for q in range(rng.randint(5, 7)):
+            a = q / 6 * math.pi + rng.uniform(-0.15, 0.15)
+            d = Vector((math.cos(a), rng.uniform(-0.4, 0.2), math.sin(a) * 0.6 + 0.15)).normalized()
+            side = d.cross(Vector((0, 1, 0))).normalized() if abs(d.y) < 0.9 else Vector((1, 0, 0))
+            leaf_strip(lv, base, d, side, rng.uniform(3.5, 5.5) * U, rng.uniform(0.6, 0.9) * U, 0.35, 5, -0.15)
+    me = bpy.data.meshes.new(name + '_s'); st.to_mesh(me); st.free(); obj(name + '_s', me, mat_col('lstem', (0.18, 0.26, 0.10), 0.6, 0.3), sc)
+    me = bpy.data.meshes.new(name + '_l'); lv.to_mesh(me); lv.free(); obj(name + '_l', me, mat_col('lleaf', (0.15, 0.24, 0.09), 0.5, 0.35), sc)
+    for k, bm_ in enumerate(fl):
+        col = tuple(min(1.0, c * (0.62 + 0.22 * k) + 0.1 * k) for c in hue)
+        me = bpy.data.meshes.new(name + '_f%d' % k); bm_.to_mesh(me); bm_.free()
+        m, nt, b = mt.principled('lup%d' % k, 0.5, 0.3); b.inputs['Base Color'].default_value = (*mt.lin(col), 1)
+        for key in ('Subsurface Weight', 'Subsurface'):
+            if key in b.inputs: b.inputs[key].default_value = 0.3; break
+        obj(name + '_f%d' % k, me, m, sc)
     return sc
-
 
 def tentacle(name, seed):
     """щупальца Alien: 4 фиолетовых изогнутых отростка с присосками, к кончику светлее"""
@@ -688,6 +752,76 @@ def potjar(name, seed):
     return sc
 
 
+
+def barrel(name, seed):
+    """бочка (пиратская бухта, критик r34: «у бочек нет обручей и заклёпок»): 18 клёпок-досок с пузом и швами, на каждой свой
+    тон и годичные слои вдоль; четыре железных обруча с заклёпками, ржавчина и потёртости; основание — по низу кадра"""
+    sc, rng = scene(32, ((1.0, 0.84, 0.62), 5.2), seed)
+    Hh, r0, r1, NS, n = 24.0, 7.4, 8.8, 18, 144
+    def rad(z):   # пузо: парабола по высоте
+        t = z / Hh * 2 - 1; return r0 + (r1 - r0) * (1 - t * t)
+    tone = [rng.uniform(0.82, 1.15) for _ in range(NS)]
+    bm = bmesh.new(); rows = []; zs = [Hh * k / 48 for k in range(49)]
+    col_layer = bm.loops.layers.color.new('Col')
+    for z in zs:
+        row = []
+        for i in range(n):
+            th = i / n * math.tau; f = (th / math.tau * NS) % 1.0; groove = 0.05 if (f < 0.04 or f > 0.96) else 0.0
+            r = rad(z) * (1 - groove * 0.4) + noise.noise(Vector((math.cos(th) * 2, math.sin(th) * 2, z * 0.3 + seed))) * 0.06
+            row.append(bm.verts.new((math.cos(th) * r * U, math.sin(th) * r * U, z * U)))
+        rows.append(row)
+    for j in range(len(rows) - 1):
+        for i in range(n):
+            fc = bm.faces.new((rows[j][i], rows[j][(i + 1) % n], rows[j + 1][(i + 1) % n], rows[j + 1][i]))
+            st = int((i + 0.5) / n * NS) % NS; k = tone[st]
+            for lp in fc.loops: lp[col_layer] = (k * 0.5, k * 0.5, k * 0.5, 1.0)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    # дерево клёпок: волокна вдоль высоты (волна с искажением), тон клёпки — из цвета вершин, грязь и влага к низу
+    m, nt, b = mt.principled('stave', 0.62, 0.3); N, L = nt.nodes, nt.links
+    tc = N.new('ShaderNodeTexCoord'); wv = N.new('ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = 'X'
+    wv.inputs['Scale'].default_value = 9; wv.inputs['Distortion'].default_value = 7; wv.inputs['Detail'].default_value = 6
+    mp = N.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (30, 30, 2.2); L.new(tc.outputs['Object'], mp.inputs['Vector']); L.new(mp.outputs['Vector'], wv.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.1; ramp.color_ramp.elements[0].color = (*mt.lin((0.20, 0.12, 0.06)), 1)
+    ramp.color_ramp.elements[1].position = 0.9; ramp.color_ramp.elements[1].color = (*mt.lin((0.46, 0.30, 0.16)), 1)
+    L.new(wv.outputs['Fac'], ramp.inputs['Fac'])
+    at = N.new('ShaderNodeAttribute'); at.attribute_name = 'Col'
+    mul = N.new('ShaderNodeMix'); mul.data_type = 'RGBA'; mul.blend_type = 'MULTIPLY'; mt.sock(mul.inputs, 'Factor_Float').default_value = 1.0
+    L.new(ramp.outputs['Color'], mt.sock(mul.inputs, 'A_Color')); L.new(at.outputs['Color'], mt.sock(mul.inputs, 'B_Color'))
+    br = N.new('ShaderNodeMath'); br.operation = 'MULTIPLY'; br.inputs[1].default_value = 2.0
+    mix2 = N.new('ShaderNodeMix'); mix2.data_type = 'RGBA'; mix2.blend_type = 'MULTIPLY'; mt.sock(mix2.inputs, 'Factor_Float').default_value = 1.0
+    L.new(mt.sock(mul.outputs, 'Result_Color'), mt.sock(mix2.inputs, 'A_Color')); mt.sock(mix2.inputs, 'B_Color').default_value = (2.0, 2.0, 2.0, 1)
+    L.new(mt.sock(mix2.outputs, 'Result_Color'), b.inputs['Base Color'])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 220; nz.inputs['Detail'].default_value = 8; L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.35; bu.inputs['Distance'].default_value = 0.002
+    L.new(nz.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    o = obj(name, me, m, sc); o.rotation_euler = (0, 0, rng.uniform(0, math.tau))
+    # обручи: полоса железа прямоугольного сечения по профилю бочки, заклёпки
+    iron = mat_col('hoop', (0.13, 0.11, 0.10), 0.5, 0.5, 0.5, 400); ib = iron.node_tree.nodes['Principled BSDF']
+    if 'Metallic' in ib.inputs: ib.inputs['Metallic'].default_value = 0.65
+    hb = bmesh.new(); rv = bmesh.new()
+    for zc in (2.2, 5.0, Hh - 5.0, Hh - 2.2):
+        w = 0.9; ring = []
+        for zz in (zc - w, zc + w):
+            for out in (0.0, 0.32):
+                row = []
+                for i in range(n):
+                    th = i / n * math.tau; r = rad(zz) + 0.06 + out
+                    row.append(hb.verts.new((math.cos(th) * r * U, math.sin(th) * r * U, zz * U)))
+                ring.append(row)
+        lo_in, lo_out, hi_in, hi_out = ring
+        for i in range(n):
+            i2 = (i + 1) % n
+            hb.faces.new((lo_out[i], lo_out[i2], hi_out[i2], hi_out[i]))
+            hb.faces.new((hi_out[i], hi_out[i2], hi_in[i2], hi_in[i]))
+            hb.faces.new((lo_in[i], lo_in[i2], lo_out[i2], lo_out[i]))
+        for q in range(14):
+            th = q / 14 * math.tau + rng.uniform(-0.05, 0.05); r = rad(zc) + 0.42
+            bmesh.ops.create_icosphere(rv, subdivisions=1, radius=0.32 * U, matrix=Matrix.Translation(Vector((math.cos(th) * r, math.sin(th) * r, zc)) * U))
+    me = bpy.data.meshes.new(name + '_h'); hb.to_mesh(me); hb.free(); oh = obj(name + '_h', me, iron, sc)
+    for p in me.polygons: p.use_smooth = False
+    me = bpy.data.meshes.new(name + '_r'); rv.to_mesh(me); rv.free(); obj(name + '_r', me, mat_col('rivet', (0.30, 0.25, 0.20), 0.4, 0.5), sc)
+    return sc
+
 def drygrass(name, seed):
     """пучок сухой травы каньона: 40–70 тонких изогнутых травинок (сужаются к концу, гнутся по ветру), соломенные тона от
     тёмного у корня к светлому (по высоте), редкие колоски на концах; у корня — несколько камешков"""
@@ -732,6 +866,10 @@ FLOWER = {   # вид: (лепестков, длина, ширина, цвет, 
     'buttercup': (5, 1.8, 1.6, (0.95, 0.76, 0.05), (0.78, 0.60, 0.10), 0.5, 0.22, 0.35),
     'daisy': (17, 2.3, 0.55, (0.93, 0.93, 0.90), (0.95, 0.70, 0.08), 0.8, 0.5, 0.12),
     'cornflower': (9, 1.9, 0.85, (0.16, 0.30, 0.86), (0.22, 0.14, 0.48), 0.5, 0.5, 0.2),
+    # v91 (критик r34: «в долине одни красные цветы»): флокс, астра, календула — розовые, фиолетовые и оранжевые кучки
+    'phlox': (5, 1.7, 1.5, (0.95, 0.38, 0.62), (0.98, 0.85, 0.90), 0.35, 0.4, 0.25),
+    'aster': (16, 2.0, 0.42, (0.55, 0.32, 0.88), (0.95, 0.75, 0.15), 0.6, 0.5, 0.1),
+    'calendula': (13, 1.9, 0.75, (0.98, 0.52, 0.06), (0.85, 0.38, 0.05), 0.7, 0.45, 0.18),
 }
 
 
@@ -984,28 +1122,70 @@ def striplight(name, seed):
     return sc
 
 
+def leaf_strip(bm, base, d, side, L, W, fold=0.25, seg=6, curl=0.15):
+    """лист: полоса вдоль средней жилки от base по направлению d (side — направление ширины), края приподняты (fold),
+    кончик загнут (curl); ширина по синусу — заострённый овал"""
+    up = d.cross(side).normalized(); rows = []
+    for k in range(seg + 1):
+        t = k / seg; w = W * math.sin(math.pi * min(0.999, 0.04 + t * 0.96)) ** 0.75
+        c = base + d * (L * t) + up * (curl * L * t * t)
+        rows.append([bm.verts.new(c - side * w + up * (fold * w)), bm.verts.new(c), bm.verts.new(c + side * w + up * (fold * w))])
+    for k in range(seg):
+        for m in range(2): bm.faces.new((rows[k][m], rows[k][m + 1], rows[k + 1][m + 1], rows[k + 1][m]))
+
+
 def alienbush(name, seed, tip):
-    """пышный куст Alien (как в эталоне): плотная крона из множества мелких фиолетовых листьев-чешуек на коротких
-    ветках, по верху — светящиеся соцветия (розовые или бирюзовые)"""
-    sc, rng = scene(40, ((0.85, 0.85, 1.0), 3.8), seed)
-    lv = bmesh.new(); fl = bmesh.new()
-    for _ in range(rng.randint(420, 520)):
-        a = rng.uniform(0, math.pi); rr = rng.uniform(0.0, 1.0) ** 0.5 * 13
-        x = math.cos(a) * rr * 1.25; z = math.sin(a) * rr * 0.95 + 0.5; y = rng.uniform(-5, 5)
-        s_ = rng.uniform(1.1, 2.0)
-        bmesh.ops.create_icosphere(lv, subdivisions=1, radius=s_ * U, matrix=Matrix.Translation(Vector((x * U, y * U, z * U))) @ Matrix.Diagonal(Vector((1.0, 0.6, 0.55, 1))) @ Matrix.Rotation(rng.uniform(0, math.tau), 4, 'Y'))
-    for _ in range(rng.randint(26, 36)):
-        a = rng.uniform(0.25, math.pi - 0.25); rr = rng.uniform(10, 14)
-        bmesh.ops.create_uvsphere(fl, u_segments=10, v_segments=8, radius=rng.uniform(0.5, 0.9) * U, matrix=Matrix.Translation(Vector((math.cos(a) * rr * 1.2 * U, rng.uniform(-6, -2) * U, (math.sin(a) * rr * 0.95 + 1.5) * U))))
+    """v91: соцветия Alien как в эталоне — пышный куст из 3–6 шаров-соцветий (как гортензия): сотни мелких четырёхлепестковых
+    цветков на тёмно-зелёных листьях (прежний «куст из бусин» был игрушечным). tip — оттенок соцветий: розово-пурпурный или
+    сине-фиолетовый; светлые цветки чуть светятся (под ночным светом карты соцветия не гаснут)"""
+    sc, rng = scene(40, ((1.0, 0.88, 0.76), 4.4), seed)
+    lv = bmesh.new()
+    for _ in range(rng.randint(70, 95)):                                   # листья: заострённые овалы из-под соцветий наружу
+        a = rng.uniform(0.12, math.pi - 0.12); rr = rng.uniform(3, 12)
+        base = Vector((math.cos(a) * rr * 1.15, rng.uniform(-3.5, 3.5), math.sin(a) * rr * 0.5 + rng.uniform(-0.5, 1.0))) * U
+        d = Vector((math.cos(a) * 1.2 + rng.uniform(-0.4, 0.4), rng.uniform(-0.6, 0.3), math.sin(a) * 0.8 + rng.uniform(-0.1, 0.4))).normalized()
+        side = d.cross(Vector((rng.uniform(-0.3, 0.3), 1, rng.uniform(-0.3, 0.3)))).normalized()
+        L = rng.uniform(4.0, 7.0); leaf_strip(lv, base, d, side, L * U, L * rng.uniform(0.2, 0.3) * U, 0.3, 6, rng.uniform(-0.25, 0.1))
     me = bpy.data.meshes.new(name + '_l'); lv.to_mesh(me); lv.free()
-    leaf = mat_col('aleaf', (0.30, 0.12, 0.48), 0.55, 0.3, 0.4, 160)
+    leaf = mat_col('aleaf', (0.09, 0.15, 0.06), 0.5, 0.35, 0.3, 300)
     b = leaf.node_tree.nodes['Principled BSDF']
     for key in ('Subsurface Weight', 'Subsurface'):
-        if key in b.inputs: b.inputs[key].default_value = 0.3; break
+        if key in b.inputs: b.inputs[key].default_value = 0.15; break
     obj(name + '_l', me, leaf, sc)
-    me = bpy.data.meshes.new(name + '_f'); fl.to_mesh(me); fl.free()
-    obj(name + '_f', me, mat_glow('abud', tuple(c * 0.6 for c in tip), tip, 1.6, 0.3, 0.2), sc)
+    shades = [tuple(c * k for c in tip) for k in (0.42, 0.62, 0.85)]
+    fl = [bmesh.new() for _ in shades]; core = bmesh.new()
+    heads = rng.randint(3, 6)
+    for h in range(heads):
+        a = (h + 0.5) / heads * (math.pi - 0.7) + 0.35 + rng.uniform(-0.15, 0.15); rr = rng.uniform(6.5, 10)
+        c0 = Vector((math.cos(a) * rr * 1.15, rng.uniform(-2.5, 1.0), math.sin(a) * rr * 0.75 + 3.5)); R = rng.uniform(4.0, 5.8)
+        n = int(R * R * 4.2)
+        for f in range(n):                                                   # цветки по полусфере соцветия (точки Фибоначчи)
+            zz = 1 - (f + 0.5) / n * 1.25
+            if zz < -0.25: continue
+            r_ = math.sqrt(max(0.0, 1 - zz * zz)); ph = f * 2.39996
+            nrm = Vector((math.cos(ph) * r_, math.sin(ph) * r_ * 0.8 - 0.35, zz)).normalized()
+            p = c0 + nrm * R * rng.uniform(0.92, 1.05)
+            t1 = nrm.cross(Vector((0, 0, 1)) if abs(nrm.z) < 0.9 else Vector((1, 0, 0))).normalized(); t2 = nrm.cross(t1)
+            k = 2 if (nrm.z > 0.35 and rng.random() < 0.6) else (0 if rng.random() < 0.35 else 1)
+            ps = rng.uniform(0.5, 0.68); rot = rng.uniform(0, math.pi / 2)
+            for q in range(4):                                               # четыре лепестка крестом
+                ang = rot + q * math.pi / 2; off = (t1 * math.cos(ang) + t2 * math.sin(ang)) * ps * 0.85
+                M = Matrix.Translation((p + off) * U) @ nrm.to_track_quat('Z', 'Y').to_matrix().to_4x4() @ Matrix.Diagonal(Vector((ps * U, ps * U, ps * 0.35 * U, 1)))
+                bmesh.ops.create_icosphere(fl[k], subdivisions=1, radius=1.0, matrix=M)
+            if rng.random() < 0.45: bmesh.ops.create_icosphere(core, subdivisions=1, radius=ps * 0.2 * U, matrix=Matrix.Translation((p + nrm * 0.12) * U))
+    for k, bm_ in enumerate(fl):
+        me = bpy.data.meshes.new(name + '_f%d' % k); bm_.to_mesh(me); bm_.free()
+        m, nt, b = mt.principled('petal%d' % k, 0.55, 0.3); b.inputs['Base Color'].default_value = (*mt.lin(shades[k]), 1)
+        for key in ('Subsurface Weight', 'Subsurface'):
+            if key in b.inputs: b.inputs[key].default_value = 0.12; break
+        if k == 2:
+            for key in ('Emission Color', 'Emission'):
+                if key in b.inputs: b.inputs[key].default_value = (*mt.lin(tip), 1); break
+            if 'Emission Strength' in b.inputs: b.inputs['Emission Strength'].default_value = 0.18
+        obj(name + '_f%d' % k, me, m, sc)
+    me = bpy.data.meshes.new(name + '_c'); core.to_mesh(me); core.free(); obj(name + '_c', me, mat_col('fcore', (0.8, 0.66, 0.5), 0.5, 0.3), sc)
     return sc
+
 
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
@@ -1017,9 +1197,12 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'watertower1': (watertower, 71, 180),
     'column1': (column, 121, 96), 'column2': (column, 122, 96), 'column_ruin1': (column, 123, 96), 'column_ruin2': (column, 124, 96),
     'pot1': (potjar, 131, 36), 'pot2': (potjar, 132, 36),
+    'barrel1': (barrel, 133, 32), 'barrel2': (barrel, 134, 32),
     'drygrass1': (drygrass, 141, 36), 'drygrass2': (drygrass, 142, 36), 'drygrass3': (drygrass, 143, 36), 'drygrass4': (drygrass, 144, 36),
     'crystal_c1': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 81, 56), 'crystal_c2': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 82, 56),
     'crystal_m1': (lambda n, s: crystals(n, s, (1.0, 0.43, 0.96)), 83, 56), 'crystal_m2': (lambda n, s: crystals(n, s, (1.0, 0.43, 0.96)), 84, 56),
+    'crystal_h1': (lambda n, s: crystals_hang(n, s, (0.3, 0.92, 1.0)), 85, 56), 'crystal_h2': (lambda n, s: crystals_hang(n, s, (0.3, 0.92, 1.0)), 86, 56),
+    'crystal_h3': (lambda n, s: crystals_hang(n, s, (0.95, 0.35, 1.0)), 87, 56), 'crystal_h4': (lambda n, s: crystals_hang(n, s, (0.62, 0.42, 1.0)), 88, 56),
     'obsidian1': (obsidian, 91, 36), 'obsidian2': (obsidian, 92, 36), 'lavarock1': (lavarock, 93, 34), 'lavarock2': (lavarock, 94, 34),
     'spike1': (spike, 95, 84), 'spike2': (spike, 96, 84), 'skull1': (skull, 97, 44), 'bones1': (bones, 98, 44),
     'alienplant1': (alienplant, 101, 40), 'alienplant2': (alienplant, 102, 40), 'pod1': (pod, 103, 36), 'tentacle1': (tentacle, 104, 72),
@@ -1028,13 +1211,15 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'rockb1': (lambda n, s: boulder(n, s, (0.34, 0.29, 0.23), (0.68, 0.60, 0.50)), 114, 36), 'rockb2': (lambda n, s: boulder(n, s, (0.34, 0.29, 0.23), (0.68, 0.60, 0.50)), 115, 36),
     'flower1': (lambda n, s: wildflowers(n, s, 'poppy'), 151, 28), 'flower2': (lambda n, s: wildflowers(n, s, 'buttercup'), 152, 28),
     'flower3': (lambda n, s: wildflowers(n, s, 'daisy'), 153, 28), 'flower4': (lambda n, s: wildflowers(n, s, 'cornflower'), 154, 28),
+    'flower5': (lambda n, s: wildflowers(n, s, 'phlox'), 155, 28), 'flower6': (lambda n, s: wildflowers(n, s, 'aster'), 156, 28),
+    'flower7': (lambda n, s: wildflowers(n, s, 'calendula'), 157, 28),
     'leaf1': (lambda n, s: leaf(n, s, (0.33, 0.55, 0.15), 3.5, False), 161, 8), 'leaf2': (lambda n, s: leaf(n, s, (0.88, 0.70, 0.16), 0, True), 162, 8),
     'leaf3': (lambda n, s: leaf(n, s, (0.86, 0.40, 0.11), 2.5, False), 163, 8), 'leaf4': (lambda n, s: leaf(n, s, (0.55, 0.47, 0.22), 0, True), 164, 8),
     'roots1': (roots, 171, 32), 'roots2': (roots, 172, 32), 'roots3': (roots, 173, 32),
     'cottage1': (cottage, 181, 100),
     'lantern1': (lantern, 191, 24),
     'striplight1': (striplight, 201, 32),
-    'alienbush1': (lambda n, s: alienbush(n, s, (1.0, 0.55, 0.95)), 211, 40), 'alienbush2': (lambda n, s: alienbush(n, s, (0.5, 0.95, 1.0)), 212, 40),
+    'alienbush1': (lambda n, s: alienbush(n, s, (0.95, 0.32, 0.95)), 211, 40), 'alienbush2': (lambda n, s: alienbush(n, s, (0.62, 0.38, 1.0)), 212, 40),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
 

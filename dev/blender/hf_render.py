@@ -49,12 +49,13 @@ def tex_hash(yy, xx, seed):
 
 
 def render_blocks(mt, name, H, C, E=None, R2=2, up=2, light=None, block=1024, margin=128, samples=128,
-                  rough=0.82, spec=0.25, micro=0.08, emit=1.6, out_dir=None, hgrain=0.0, cgrain=0.0, speck=0.0, sss=0.0):
+                  rough=0.82, spec=0.25, micro=0.08, emit=1.6, out_dir=None, hgrain=0.0, cgrain=0.0, speck=0.0, sss=0.0, world=None):
     """H (N2×N2, единицы мира), C (N2×N2×3, sRGB 0..255), E (N2×N2×3 свечение 0..1 или None); бесшовные по краям.
     Пишет out_dir/<name>/b_<by>_<bx>.png (block×block px).
     hgrain / cgrain / speck — деталь в 1–2 текселя (критик r24: «родные» Blender-текстуры были фактически ×2): микрорельеф
     (ед. мира), зерно тона (доля яркости) и доля искр-блёсток (+25 %); считаются по глобальным координатам — без швов.
-    sss — доля подповерхностного рассеяния (снег: мягкие голубоватые тени комьев)."""
+    sss — доля подповерхностного рассеяния (снег: мягкие голубоватые тени комьев).
+    world — (r, g, b, сила) неба вместо стандартного голубого: его отражают влажные грани (Alien — сиреневый блеск)."""
     R = R2 * up; NY2, NX2 = H.shape; nby = max(1, NY2 * up // block); nbx = max(1, NX2 * up // block)
     B = NX2 * up // nbx; B2 = B // up; M2 = margin // up
     assert NY2 * up // nby == B, 'блоки должны быть квадратными'
@@ -69,6 +70,8 @@ def render_blocks(mt, name, H, C, E=None, R2=2, up=2, light=None, block=1024, ma
             if os.environ.get('HF_ONLY') and os.environ['HF_ONLY'] != '%d,%d' % (by, bx): continue   # проба одного блока
             if light: mt.LIGHT.update(**light)
             sc = mt.reset()
+            if world:
+                bg = sc.world.node_tree.nodes['Background']; bg.inputs[0].default_value = (*world[:3], 1); bg.inputs[1].default_value = world[3]
             ys = np.arange(by * B2 - M2 - ext, (by + 1) * B2 + M2 + ext) % NY2; xs = np.arange(bx * B2 - M2 - ext, (bx + 1) * B2 + M2 + ext) % NX2
             U = up2 if up > 1 else (lambda a: a)
             Hb = U(H[np.ix_(ys, xs)].astype(np.float32))

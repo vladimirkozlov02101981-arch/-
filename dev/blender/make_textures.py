@@ -533,6 +533,91 @@ def grass_strip(name, seed, cols, flowers, height=0.26, H_PX=80, glow=None):
     render(sc, name)
 
 
+
+def moss_strip(name, seed, cols, flowers, glow=None, H_PX=80, tuft_h=0.12, n_hair=18000, n_clusters=15, n_sprouts=30):
+    """мох и низкие растения Alien (v90, эталон dev/reference/alien.png: пушистая оливковая кромка, скопления мелких лиловых
+    цветов, редкие ростки со светящимся кончиком) вместо высокой бирюзовой травы-«гребня». Волоски мха — одна сетка на
+    материал (тысячи коротких изогнутых лент), подушки 4–12 px. Прозрачный фон, по горизонтали бесшовно, низ кадра = корни"""
+    sc = reset(); rng = random.Random(seed)
+    sc.render.resolution_y = H_PX; sc.render.film_transparent = True
+    sc.render.image_settings.color_mode = 'RGBA'
+    cam = sc.camera; hgt = H_PX / 100.0
+    cam.location = (0, -6, hgt / 2 - 0.05); cam.rotation_euler = (math.radians(90), 0, 0)
+
+    def mat(c, rough, sss):
+        m, nt, b = principled('m', rough, 0.25); b.inputs['Base Color'].default_value = (*lin(c), 1)
+        for key in ('Subsurface Weight', 'Subsurface'):
+            if key in b.inputs: b.inputs[key].default_value = sss; break
+        return m
+    mats = [mat(c, 0.75, 0.2) for c in cols]
+
+    def ribbon(V, F, x, y, z0, h, lean, w, th, seg=3):
+        ca, sa = math.cos(th), math.sin(th); b0 = len(V)
+        for k in range(seg + 1):
+            t = k / seg; bend = lean * t * t; ww = w * (1 - t) ** 0.7 / 2
+            V.append((x + bend - ww * ca, y - ww * sa, z0 + h * t)); V.append((x + bend + ww * ca, y + ww * sa, z0 + h * t))
+        for k in range(seg): F.append((b0 + 2 * k, b0 + 2 * k + 1, b0 + 2 * k + 3, b0 + 2 * k + 2))
+
+    def mesh(nm, V, F, m):
+        me = bpy.data.meshes.new(nm); me.from_pydata(V, [], F); me.materials.append(m)
+        for p in me.polygons: p.use_smooth = True
+        sc.collection.objects.link(bpy.data.objects.new(nm, me))
+    # подушки мха: бугры 5–16 px шириной (периодически по x), между ними ниже
+    bumps = [(rng.uniform(-S / 2, S / 2), rng.uniform(0.025, 0.08), rng.uniform(0.45, 1.0)) for _ in range(90)]
+
+    def cushion(x):
+        v = 0.25
+        for (bx, bw, bh) in bumps:
+            d = (x - bx + S / 2) % S - S / 2
+            if abs(d) < 3 * bw: v = max(v, bh * math.exp(-(d / bw) ** 2))
+        return v
+    groups = [([], []) for _ in mats]
+    for i in range(n_hair):
+        x = rng.uniform(-S / 2, S / 2); y = rng.uniform(-0.2, 0.2)
+        h = tuft_h * cushion(x) * rng.uniform(0.45, 1.0); tall = h / tuft_h
+        mi = min(len(mats) - 1, max(0, int(tall * len(mats) + rng.uniform(-1.0, 0.6))))
+        lean = rng.gauss(0, 0.35) * h; w = rng.uniform(0.005, 0.009); th = rng.uniform(0, math.pi)
+        for dx in (-S, 0, S):
+            if abs(x + dx) - 0.1 > S / 2: continue
+            ribbon(*groups[mi], x + dx, y, -0.03, h, lean, w, th)
+    for mi, (V, F) in enumerate(groups):
+        if V: mesh('moss%d' % mi, V, F, mats[mi])
+    # кустики-«вереск»: шапка из мелких лиловых головок на тёмных веточках
+    stem_m = mat((0.18, 0.22, 0.09), 0.7, 0.0); SV, SF = [], []
+    fl_m = [mat(c, 0.5, 0.3) for c in flowers]
+    bm = bmesh.new(); bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)
+    heads = []
+    for mi in range(len(fl_m)):
+        me = bpy.data.meshes.new('head%d' % mi); bm.to_mesh(me); me.materials.append(fl_m[mi])
+        for p in me.polygons: p.use_smooth = True
+        heads.append(me)
+    bm.free()
+    for ci in range(n_clusters):
+        cx = rng.uniform(-S / 2, S / 2); y0 = rng.uniform(-0.15, 0.05); R = rng.uniform(0.04, 0.09); Hc = rng.uniform(0.07, 0.15)
+        mi = rng.randrange(len(fl_m))
+        for j in range(rng.randint(22, 44)):
+            u = rng.uniform(-1, 1); hz = Hc * math.sqrt(1 - u * u) * rng.uniform(0.55, 1.0); hx = cx + u * R; hy = y0 + rng.uniform(-0.5, 0.5) * R
+            r = rng.uniform(0.007, 0.014)
+            for dx in (-S, 0, S):
+                if abs(hx + dx) - 0.1 > S / 2: continue
+                ob = bpy.data.objects.new('fh', heads[mi if rng.random() < 0.8 else rng.randrange(len(heads))]); ob.location = (hx + dx, hy, hz - 0.03)
+                ob.scale = (r, r, r * 0.85); sc.collection.objects.link(ob)
+                ribbon(SV, SF, cx + dx + u * R * 0.4, hy, -0.03, hz, u * R * 0.6, 0.004, rng.uniform(0, math.pi))
+    # редкие ростки со светящимся кончиком (бирюза эталона)
+    if glow:
+        gm = mat_glow('sprout', *glow)
+        for i in range(n_sprouts):
+            x = rng.uniform(-S / 2, S / 2); y = rng.uniform(-0.18, 0.1); h = rng.uniform(0.08, 0.2); lean = rng.gauss(0, 0.25) * h
+            r = rng.uniform(0.008, 0.013)
+            for dx in (-S, 0, S):
+                if abs(x + dx) - 0.1 > S / 2: continue
+                ribbon(SV, SF, x + dx, y, -0.03, h, lean, 0.009, rng.uniform(-0.3, 0.3))
+                bm = bmesh.new(); bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=r)
+                me = bpy.data.meshes.new('tip'); bm.to_mesh(me); bm.free(); me.materials.append(gm)
+                ob = bpy.data.objects.new('tip', me); ob.location = (x + dx + lean, y, h - 0.03); sc.collection.objects.link(ob)
+    if SV: mesh('stems', SV, SF, stem_m)
+    render(sc, name)
+
 # ---------------------------------------------------------------- природная порода (карта высот)
 def blur_p(A, sig):
     """периодическое гауссово размытие (FFT)"""
@@ -1492,8 +1577,10 @@ LIB = {
     'rock_alien': lambda: rock_face('rock_alien', 131, [(0.22, 0.21, 0.21), (0.28, 0.27, 0.27), (0.18, 0.17, 0.18), (0.34, 0.32, 0.33)], streak=0.1, glow=(0.40, 0.95, 1.0), gstr=6.0, tilt=-0.05, cap=((0.30, 0.40, 0.18), 0.6), capk=0.8),
     'dirt_alien': lambda: dirt_stones('dirt_alien', 132, (0.24, 0.22, 0.22), (0.15, 0.14, 0.14), (0.24, 0.22, 0.22), (0.48, 0.46, 0.46), density=2.0),
     'cave_alien': lambda: rock_face('cave_alien', 133, [(0.24, 0.17, 0.36), (0.30, 0.22, 0.44), (0.20, 0.14, 0.30)], layer=(30, 90), blocks=130, glow=(0.35, 0.9, 1.0), gstr=3.5, cave=True),
-    'grass_alien': lambda: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)],
-                                       [(1.0, 0.45, 0.95), (0.55, 0.95, 1.0)], glow=((0.35, 1.0, 0.90), 2.0)),
+    # v90: низкий оливковый мох, кустики лиловых цветов и светящиеся ростки (эталон) вместо бирюзовой травы-«гребня»
+    # (прежнее: grass_strip('grass_alien', 134, [(0.05, 0.28, 0.30), (0.08, 0.40, 0.40), (0.12, 0.52, 0.50), (0.30, 0.90, 0.85)], ...))
+    'grass_alien': lambda: moss_strip('grass_alien', 134, [(0.30, 0.36, 0.10), (0.45, 0.53, 0.15), (0.60, 0.68, 0.22), (0.74, 0.80, 0.30)],
+                                      [(0.85, 0.45, 0.95), (0.70, 0.30, 0.90), (0.95, 0.60, 1.0)], glow=((0.35, 1.0, 0.90), 1.6)),
     # ---- пиратская бухта: доски корабля, тропическая земля и трава
     'wood_ship': lambda: wood_planks('wood_ship', 141, 20, 170, (0.13, 0.09, 0.06), (0.36, 0.28, 0.20), weather=0.8),
     'wood_light': lambda: wood_planks('wood_light', 142, 17, 140, (0.46, 0.32, 0.20), (0.80, 0.63, 0.43), weather=0.5),

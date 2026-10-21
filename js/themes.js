@@ -16,7 +16,7 @@ const THEMES = {
     clouds: { n: 9, color: '#ffffff', shade: '#c5d8ec', alpha: 0.95 },
     liquid: { kind: 'water', top: '#5cbcef', mid: '#2a7fc0', deep: '#0b3560', foam: '#effbff', alpha: 0.82 },
     ground: {
-      cap: { cols: ['#b6c566', '#758d39', '#4b5829'], thick: 8, blades: ['#88ac2c', '#5e8420', '#c8e04a', '#406a16', '#a0c03c'], flowers: ['#e8302a', '#f2c830', '#f4f0e0', '#4a7aff', '#ff5d8f', '#f2c830'] },
+      cap: { cols: ['#b6c566', '#758d39', '#4b5829'], thick: 8, blades: ['#88ac2c', '#5e8420', '#c8e04a', '#406a16', '#a0c03c'], flowers: ['#e8302a', '#f2c830', '#f4f0e0', '#4a7aff', '#ff5d8f', '#9a5cf0'] /* v91: вместо второго жёлтого — фиолетовая астра */ },
       soil: '#553722', soilDepth: 26,
       strata: ['#8e6446', '#7e583c', '#966c4c', '#765236', '#8a6242'], band: 46, bandSharp: 0.6,
       rock: ['#a39c92', '#8f887e', '#b3aba0', '#7e776e'],
@@ -112,9 +112,9 @@ const THEMES = {
       strata: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98', '#50387a'], band: 28, bandSharp: 0.3,
       rock: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98'],
       pebbles: ['#6a55a0', '#56448a', '#7d68b8'], smoothStones: true, stoneRim: '#7ae8ff',
-      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], gain: [1.12, 1.28, 0.72] /* v70: cmatch к эталону, кадр alien:1700:1000 — порода 26/23/30 при эталоне 29/27/30 (было [1.6, 1.52, 1.36] — порода в 1,7 раза светлее и фиолетовая; эталон — почти чёрная) */ },
+      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], glowTex2: [250, 110, 255], glowRaw: true, glowDirt: true, gain: [1.62, 1.8, 1.0] /* v91: новая порода (make_rubble.py: валуны, щебень, мокрый блеск) — по замеру кадра alien:1700:1000 к эталону 25/23/25 (v70: [1.12, 1.28, 0.72] для прежней) */ },
     },
-    scatter: ['crystal', 'pod', 'alienplant', 'crystal', 'alienplant', 'pod', 'alienplant'],   /* r28: растений на островах вдвое больше */
+    scatter: ['crystal', 'pod', 'alienbush', 'alienplant', 'alienbush', 'pod', 'alienbush', 'crystal'],   /* r28: растений на островах вдвое больше; v91: соцветия (эталон — густая лиловая кромка) */
     weather: 'spores', birds: false, ambient: '#8474b0', gravity: 0.72, ambientSound: 'space', glow: true,
   },
   tropical: {

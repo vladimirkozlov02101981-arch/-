@@ -386,6 +386,9 @@ const DECOR = {
     c.fillStyle = '#2a2a2a'; for (const [ax, ay] of [[2, 2], [w - 4, 2], [2, h - 4], [w - 4, h - 4]]) c.fillRect(x0 + ax, y0 + ay, 2 * s, 2 * s);   // гвозди
   },
   barrel(c, g, x, y, s) {
+    /* v91 (критик r34: «у бочек нет обручей и заклёпок»): бочка из Blender — клёпки с волокнами, четыре железных обруча
+       с заклёпками; свой генератор случайных чисел по месту — остальной декор карты не сдвигается */
+    if (treeSprite(c, ['barrel1', 'barrel2'], x, y, s, makeRng(((x * 73856093) ^ (y * 19349663)) >>> 0), 32)) return;
     c.fillStyle = hgrad(c, x - 9 * s, x + 9 * s, ['#a0703f', '#7a4a22', '#4a2a10']);
     c.beginPath(); c.moveTo(x - 8 * s, y + 2); c.quadraticCurveTo(x - 11 * s, y - 11 * s, x - 8 * s, y - 24 * s); c.lineTo(x + 8 * s, y - 24 * s); c.quadraticCurveTo(x + 11 * s, y - 11 * s, x + 8 * s, y + 2); c.closePath(); c.fill();
     c.fillStyle = '#3a3a3a'; c.fillRect(x - 10 * s, y - 20 * s, 20 * s, 2 * s); c.fillRect(x - 10 * s, y - 4 * s, 20 * s, 2 * s);
@@ -579,8 +582,13 @@ const DECOR = {
       c.fillStyle = '#5fd8c0'; circ(c, ex, ey, 2.6 * s); c.fillStyle = '#c8fff4'; circ(c, ex - 0.6 * s, ey - 0.6 * s, 1.1 * s); if (g) { g.fillStyle = 'rgba(120,255,230,0.45)'; circ(g, ex, ey, 4 * s); }
     }
   },
+  alienbush(c, g, x, y, s, r) {   // v91: соцветия-«гортензии» (Blender) — густая лиловая кромка островов, как в эталоне
+    const k = s * 1.5;   /* соцветия в эталоне — почти с бойца высотой (кадр 40 ед., куст в нём ~20) */
+    if (treeSprite(c, ['alienbush1', 'alienbush2'], x, y + 1, k, r, 40)) { if (g) softGlow(g, x, y - 12 * k, 14 * k, '230,120,255', 0.1); return; }
+    DECOR.pod(c, g, x, y, s, r);
+  },
   pod(c, g, x, y, s, r) {
-    if (r && treeSprite(c, ['pod1'], x, y, s, r, 36)) { if (g) softGlow(g, x, y - 12 * s, 13 * s, '255,120,230', 0.16); return; }   // светящийся стручок (Blender)
+    if (r && treeSprite(c, ['pod1'], x, y, s, r, 36)) { if (g) softGlow(g, x, y - 14 * s, 12 * s, '170,130,255', 0.08); return; }   // v91: люпин (Blender) вместо светящегося «яйца»
     c.fillStyle = vgrad(c, y - 22 * s, y, ['#ffb0f0', '#c040b0', '#5a1a50']); c.beginPath(); c.ellipse(x, y - 10 * s, 9 * s, 13 * s, 0, 0, TAU); c.fill();
     c.strokeStyle = 'rgba(255,220,250,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y - 10 * s, 5 * s, 11 * s, 0, 0, TAU); c.stroke();
     if (g) { g.fillStyle = 'rgba(255,120,230,0.4)'; circ(g, x, y - 10 * s, 10 * s); }
