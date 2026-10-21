@@ -78,7 +78,7 @@ class Camera {
   /** обычный кадр у бойца без побочных действий (с учётом высоты прыжка и края карты) — откуда камеру увели стрелками или оптикой */
   homeOf(a, sc, sw, sh) {
     const y = (this.aKey === 's' + a.id ? this.ay : a.y) - 58, hw = sw / 2 / this.z, hh = sh / 2 / this.z;
-    const minX = hw - 250, maxX = sc.W - hw + 250, minY = -900 + hh, maxY = sc.waterY + 270 - hh;
+    const minX = Math.max(0, hw - 250), maxX = Math.min(sc.W, sc.W - hw + 250), minY = -900 + hh, maxY = sc.waterY + 270 - hh;
     return { x: minX > maxX ? sc.W / 2 : clamp(a.x, minX, maxX), y: minY > maxY ? maxY : clamp(y, minY, maxY) };
   }
   /** куда смотреть при выстреле быстрыми пулями: свой боец и место попадания вместе, если помещаются в кадр, иначе — место
@@ -449,9 +449,13 @@ class Camera {
   clampTo(sc, sw, sh, from = null, reach = null) {
     if (this.z <= this.zoomLimits(sh, sw)[0] * (1 + 1e-8)) { this.x = sc.W / 2; this.y = sc.H / 2; return; }
     const hw = sw / 2 / this.z, hh = sh / 2 / this.z;
-    let minX = Math.min(sc.W / 2, hw - 250), maxX = Math.max(sc.W / 2, sc.W - hw + 250);
-    // свободный обзор (прицел с выбором точки, оптика, бинокль): край карты можно поставить в центр экрана и разглядеть вблизи
-    if (this.edge || this.scopeFocus || this.binoc) { minX = Math.min(minX, 0); maxX = Math.max(maxX, sc.W); }
+    // центр кадра не уходит за край карты: на узком экране (меньше 500 ед. в ширину) прежние «250 за краем» давали больше
+    // половины кадра пропасти
+    let minX = Math.min(sc.W / 2, Math.max(0, hw - 250)), maxX = Math.max(sc.W / 2, Math.min(sc.W, sc.W - hw + 250));
+    // свободный обзор (прицел с выбором точки, оптика, бинокль) и обзор стрелками (просьба 21.10): край карты можно поставить
+    // ровно в центр экрана — половина кадра карта, половина пропасть за краем, — и не дальше; обычное слежение за бойцом —
+    // в прежних пределах (за краем не больше 250 ед.)
+    if (this.edge || this.scopeFocus || this.binoc || this.manualActive) { minX = Math.min(minX, 0); maxX = Math.max(maxX, sc.W); }
     // удар по точке, попадание, снаряд, взрыв, прицел соперника — по центру кадра в любой точке карты, и у самого её края
     // (за краем — фон); обычный кадр у бойца — в прежних пределах
     if (reach && !(typeof reach.k === 'string' && reach.k[0] === 's') && Number.isFinite(reach.x)) { minX = Math.min(minX, Math.max(0, reach.x)); maxX = Math.max(maxX, Math.min(sc.W, reach.x)); }
