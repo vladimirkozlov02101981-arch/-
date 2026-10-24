@@ -240,6 +240,12 @@ function texMean(T) {
   let s = 0; const d = T.d; for (let j = 0; j < d.length; j += 4) s += d[j] + d[j + 1] + d[j + 2];
   return (T.mean = s / (d.length / 4));
 }
+/** средний цвет текстуры по каналам [r, g, b] */
+function texMeanRGB(T) {
+  if (T.meanRGB) return T.meanRGB;
+  let r = 0, g = 0, b = 0; const d = T.d, n = d.length / 4; for (let j = 0; j < d.length; j += 4) { r += d[j]; g += d[j + 1]; b += d[j + 2]; }
+  return (T.meanRGB = [r / n, g / n, b / n]);
+}
 /** пиксель бесшовной текстуры (отрендерена в Blender), координаты мира 1:1 */
 function texAt(T, x, y, o) {
   const tx = ((x | 0) % T.w + T.w) % T.w, ty = ((y | 0) % T.h + T.h) % T.h, j = (ty * T.w + tx) * 4, d = T.d;
@@ -512,6 +518,11 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   } else if (mt === 12 && (S.tx.rock || S.tx.dirt || S.tx.cave)) {
     // задняя стена: та же порода, что и скала вокруг (в скальных картах), иначе — плиты пещеры
     if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); r = o.r * 1.05 * S.tgR; g = o.g * 1.05 * S.tgG; bl = o.b * 1.05 * S.tgB; o.ga = 0; }
+    else if (S.tx.dirt && S.bury) {   /* v94 (эталон valley_tower: стена тоннеля тёмная и ровная — камни на ней не выделяются; у нас — светлые камни и бледные
+      круги валунов): тот же грунт, контраст вдвое ниже, темнее */
+      texAt(S.tx.dirt, x + 257, y + 131, o); const M = texMeanRGB(S.tx.dirt);
+      r = (M[0] + (o.r - M[0]) * 0.5) * 0.6; g = (M[1] + (o.g - M[1]) * 0.5) * 0.58; bl = (M[2] + (o.b - M[2]) * 0.5) * 0.62;
+    }
     else if (S.tx.dirt) { texAt(S.tx.dirt, x + 257, y + 131, o); r = o.r * 0.7; g = o.g * 0.68; bl = o.b * 0.72; }   // земляная пещера: стена из того же грунта с камнями
     else { texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; }
     o.tex = true;
