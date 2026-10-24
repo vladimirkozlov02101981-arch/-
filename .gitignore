@@ -23,3 +23,6 @@ profile.json.tmp
 
 # Personal Chromium app window state
 dev/browser-profile/
+
+# исходник текстуры каньона до пластов (есть в истории git, коммит 27e2d5c)
+dev/tex-backup/rock_canyon_strata_native.webp

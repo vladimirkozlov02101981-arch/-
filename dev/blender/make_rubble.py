@@ -36,7 +36,7 @@ STYLES = {
                   facet=((0.6, 0.86), (0.66, 0.92)), flat=(0.55, 1.0), planes=4, fslope=(0.45, 1.15),   # глубже срезы, 4 грани — угловатые глыбы, не галька
                   rock=[(92, 86, 94), (76, 71, 80), (108, 101, 108), (68, 63, 70), (86, 80, 88), (100, 93, 100), (60, 56, 62)],
                   matrix=(12, 11, 15), moss=(78, 86, 36), moss_k=0.2,
-                  crystals=56, crystal_size=2.4, crystal_3d=True, crystal_cols=[(150, 90, 255), (60, 200, 255), (220, 90, 255), (90, 235, 255)],
+                  crystals=64, crystal_size=2.4, crystal_3d=True, crystal_gem=True, crystal_cols=[(150, 90, 255), (60, 200, 255), (220, 90, 255), (90, 235, 255)],
                   light=dict(col=(0.9, 0.88, 1.0), elev=26, energy=5.2), rough=0.4, spec=0.55, world=(0.52, 0.5, 0.72, 0.3), emit=0.7),
 }
 
@@ -117,22 +117,26 @@ def field(st):
             # v90: пучок из 3–7 гранёных призм (заострённый конец), выступает над породой: гребень вдоль оси даёт светлую и тёмную
             # грани; сердцевина светится ярче краёв
             base = float(H[int(y0 * R) % NY, int(x0 * R) % NX]); a0 = rng.uniform(0, math.tau)
-            for j in range(int(rng.integers(3, 8))):
-                a = a0 + rng.normal(0, 0.55); L = rng.uniform(3, 8) * cz * (1.3 if j == 0 else 1); w = rng.uniform(0.6, 1.1) * cz
+            gem = st.get('crystal_gem')   # v92: короткие широкие призмы во все стороны, плоская верхняя грань с фаской (были «веера перьев»)
+            for j in range(int(rng.integers(4, 10) if gem else rng.integers(3, 8))):
+                if gem: a = a0 + rng.normal(0, 0.95); L = rng.uniform(2.2, 5.5) * cz * (1.35 if j == 0 else 1); w = rng.uniform(0.75, 1.3) * cz
+                else: a = a0 + rng.normal(0, 0.55); L = rng.uniform(3, 8) * cz * (1.3 if j == 0 else 1); w = rng.uniform(0.6, 1.1) * cz
                 ax, ay = math.cos(a), math.sin(a); xc, yc = x0 + rng.normal(0, 0.7 * cz), y0 + rng.normal(0, 0.7 * cz)
                 ext = int((L + w + 2) * R) + 2
                 yy, xx = np.mgrid[int(yc * R) - ext:int(yc * R) + ext, int(xc * R) - ext:int(xc * R) + ext]
                 wx = (xx + 0.5) / R - xc; wy = (yy + 0.5) / R - yc
                 t = (wx * ax + wy * ay) / L; q = -wx * ay + wy * ax
-                wt = w * np.clip(np.minimum(t / 0.15, (1 - t) / 0.4), 0, 1) ** 0.6
+                wt = w * (np.clip(np.minimum(t / 0.1, (1 - t) / 0.3), 0, 1) if gem else np.clip(np.minimum(t / 0.15, (1 - t) / 0.4), 0, 1) ** 0.6)
                 m = (t > 0) & (t < 1) & (np.abs(q) < wt)
                 if not m.any(): continue
                 yi, xi = yy[m] % NY, xx[m] % NX; tt = t[m]; qq = np.abs(q[m]) / np.maximum(wt[m], 1e-3)
-                hr = base + 0.5 + (1.0 + 1.4 * rng.random()) * cz * (1 - qq) * (1 - 0.45 * tt)
+                prof = np.minimum(1, (1 - qq) * 2.2) if gem else (1 - qq)   # плоская грань сверху и фаски по бокам
+                hr = base + 0.5 + (1.0 + 1.4 * rng.random()) * cz * prof * (1 - (0.3 if gem else 0.45) * tt)
                 up = hr > H[yi, xi]; yi, xi, tt, qq, hr = yi[up], xi[up], tt[up], qq[up], hr[up]
                 H[yi, xi] = hr
-                C[yi, xi] = col * (0.16 + 0.4 * (1 - qq))[:, None]   # AgX: при ярком свечении насыщенный цвет уходит в белый — свечение слабее, альбедо темнее
-                E[yi, xi] = col / 255.0 * ((0.2 + 1.0 * (1 - qq) ** 2) * (1.1 - 0.5 * tt))[:, None]
+                pq = np.minimum(1, (1 - qq) * 2.2) if gem else (1 - qq)
+                C[yi, xi] = col * (0.16 + 0.4 * pq)[:, None]   # AgX: при ярком свечении насыщенный цвет уходит в белый — свечение слабее, альбедо темнее
+                E[yi, xi] = col / 255.0 * ((0.2 + 1.0 * pq ** 2) * (1.1 - 0.5 * tt))[:, None]
             continue
         for j in range(rng.integers(3, 6)):
             a = rng.uniform(0, math.tau); L = rng.uniform(2.5, 7) * cz; w = rng.uniform(0.8, 1.6) * cz   # r28: крупнее и заметнее

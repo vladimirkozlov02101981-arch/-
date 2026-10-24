@@ -57,14 +57,26 @@ function createRelayQueue(ws, options = {}) {
   return { push, flush, dispose, stats };
 }
 
+/** версия игры на диске (index.html, «ВЕРСИЯ ГГГГ.ММ.ДД-N») — читается при создании сервера: это версия, с которой он запущен */
+const versions = new Map();
+function gameVersion(root) {
+  if (!versions.has(root)) {
+    let v = '';
+    try { const m = fs.readFileSync(path.join(root, 'index.html'), 'utf8').match(/id="game-version">[^<]*?(\d{4}\.\d{2}\.\d{2}-\d+)/); if (m) v = m[1]; } catch { }
+    versions.set(root, v);
+  }
+  return versions.get(root);
+}
+
 function createServer(options = {}) {
-  const rooms = new Map(), root = options.root || __dirname;
+  const rooms = new Map(), root = options.root || __dirname; gameVersion(root);
   const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.webp': 'image/webp', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.ico': 'image/x-icon', '.ogg': 'audio/ogg' };
   const server = http.createServer((req, res) => {
     let url;
     try { url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname); } catch { res.writeHead(400).end(); return; }
     // файл игры на этом же ПК (адрес file://) спрашивает свой сервер и ссылку туннеля — разрешаем ему эти два ответа
-    if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end('{"ok":true,"transport":"relay","project":"territory-war-copy1"}'); return; }
+    // version и pid — для лаунчера (start-game.ps1): сервер прежней версии после обновления папки перезапускается
+    if (url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end(JSON.stringify({ ok: true, transport: 'relay', project: 'territory-war-copy1', version: gameVersion(root), pid: process.pid })); return; }
     // публичный адрес туннеля «Играть онлайн.cmd» (бесплатный адрес иногда меняется — берём последний) — для приглашения другу
     if (url === '/public') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }).end(JSON.stringify({ url: publicUrl() })); return; }
     // личные настройки игрока этого ПК (profile.json рядом с игрой): только с самого ПК — не через туннель для друга

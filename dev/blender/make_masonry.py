@@ -113,6 +113,8 @@ def field(st):
     rough = (gnoise(SH, 1.1 * R, 1.1 * R, rng) * 0.12 + gnoise(SH, 3 * R, 3 * R, rng) * 0.3 + gnoise(SH, 8 * R, 8 * R, rng) * 0.45
              + np.abs(gnoise(SH, 2.4 * R, 2.4 * R, rng)) * 0.18 + gnoise(SH, 0.35 * R, 0.35 * R, rng) * 0.05) * rk   # колотая лицевая сторона: грани, бугры, гребни, зерно
     SN = st.get('snow'); LV = st.get('lava')
+    RM = st.get('_rowmap')   # карта пластов для обработки готовой текстуры (dev/tools/canyon_strata.py): номер ряда и доля высоты в ряду
+    if RM is not None: RM['row'] = np.zeros(SH, np.int16); RM['v'] = np.zeros(SH, np.float32)
     E = np.zeros((NY, NX, 3), np.float32) if LV else None
     if LV: lavan = gnoise(SH, 3 * R, 40 * R, rng)   # расплав тянется вдоль шва
     if SN:
@@ -136,6 +138,7 @@ def field(st):
         SL = st.get('slant'); ang = math.radians(rng.uniform(*SL)) * (1 if rng.random() < 0.5 else -1) if SL else 0.0
         X = ((XX[rows] if WP else xx[rows]) + off + (Y - bh / 2) * math.tan(ang)) % T                  # косые трещины пласта
         b = np.clip(np.searchsorted(cw, X, side='right') - 1, 0, len(ws) - 1); bw = ws[b]; fx = X - cw[b]
+        if RM is not None: RM['row'][rows] = r; RM['v'][rows] = np.clip(Y / bh, 0, 1)
         # свойства камня
         nb = len(ws); tone = rng.normal(0, 0.06, nb); kind = rng.integers(0, len(stone_cols), nb)
         lift = rng.uniform(-0.35, 0.35, nb); dome = rng.uniform(0.15, 0.55, nb); has_l = rng.random(nb) < st['lichen'] * 2.2
