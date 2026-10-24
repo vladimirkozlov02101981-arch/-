@@ -204,6 +204,29 @@ function texGlow(S, o, r, g, bl) {
   if (!S.glowRaw) { o.r = r; o.g = g; o.b = bl; }
   return true;
 }
+/** отсвет горящих окон на стене здания (критик r34, эталон города: свет из окон мягко растекается по фасаду и ложится на
+    подоконник): яркость окон в половинном разрешении, три прохода «коробкой» (почти гаусс σ ≈ 7 px), сдвиг на 3 px вниз; тёплая
+    добавка к пикселям стены (не к самим окнам). Запекается в ландшафт — не мерцает вместе со слоем свечения и видна при приближении */
+function windowSpill(px, winL, W, H) {
+  const w = W >> 1, h = H >> 1; let a = new Float32Array(w * h), b = new Float32Array(w * h), any = false;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * 2 * W + x * 2, v = winL[i] + winL[i + 1] + winL[i + W] + winL[i + W + 1]; if (v) { a[y * w + x] = v * 0.25; any = true; } }
+  if (!any) return;
+  const R = 3, n = 2 * R + 1;
+  for (let pass = 0; pass < 3; pass++) {
+    for (let y = 0; y < h; y++) { const o = y * w; let s2 = 0; for (let x = -R; x <= R; x++) s2 += a[o + Math.min(w - 1, Math.max(0, x))];
+      for (let x = 0; x < w; x++) { b[o + x] = s2 / n; s2 += a[o + Math.min(w - 1, x + R + 1)] - a[o + Math.max(0, x - R)]; } }
+    for (let x = 0; x < w; x++) { let s2 = 0; for (let y = -R; y <= R; y++) s2 += b[Math.min(h - 1, Math.max(0, y)) * w + x];
+      for (let y = 0; y < h; y++) { a[y * w + x] = s2 / n; s2 += b[Math.min(h - 1, y + R + 1) * w + x] - b[Math.max(0, y - R) * w + x]; } }
+  }
+  for (let y = 0; y < H; y++) {
+    const hy = Math.max(0, Math.min(h - 1, (y - 3) >> 1)) * w;
+    for (let x = 0; x < W; x++) {
+      const gi = y * W + x; if (winL[gi]) continue; const j = gi * 4; if (!px[j + 3]) continue;
+      const k = Math.min(1, a[hy + Math.min(w - 1, x >> 1)] / 255 * 1.8) * 0.75; if (k < 0.01) continue;
+      px[j] = Math.min(255, px[j] * (1 + k * 1.3) + k * 34); px[j + 1] = Math.min(255, px[j + 1] * (1 + k * 0.7) + k * 14); px[j + 2] = Math.min(255, px[j + 2] * (1 + k * 0.1) + k * 2);   /* тёплый: у эталона R/G у окна 1,46 */
+    }
+  }
+}
 /** вид кучки цветов (спрайт Blender) по цвету палитры темы, если он не из прежних четырёх (мак, лютик, ромашка, василёк) */
 const FLOWER_KIND = { '#ff5d8f': 'flower5', '#ff7a9a': 'flower5', '#ff4f7b': 'flower5', '#9a5cf0': 'flower6', '#ff8a3d': 'flower7' };
 /** длина свисающей пряди мха под кромкой (Alien) в столбце x: скопления прядей по 2 px шириной, между ними — короткий край */
@@ -636,7 +659,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) {
             // свет каждого окна свой (ячейка окна в координатах здания, а не плитки): часть гаснет, у остальных — разная яркость и тон
             const wc = Math.floor((x - prm.x0) / 32), wr = Math.floor((y - prm.y0) / 40), hw = hash3(wc, wr, info.idx * 7 + 11), ht = hash3(wc, wr, info.idx * 7 + 12);
-            if (hw < 0.3) { r *= 0.16; g *= 0.17; bl *= 0.2; }
+            if (hw < 0.12) { r *= 0.16; g *= 0.17; bl *= 0.2; }   /* v93: гаснет меньше окон — горящих 1,9 % кадра при эталоне 3,2 % */
             else { const k = 0.72 + hw * 0.42, warmW = ht < 0.86;   /* r33: тёплых окон ~60 %, холодных ~10 % */ r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
               o.emit = true; o.emitTex = true; o.ga = (isBack ? 150 : 230) * (0.6 + hw * 0.4); o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           }
@@ -996,6 +1019,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   let hasBack = false; for (let i = 0; i < N; i++) if (back[i] && !m[i]) { hasBack = true; break; }
   const bimg = hasBack ? T.dctx.createImageData(W, H) : null; const bpx = bimg ? bimg.data : null;
   const gimg = T.gctx ? new Uint8ClampedArray(N * 4) : null;
+  const winL = S.tx.facade && bpx ? new Uint8Array(N) : null;   /* яркость горящих окон фасада — для отсвета на стене (windowSpill) */
   const o = { r: 0, g: 0, b: 0, n1: 0, ga: 0, gr: 0, gg: 0, gb: 0, cap: false, spec: 0 };
   const t2 = S.tiles.t2;
   const LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z, KN = 1 / 26;
@@ -1139,10 +1163,11 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         }
         bpx[j] = br; bpx[j + 1] = bg; bpx[j + 2] = bb; bpx[j + 3] = 255;
         if (o.tT && (!o.emit || o.emitTex)) refB[i] = texRefId(o, x, y);
-        if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } }
+        if (o.emit) { bpx[j] = o.r * 0.88; bpx[j + 1] = o.g * 0.86; bpx[j + 2] = o.b * 0.84; if (gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; } if (winL && o.emitTex) winL[i] = Math.min(255, o.r * 0.3 + o.g * 0.59 + o.b * 0.11); }
       }
     }
   }
+  if (winL) windowSpill(bpx, winL, W, H);
   sharpen(img.data, W, H, 0.55); if (bimg) sharpen(bimg.data, W, H, 0.4);   // камера увеличивает карту — заранее подчёркиваем мелкую фактуру
   T.ctx.putImageData(img, 0, 0);
   if (bimg) {

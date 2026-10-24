@@ -89,7 +89,7 @@ const THEMES = {
       strata: ['#4b3c39', '#5b4944', '#3e3130', '#655149', '#4e3e3a'], band: 26, bandSharp: 0.3,
       rock: ['#6a5244', '#7e6250', '#5a4438', '#8a6c56', '#725a4a'], rockDirt: true, rockBand: 48, backK: 1.5,
       pebbles: ['#6a5a54', '#7a6862', '#5a4a44'], smoothStones: true,
-      outline: '#0d0606', veins: { color: '#ff7a20', w: 0.012, glow: true, hot: true, mask: 0.64, halo: 3 /* v50: тонкие редкие трещины, как в эталоне (были кляксы) */ }, ceiling: 'stalactites', capMats: [1, 9], tex: { rock: 'rock_volcano', cave: 'cave_volcano', cap: 'cap_ash', gain: [1.8, 1.9, 1.78] /* v73: по замеру камня без свечения (эталон 29/16/12, было 21/10/8 — темнее и насыщеннее), ~60 % шага; v56: базальтовые плиты из Blender (make_masonry.py basalt) с расплавом в швах */, glowTex: [255, 110, 30], glowMin: 190 },
+      outline: '#0d0606', veins: { color: '#ff7a20', w: 0.012, glow: true, hot: true, mask: 0.64, halo: 3 /* v50: тонкие редкие трещины, как в эталоне (были кляксы) */ }, ceiling: 'stalactites', capMats: [1, 9], tex: { rock: 'rock_volcano', cave: 'cave_volcano', cap: 'cap_ash', gain: [2.62, 2.66, 2.36] /* v93: по замеру кадра volcano:2200:1100 (камень 23/12/9 при эталоне 34/17/12, ×1,47/1,40/1,33); v73: по замеру камня без свечения (эталон 29/16/12, было 21/10/8 — темнее и насыщеннее), ~60 % шага; v56: базальтовые плиты из Blender (make_masonry.py basalt) с расплавом в швах */, glowTex: [255, 110, 30], glowMin: 190 },
     },
     scatter: ['obsidian', 'lavarock', 'bones', 'obsidian', 'lavarock'],
     weather: 'embers', birds: false, ambient: '#a47a6c', ambientSound: 'lava', glow: true,
@@ -179,7 +179,7 @@ const THEMES = {
       strata: ['#3d3630', '#4a4038', '#352f2a', '#554a40'], band: 30, bandSharp: 0.3,
       rock: ['#4a4a52', '#3e3e46', '#56565e'],
       pebbles: ['#6a625a', '#58514a', '#7a7268'], smoothStones: true,
-      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [2.9, 2.6, 1.6] },
+      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [3.9, 3.1, 1.75] /* v93: стена по замеру к эталону (дальняя стена 19/23/33 при эталоне 29/30/39); было [2.9, 2.6, 1.6] */ },
     },
     scatter: ['trash', 'tuft'],
     weather: null, birds: false, ambient: '#aaa8cf', ambientSound: 'city', glow: true,   // без дождя (просьба игрока)
