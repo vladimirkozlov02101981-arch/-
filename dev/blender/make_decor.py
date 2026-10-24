@@ -250,6 +250,22 @@ def deadtree(name, seed, charred):
     else:
         m = mt.mat_stone('drywood', (0.36, 0.30, 0.24), (0.66, 0.59, 0.50), rough=0.85, spec=0.2, scale=25, bumpk=1.1)
     obj(name, me, m, sc)
+    if charred:
+        # v93 (эталон вулкана: на концах веток — гроздья тлеющих оранжевых угольков; критик r34: «чёрная вырезка»):
+        # на 70 % кончиков по 2–4 светящихся шарика 0,55–1,15 ед. (сердцевина жёлто-оранжевая, край темнее), снизу — оранжевый
+        # отсвет лавы на коре (точечный свет у земли)
+        eb = [bmesh.new() for _ in range(2)]
+        for tp in tips:
+            if rng.random() < 0.3: continue                                    # часть кончиков голые: гроздья раздельные, ветки видны
+            for _ in range(rng.randint(2, 4)):
+                off = Vector((rng.gauss(0, 1.0), rng.gauss(0, 0.6), rng.gauss(0.4, 0.8))) * U
+                k = 0 if rng.random() < 0.55 else 1
+                bmesh.ops.create_icosphere(eb[k], subdivisions=2, radius=rng.uniform(0.55, 1.15) * U, matrix=Matrix.Translation(tp + off))
+        for k, bm_ in enumerate(eb):
+            me2 = bpy.data.meshes.new(name + '_e%d' % k); bm_.to_mesh(me2); bm_.free()
+            obj(name + '_e%d' % k, me2, mat_glow('ember%d' % k, (0.45, 0.09, 0.01) if k else (0.75, 0.24, 0.02), (1.0, 0.28, 0.03) if k else (1.0, 0.45, 0.06), 0.55 if k else 0.9, 0.6), sc)   # AgX: яркое свечение уходит в белый — умеренная сила, насыщенный цвет
+        ld = bpy.data.lights.new('lavaglow', 'POINT'); ld.energy = 4.0; ld.color = (1.0, 0.42, 0.12); ld.shadow_soft_size = 0.2
+        lo = bpy.data.objects.new('lavaglow', ld); lo.location = (0, -0.25, -0.05); sc.collection.objects.link(lo)
     return sc
 
 

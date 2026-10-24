@@ -22,8 +22,10 @@ def main(src, out):
     img = np.asarray(Image.open(src).convert('RGB')).astype(np.float32)
     mx = img.max(2); mn = img.min(2); sat = (mx - mn) / np.maximum(mx, 1)
     R, G, B = img[..., 0], img[..., 1], img[..., 2]
-    cyan = (sat > 0.32) & (mx > 30) & (B >= R) & (G > R + 8)
-    mag = (sat > 0.36) & (mx > 30) & (B > G + 10) & (R > G + 4)
+    # по разнице каналов (v93: гранёные кристаллы в рендере пастельные — насыщенность 0,18–0,27, как у бликов мокрого камня;
+    # камень серо-сиреневый: R − G ≈ 8–10, B − G ≈ 12–20, поэтому пороги 15–28 его не задевают; мелкие пятна < 150 px отсекаются)
+    cyan = ((G > R + 22) & (B > R + 22)) | ((sat > 0.32) & (mx > 30) & (B >= R) & (G > R + 8))
+    mag = ((R > G + 15) & (B > G + 28)) | ((sat > 0.36) & (mx > 30) & (B > G + 10) & (R > G + 4))
     out_img = img.copy()
     for mask, c0, c1, glow in ((cyan, (20, 110, 160), (175, 250, 255), (40, 150, 200)), (mag, (110, 25, 160), (250, 170, 255), (150, 50, 200))):
         mask = ndimage.binary_opening(mask, iterations=1)

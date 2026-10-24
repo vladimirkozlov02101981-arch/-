@@ -197,7 +197,10 @@ const DECOR = {
   },
   deadtree(c, g, x, y, s, r) {
     const charred = DECOR_THEME === 'volcano';
-    if (treeSprite(c, charred ? ['deadtree_char1', 'deadtree_char2'] : ['deadtree1', 'deadtree2'], x, y, s, r, 130)) return;   // сухое дерево из Blender
+    if (treeSprite(c, charred ? ['deadtree_char1', 'deadtree_char2'] : ['deadtree1', 'deadtree2'], x, y, s, r, 130)) {   // сухое дерево из Blender
+      if (charred && g) softGlow(g, x, y - 72 * s, 24 * s, '255,110,30', 0.15);   /* v93: гроздья тлеющих угольков на ветках светятся (эталон) — ночной свет темы их не гасит */
+      return;
+    }
     const col = charred ? '#1c1412' : '#8c7862';
     const br = (x0, y0, a, len, w, d) => {
       const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len;
