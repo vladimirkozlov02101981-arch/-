@@ -865,8 +865,9 @@ def drygrass(name, seed):
     nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 25; Lk.new(tc.outputs['Object'], nz.inputs['Vector'])
     mx = N.new('ShaderNodeMath'); mx.operation = 'MULTIPLY_ADD'; mx.inputs[1].default_value = 0.35; Lk.new(nz.outputs['Fac'], mx.inputs[0]); Lk.new(mr.outputs['Result'], mx.inputs[2])
     ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
-    E[0].position = 0.05; E[0].color = (*mt.lin((0.36, 0.27, 0.15)), 1); E[1].position = 0.75; E[1].color = (*mt.lin((0.86, 0.74, 0.50)), 1)
-    e = E.new(0.4); e.color = (*mt.lin((0.68, 0.53, 0.31)), 1)
+    # v101 (эталон каньона: пучки серо-оливковые, как полынь, светлые только кончики; соломенно-золотые читались белёсыми)
+    E[0].position = 0.05; E[0].color = (*mt.lin((0.27, 0.21, 0.12)), 1); E[1].position = 0.8; E[1].color = (*mt.lin((0.72, 0.64, 0.45)), 1)
+    e = E.new(0.42); e.color = (*mt.lin((0.47, 0.40, 0.25)), 1)
     Lk.new(mx.outputs['Value'], ramp.inputs['Fac']); Lk.new(ramp.outputs['Color'], b.inputs['Base Color'])
     for key in ('Subsurface Weight', 'Subsurface'):
         if key in b.inputs: b.inputs[key].default_value = 0.2; break

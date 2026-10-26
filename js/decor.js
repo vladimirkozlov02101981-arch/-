@@ -895,7 +895,8 @@ function placeDecorOn(T, theme, map, waterY, tops, mat, c, back) {
       if (y > waterY - 12 || r() > 0.09) continue;
       const mm = mat[y * T.W + x]; if (mm !== 1 && mm !== 2) continue;
       if (!T.isSolid(x - 5, y + 3) || !T.isSolid(x + 5, y + 3) || T.isSolid(x, y - 10)) continue;
-      drawDecorItem(DECOR.drygrass, c, g, x, y + 2, r.range(0.4, 0.8), r, r() < 0.5);
+      const open = !(back && y > 2 && back[(y - 2) * T.W + x] > 0);   /* v101 (эталон: пучки ~20 ед. каждые 30–50 px по верху): под открытым небом крупнее */
+      drawDecorItem(DECOR.drygrass, c, g, x, y + 2, open ? r.range(0.9, 1.5) : r.range(0.4, 0.8), r, r() < 0.5);
     }
   }
   const occupied = (map.decor || []).map(d => d[1]);
