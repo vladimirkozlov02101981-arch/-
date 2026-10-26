@@ -405,7 +405,9 @@ const MAP_CITY = buildLevel({
   // метро под обоими кварталами
   B.room(300, 1552, 1700, 90); B.ladder(345, 1500, 1642); B.ladder(1540, 1500, 1642);
   B.room(2800, 1552, 1700, 90); B.ladder(2915, 1500, 1642); B.ladder(4200, 1500, 1642);
-  const house = (x, w, n, st, lad) => B.tower(x, 1500, w, { mat: 'concrete', pal: st, wall: 14, slab: 14, stories: [100, ...Array(n - 1).fill(96)], ladders: Array.from({ length: n }, (_, i) => i % 2 ? w - lad : lad), found: 6 });
+  const house = (x, w, n, st, lad) => { const top = B.tower(x, 1500, w, { mat: 'concrete', pal: st, wall: 14, slab: 14, stories: [100, ...Array(n - 1).fill(96)], ladders: Array.from({ length: n }, (_, i) => i % 2 ? w - lad : lad), found: 6 });
+    B.fixture({ k: 'rail', metal: true, x1: x + 3, y1: top, x2: x + w - 3, y2: top, sag: 0, h: 14 });   /* v95: ограждение по краю крыши (эталон) */
+    return top; };
   house(90, 220, 4, P_TOWER('#3a4150', '#ffd27a', 0.4), 30);
   house(380, 240, 6, P_TOWER('#2b3140', '#9fe0ff', 0.35), 30);
   house(690, 180, 2, P_TOWER('#4a4038', '#ffb86b', 0.5), 30);
@@ -468,13 +470,26 @@ function drawTacticalRoutes(c, map, T) {
   c.save();
   for (const f of map.fixtures || []) {
     if (f.k === 'rail') {
-      c.strokeStyle = f.col || 'rgba(60,40,24,0.9)'; c.lineWidth = 2;
       const cx = (f.x1 + f.x2) / 2, cy = (f.y1 + f.y2) / 2 + f.sag, len = Math.hypot(f.x2 - f.x1, f.y2 - f.y1), n = Math.max(4, Math.round(len / 10));
       const pts = []; for (let i = 0; i <= n; i++) { const t = i / n, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), d = t * t; pts.push([a * f.x1 + b * cx + d * f.x2, a * f.y1 + b * cy + d * f.y2]); }
       const ok = fixtureState(T, f, pts, (p) => deckAt(T, p[0], p[1] + 1, 10), (p) => fixtureHit(T, p[0], p[1] - 10, 2));
-      c.beginPath();
-      for (let i = 0; i < n; i++) if (ok[i] && ok[i + 1]) { c.moveTo(pts[i][0], pts[i][1] - 16); c.lineTo(pts[i + 1][0], pts[i + 1][1] - 16); }
-      c.stroke();
+      if (f.metal) {
+        /* v95 (эталон города: металлические ограждения крыш и балконов; критик r34): стойки через ~10 ед., поручень и
+           средняя перекладина — тёмный контур, тело, блик сверху (как у фермы моста), а не одна линия */
+        const H = f.h || 15, rail = (k, dy) => { for (let i = 0; i < n; i++) if (ok[i] && ok[i + 1]) { k.moveTo(pts[i][0], pts[i][1] - dy); k.lineTo(pts[i + 1][0], pts[i + 1][1] - dy); } };
+        const posts = (k) => { for (let i = 0; i <= n; i++) if ((i % 2 === 0 || i === n) && ok[i] && ((i > 0 && ok[i - 1]) || (i < n && ok[i + 1]))) { k.moveTo(pts[i][0], pts[i][1]); k.lineTo(pts[i][0], pts[i][1] - H); } };   /* стойки через ~20 ед. */
+        c.save(); c.lineCap = 'round';
+        for (const [col, w, oy] of [['rgba(6,8,12,0.9)', 3.2, 0.5], [f.col || '#353c48', 1.7, 0], ['rgba(170,182,205,0.4)', 0.6, -0.6]]) {
+          c.save(); c.translate(0, oy); c.strokeStyle = col; c.lineWidth = w; c.beginPath(); rail(c, H); rail(c, H * 0.5); c.stroke();
+          c.lineWidth = w * 0.75; c.beginPath(); posts(c); c.stroke(); c.restore();
+        }
+        c.restore();
+      } else {
+        c.strokeStyle = f.col || 'rgba(60,40,24,0.9)'; c.lineWidth = 2;
+        c.beginPath();
+        for (let i = 0; i < n; i++) if (ok[i] && ok[i + 1]) { c.moveTo(pts[i][0], pts[i][1] - 16); c.lineTo(pts[i + 1][0], pts[i + 1][1] - 16); }
+        c.stroke();
+      }
     } else if (f.k === 'truss') {
       const x1 = f.x1, y1 = f.y1, x2 = f.x2, y2 = f.y2, sag = f.sag || 0, thick = f.thick || 13;
       const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
