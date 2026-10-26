@@ -1446,6 +1446,23 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       }
       gap = (dense > 0.2 ? 24 : 50) + rng() * (dense > 0.2 ? 50 : 130);
     }
+    /* v96 (эталон замков: кладка поверху заросла плющом клочьями, местами свисает на 10–30 ед.; у нас были только одиночные
+       плети): «шапка» плюща из Blender (make_ivy.py crest, полоса 256×40 ед., бесшовная) вдоль верха каменных стен долины и
+       замков — на ~60 % длины, клочьями; столбец полосы — по x, верх полосы — у кромки стены. Числа rng не тратятся */
+    const IC = castle && TexLib.data.ivy_crest;
+    if (IC) {
+      if (surface) surface.sprite(IC.canvas, 'ivy_crest');
+      const cw = IC.w, chh = IC.h, CS = 1.35;   /* крупнее в 1,35 раза — пышнее, как в эталоне */
+      const csh = makeCanvas(cw, chh), shx = csh.getContext('2d'); shx.drawImage(IC.canvas, 0, 0); shx.globalCompositeOperation = 'source-in'; shx.fillStyle = '#0c0a08'; shx.fillRect(0, 0, cw, chh);   /* тень листвы на камне */
+      for (let k = 0; k < tops.length; k += 2) {
+        const x = tops[k], y = tops[k + 1];
+        if (matAt(x, y + 2) !== 3 || y > waterY - 8 || fbm1(x / 60, seed + 133, 2) + 0.35 * fbm1(x / 17, seed + 134, 1) < -0.08) continue;
+        const sx = ((Math.floor(x / CS) % cw) + cw) % cw;
+        anchor(x, y);
+        c.globalAlpha = 0.28; c.drawImage(csh, sx, 0, 1, chh, x + 1.5, y + 1.5, 1, chh * CS); c.globalAlpha = 1;
+        c.drawImage(IC.canvas, sx, 0, 1, chh, x, y - 1.5, 1, chh * CS);
+      }
+    }
     for (let k = 0; !IV && k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
       if (matAt(x, y + 2) !== 3 || y > waterY - 8 || x - lastX < 22 + rng() * 26 || rng() > 0.5) continue;

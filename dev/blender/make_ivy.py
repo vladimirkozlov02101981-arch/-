@@ -121,4 +121,82 @@ def main():
     print('IVY', W * K, H * K, flush=True)
 
 
-main()
+def save_small(out, name):
+    """×1: усреднение блоков K×K с учётом прозрачности (без тёмной каймы)"""
+    import numpy as np
+    im = bpy.data.images.load(os.path.join(out, name + '.png')); w, h = im.size
+    a = np.array(im.pixels[:], np.float32).reshape(h, w, 4)
+    pre = a.copy(); pre[..., :3] *= a[..., 3:4]
+    lo = pre.reshape(h // K, K, w // K, K, 4).mean((1, 3)); al = lo[..., 3:4]
+    lo[..., :3] = np.where(al > 1e-4, lo[..., :3] / np.maximum(al, 1e-4), 0)
+    small = bpy.data.images.new(name + '_small', w // K, h // K, alpha=True); small.pixels.foreach_set(lo.ravel())
+    small.filepath_raw = os.path.join(ROOT, 'assets', 'tex', name + '.png'); small.file_format = 'PNG'; small.save()
+
+
+CREST_W, CREST_H = 256, 40
+
+
+def crest():
+    """v96 (эталон замков: мост и стены поверху заросли плющом клочьями — густо у кромки, местами свисает на 10–30 ед.;
+    у нас были только одиночные плети «столбиками»): полоса 256×40 ед., бесшовная по горизонтали, верх кадра = верх стены.
+    По кромке — стелющиеся побеги с листьями во все стороны, местами короткие плети вниз (4–30 ед.); плотность клочьями"""
+    sc = mt.reset(); rng = random.Random(91)
+    W, H = CREST_W, CREST_H
+    sc.render.resolution_x = W * K; sc.render.resolution_y = H * K; sc.render.resolution_percentage = 100
+    sc.render.film_transparent = True; sc.render.image_settings.color_mode = 'RGBA'; sc.cycles.samples = 128
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.9
+    cam = sc.camera; cam.data.ortho_scale = W * U
+    cam.location = (W * U / 2, -10, -H * U / 2 + 1 * U); cam.rotation_euler = (math.radians(90), 0, 0)
+    sun = bpy.data.objects['sun']; sun.rotation_euler = Vector((0.55, 0.5, -0.67)).normalized().to_track_quat('-Z', 'Y').to_euler()
+    shades = [mt.lin(c) for c in ((0.22, 0.29, 0.15), (0.29, 0.37, 0.19), (0.36, 0.43, 0.24), (0.33, 0.38, 0.25), (0.26, 0.33, 0.18))]
+    young = mt.lin((0.46, 0.50, 0.26))
+    bv = bmesh.new(); bl = bmesh.new(); cl = bl.loops.layers.float_color.new('Col')
+    clump = lambda x: 0.5 + 0.5 * math.sin(x * 0.045 + 1.3) * math.sin(x * 0.11 + 0.4)     # клочья по длине стены (период полосы — 256)
+    items = []
+    x = 0.0
+    while x < W:                                                       # стелющиеся побеги вдоль кромки
+        L = rng.uniform(14, 40); items.append(('run', x, L, rng.random() * 1e9)); x += L * rng.uniform(0.35, 0.8)
+    for _ in range(46):                                                # короткие плети вниз — гуще в клочьях
+        x = rng.uniform(0, W)
+        if rng.random() > 0.25 + 0.75 * clump(x): continue
+        items.append(('hang', x, rng.uniform(4, 30) * (0.5 + clump(x)), rng.random() * 1e9))
+
+    def runner(x0, L, r):
+        """побег вдоль кромки: стебель чуть ниже верха, листья вверх, вбок и вниз (как в эталоне — кромка «пушистая»)"""
+        y0 = r.uniform(1.0, 3.5)
+        pts = [Vector(((x0 + L * t) * U, 0, -(y0 + 1.2 * math.sin(t * 5 + x0)) * U)) for t in [k / 8 for k in range(9)]]
+        for i in range(8): mt._cone(bv, pts[i], pts[i + 1], 0.35 * U, 0.3 * U, 5)
+        t = r.uniform(0.0, 0.1)
+        while t < 1.0:
+            p = Vector(((x0 + L * t) * U, 0, -(y0 + 1.2 * math.sin(t * 5 + x0)) * U))
+            ang = math.radians(r.choice((r.uniform(40, 140), r.uniform(-150, -30), r.uniform(-30, 30), r.uniform(150, 210))))
+            size = r.uniform(2.6, 4.6) * U
+            b = p + Vector((math.cos(ang), 0, math.sin(ang))) * r.uniform(1.0, 2.2) * U + Vector((0, -0.3 * U, 0))
+            axis = Vector((math.cos(ang) * 0.8, 0, math.sin(ang) * 0.8 - 0.3))
+            leaf_mesh(bl, cl, b, axis, r.choice((-1, 1)), size, young if r.random() < 0.12 else r.choice(shades), r)
+            t += r.uniform(1.4, 2.6) / L
+    for kind, x0, L, seed in items:
+        for dx in (-W, 0, W):                                          # бесшовно: края дублируются со сдвигом на период
+            if x0 + dx < -40 or x0 + dx > W + 40: continue
+            r = random.Random(seed)
+            if kind == 'run': runner(x0 + dx, L, r)
+            else: strand(bv, bl, cl, (x0 + dx) * U, L, r, shades, young)
+    vm = bpy.data.meshes.new('vine'); bv.to_mesh(vm); bv.free()
+    vm.materials.append(mt.mat_stone('vine', (0.20, 0.17, 0.11), (0.34, 0.30, 0.20), rough=0.8, spec=0.2, scale=40, bumpk=0.4))
+    for p in vm.polygons: p.use_smooth = True
+    ov = bpy.data.objects.new('vine', vm); ov['tone'] = 0.0; sc.collection.objects.link(ov)
+    lm = bpy.data.meshes.new('leaves'); bl.to_mesh(lm); bl.free()
+    m, nt, b = mt.principled('ivy', 0.38, 0.55)
+    at = nt.nodes.new('ShaderNodeAttribute'); at.attribute_name = 'Col'; nt.links.new(at.outputs['Color'], b.inputs['Base Color'])
+    for key in ('Subsurface Weight', 'Subsurface'):
+        if key in b.inputs: b.inputs[key].default_value = 0.12; break
+    lm.materials.append(m); sc.collection.objects.link(bpy.data.objects.new('leaves', lm))
+    out = os.path.join(ROOT, 'assets', 'tex', 'surface'); mt.OUT = out; mt.render(sc, 'ivy_crest')
+    save_small(out, 'ivy_crest')
+    print('IVY_CREST', W * K, H * K, flush=True)
+
+
+import sys
+_args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+if not _args or 'ivy' in _args: main()
+if not _args or 'crest' in _args: crest()
