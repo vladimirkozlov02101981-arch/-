@@ -653,8 +653,9 @@ def mat_marble(name, seed):
     vein = N.new('ShaderNodeTexWave'); vein.wave_type = 'BANDS'; vein.inputs['Scale'].default_value = 14; vein.inputs['Distortion'].default_value = 9
     vein.inputs['Detail'].default_value = 6; L.new(tc.outputs['Object'], vein.inputs['Vector'])
     nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 40; nz.inputs['Detail'].default_value = 10; L.new(tc.outputs['Object'], nz.inputs['Vector'])
-    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[0].color = (*mt.lin((0.80, 0.66, 0.48)), 1)
-    ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (*mt.lin((0.99, 0.90, 0.74)), 1)
+    # v97 (замер эталона каньона: колонны 178/133/101, светлые грани 243/206/158; у нас были белёсые 209/192/183): теплее и темнее
+    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[0].color = (*mt.lin((0.66, 0.48, 0.32)), 1)
+    ramp.color_ramp.elements[1].position = 0.75; ramp.color_ramp.elements[1].color = (*mt.lin((0.93, 0.76, 0.54)), 1)
     mix = N.new('ShaderNodeMath'); mix.operation = 'MULTIPLY_ADD'; mix.inputs[1].default_value = 0.35; mix.inputs[2].default_value = 0.4
     L.new(vein.outputs['Fac'], mix.inputs[0]); add = N.new('ShaderNodeMath'); add.operation = 'ADD'; L.new(mix.outputs['Value'], add.inputs[0]); L.new(nz.outputs['Fac'], add.inputs[1])
     sc = N.new('ShaderNodeMath'); sc.operation = 'MULTIPLY'; sc.inputs[1].default_value = 0.62; L.new(add.outputs['Value'], sc.inputs[0])
@@ -729,6 +730,7 @@ def column(name, seed):
         p = Vector(v.co) / U; d = noise.noise(p * 0.12 + Vector((seed, seed * 2, 0))) * 0.12
         v.co = Vector(v.co) + Vector((p.x, p.y, 0)).normalized() * d * U if (p.x * p.x + p.y * p.y) > 1 else v.co
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); obj(name, me, mat_weathered('limestone', seed) if name.startswith('column_ruin') else mat_marble('marble', seed), sc)
+    if not name.startswith('column_ruin'): sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.35   # слабее заливка — светотень, как в эталоне
     return sc
 
 
