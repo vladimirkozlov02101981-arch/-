@@ -178,7 +178,7 @@ const THEMES = {
       soil: '#4a4038', soilDepth: 20,
       strata: ['#3d3630', '#4a4038', '#352f2a', '#554a40'], band: 30, bandSharp: 0.3,
       rock: ['#4a4a52', '#3e3e46', '#56565e'],
-      pebbles: ['#6a625a', '#58514a', '#7a7268'], smoothStones: true,
+      pebbles: ['#4a4642', '#3c3936', '#56524c'], smoothStones: false,   /* v103 (r35: «мармеладки на земле»): щебень, а не гладкие шары */
       outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [3.9, 3.1, 1.75] /* v93: стена по замеру к эталону (дальняя стена 19/23/33 при эталоне 29/30/39); было [2.9, 2.6, 1.6] */ },
     },
     scatter: ['trash', 'tuft'],
