@@ -264,8 +264,16 @@ function hiresWorkerMain() {
     const natRGB = (e, wx, wy) => {
       const cr = e.crop, hx = (wx + e.dx) * e.nk - 0.5 - cr.x0, hy = (wy + e.dy) * e.nk - 0.5 - cr.y0;
       const xi = Math.floor(hx), yi = Math.floor(hy), fx = hx - xi, fy = hy - yi, cd = cr.d, cw = cr.w;
-      const p00 = (yi * cw + xi) * 3, p01 = p00 + 3, p10 = p00 + cw * 3, p11 = p10 + 3;
-      for (let c = 0; c < 3; c++) NRGB[c] = ((cd[p00 + c] * (1 - fx) + cd[p01 + c] * fx) * (1 - fy) + (cd[p10 + c] * (1 - fx) + cd[p11 + c] * fx) * fy) / 255;
+      if (S > e.nk * 1.05) {   /* v107: при увеличении — бикубика Катмулла–Рома, как в шейдере (natCR): зерно резкое, без «мыла» */
+        const ax = [fx * (-0.5 + fx * (1 - 0.5 * fx)), 1 + fx * fx * (-2.5 + 1.5 * fx), fx * (0.5 + fx * (2 - 1.5 * fx)), fx * fx * (-0.5 + 0.5 * fx)];
+        const ay = [fy * (-0.5 + fy * (1 - 0.5 * fy)), 1 + fy * fy * (-2.5 + 1.5 * fy), fy * (0.5 + fy * (2 - 1.5 * fy)), fy * fy * (-0.5 + 0.5 * fy)];
+        let r = 0, g = 0, b = 0;
+        for (let j = 0; j < 4; j++) { const row = ((yi + j - 1) * cw + xi - 1) * 3, wy = ay[j]; for (let i = 0; i < 4; i++) { const q = row + i * 3, k = wy * ax[i]; r += cd[q] * k; g += cd[q + 1] * k; b += cd[q + 2] * k; } }
+        NRGB[0] = Math.max(0, r / 255); NRGB[1] = Math.max(0, g / 255); NRGB[2] = Math.max(0, b / 255);
+      } else {
+        const p00 = (yi * cw + xi) * 3, p01 = p00 + 3, p10 = p00 + cw * 3, p11 = p10 + 3;
+        for (let c = 0; c < 3; c++) NRGB[c] = ((cd[p00 + c] * (1 - fx) + cd[p01 + c] * fx) * (1 - fy) + (cd[p10 + c] * (1 - fx) + cd[p11 + c] * fx) * fy) / 255;
+      }
       const fine = FINE[e.name], f = fine && S <= 4 && fine.mip ? fine.mip : fine;
       if (f) { const cx = (wx + e.dx) * f.scale, cy = (wy + e.dy) * f.scale; NRGB[0] *= fineAt(f, cx, cy, 0); NRGB[1] *= fineAt(f, cx, cy, 1); NRGB[2] *= fineAt(f, cx, cy, 2); }
     };

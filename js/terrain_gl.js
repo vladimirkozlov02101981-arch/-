@@ -92,12 +92,34 @@ vec3 natSample(int s, vec2 tc, vec2 gx, vec2 gy) {
   return textureGrad(tN5, tc, gx, gy).rgb;
 }
 float natH(int s, vec2 tc, vec2 gx, vec2 gy) { return dot(natSample(s, tc, gx, gy), Y3); }
+vec3 natLod0(int s, vec2 tc) {
+  if (s == 0) return textureLod(tN0, tc, 0.0).rgb;
+  if (s == 1) return textureLod(tN1, tc, 0.0).rgb;
+  if (s == 2) return textureLod(tN2, tc, 0.0).rgb;
+  if (s == 3) return textureLod(tN3, tc, 0.0).rgb;
+  if (s == 4) return textureLod(tN4, tc, 0.0).rgb;
+  return textureLod(tN5, tc, 0.0).rgb;
+}
+/* v107 (владелец 28.10: «невероятно чётко, без размытостей и пикселей — как в реальности»): при увеличении (тексель родной
+   крупнее пикселя экрана) — бикубика Катмулла–Рома (5 выборок, углы отброшены) вместо билинейной: зерно и края камней
+   остаются резкими, без «мыла»; sz — размер текстуры в текселях */
+vec3 natCR(int s, vec2 tc, vec2 sz) {
+  vec2 p = tc * sz - 0.5, i = floor(p), f = p - i;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f)), w1 = 1.0 + f * f * (-2.5 + 1.5 * f), w2 = f * (0.5 + f * (2.0 - 1.5 * f)), w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2, t0 = (i - 0.5) / sz, t3 = (i + 2.5) / sz, t12 = (i + 0.5 + w2 / w12) / sz;
+  float a = w12.x * w0.y, b = w0.x * w12.y, c = w12.x * w12.y, d = w3.x * w12.y, e = w12.x * w3.y;
+  vec3 r = natLod0(s, vec2(t12.x, t0.y)) * a + natLod0(s, vec2(t0.x, t12.y)) * b + natLod0(s, t12) * c + natLod0(s, vec2(t3.x, t12.y)) * d + natLod0(s, vec2(t12.x, t3.y)) * e;
+  return max(r / (a + b + c + d + e), vec3(0.0));
+}
 /* родной цвет материала в точке карты w (с фото-порами мельче текселя) */
 vec3 natAt(int s, vec2 w, vec2 d) {
   vec4 ni = uNat[s];
   /* v104 (критик r35: «мелкая деталь на 20–50 % ниже эталона»): уровень мип-карты на полшага ниже (градиент ×0,7) — при
      обычном масштабе ×4-текстура уменьшается в 3–3,5 раза, и трилинейная выборка съедала зерно камня и волокна досок */
-  vec3 c = natSample(s, (w + d) * ni.z / ni.xy, vec2(TGL_LODK * ni.z / (uXf.x * ni.x), 0.0), vec2(0.0, TGL_LODK * ni.z / (uXf.y * ni.y)));
+  vec2 tc = (w + d) * ni.z / ni.xy, gx = vec2(TGL_LODK * ni.z / (uXf.x * ni.x), 0.0), gy = vec2(0.0, TGL_LODK * ni.z / (uXf.y * ni.y));
+  float mg = ni.z / max(uXf.x, 1e-3);   /* текселей родной на пиксель экрана: меньше 1 — увеличение */
+  vec3 c = mg >= 1.0 ? natSample(s, tc, gx, gy) : natCR(s, tc, ni.xy);
+  if (mg >= 0.8 && mg < 1.0) c = mix(c, natSample(s, tc, gx, gy), (mg - 0.8) / 0.2);   /* плавный переход без «щелчка» при масштабировании */
   if (float(s) == uFine.x) {
     vec2 fc = (w + d) * uFine.y / uFine.zw;
     c *= dot(textureGrad(tFine, fc, vec2(uFine.y / (uXf.x * uFine.z), 0.0), vec2(0.0, uFine.y / (uXf.y * uFine.w))).rgb, vec3(0.299, 0.587, 0.114)) * (255.0 / 128.0);

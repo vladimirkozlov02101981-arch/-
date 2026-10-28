@@ -1282,6 +1282,19 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
      в подземных ходах, снег и сосульки — внутри построек, а отделка пещер (сколы, гравий, мох) не рисовалась вовсе */
   const BK = backArr || null;
   const isCaveAt = (x, y) => y > 0 && !T.isSolid(x, y - 1) && BK && BK[(y - 1) * W + x] > 0;
+  /* индекс верхних точек по столбцам, верх рядом с y в столбце x и v107 (владелец 28.10: «без размытостей и пикселей»; при
+     приближении трава, свес и плющ обрывались вертикальным срезом): runTaper — 0…1, насколько точка далеко от конца полосы
+     (ok — условие полосы, идём вдоль поверхности до D столбцов в обе стороны) — у концов растения сходят на нет */
+  const topCol = new Int32Array(W + 1); { let k = 0; for (let x = 0; x <= W; x++) { while (k < tops.length && tops[k] < x) k += 2; topCol[x] = k; } }
+  const topNear = (x, y) => { if (x < 0 || x >= W) return -1; for (let k = topCol[x]; k < topCol[x + 1]; k += 2) { const yy = tops[k + 1]; if (yy - y <= 4 && y - yy <= 4) return yy; } return -1; };
+  const runTaper = (x, y, ok, D) => {
+    let yl = y, yr = y;
+    for (let s = 1; s <= D; s++) {
+      const a = topNear(x - s, yl); if (a < 0 || !ok(x - s, a)) return (s - 1) / D; yl = a;
+      const b = topNear(x + s, yr); if (b < 0 || !ok(x + s, b)) return (s - 1) / D; yr = b;
+    }
+    return 1;
+  };
   const grassTex = G.tex && G.tex.grass && TexLib.data[G.tex.grass];
   if (grassTex) {
     // Отдельные пучки разной высоты; низкая светлая кромка долины и замков.
@@ -1294,12 +1307,12 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     if (surface) surface.sprite(img, G.tex.grass, meadow ? 'brightness(1.2) saturate(0.8)' : 'none');   // ×4 версия — assets/tex/surface/<имя>.png
     // основание травы — по сглаженной высоте поверхности (среднее соседних столбцов того же уступа): низ травы идёт по склону
     // ровной линией, а не ступеньками пикселей (при приближении была «лесенка» на границе травы и дёрна)
-    const topCol = new Int32Array(W + 1); { let k = 0; for (let x = 0; x <= W; x++) { while (k < tops.length && tops[k] < x) k += 2; topCol[x] = k; } }
+    const grassOk = (x, y) => !(y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y));
     const smoothTop = (x, y) => { let s = 0, n = 0; for (let xx = Math.max(0, x - 3); xx <= Math.min(W - 1, x + 3); xx++) for (let k = topCol[xx]; k < topCol[xx + 1]; k += 2) { const yy = tops[k + 1]; if (yy - y <= 4 && y - yy <= 4) { s += yy; n++; break; } } return n ? s / n : y; };
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1]; anchor(x, y);
-      if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y)) continue;
-      const h = meadow ? gh * (0.52 + (fbm1(x / 32, seed + 91, 2) + 1) * 0.16 + hash3(x >> 2, 0, seed + 92) * 0.12) : gh;
+      if (!grassOk(x, y)) continue;
+      const h = (meadow ? gh * (0.52 + (fbm1(x / 32, seed + 91, 2) + 1) * 0.16 + hash3(x >> 2, 0, seed + 92) * 0.12) : gh) * (0.45 + 0.55 * runTaper(x, y, grassOk, 6));
       const offset = meadow ? Math.round(fbm1(x / 90, seed + 93, 2) * 32) : 0;
       c.drawImage(img, (((x + offset) % gw) + gw) % gw, 0, 1, gh, x, smoothTop(x, y) + 5 - h, 1, h);
     }
@@ -1308,13 +1321,15 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       приближении свес рисуется из той же ×4 полосы; числа rng не тратятся */
       const himg = makeCanvas(gw, gh), hx2 = himg.getContext('2d'); hx2.filter = 'brightness(1.0) saturate(0.75)'; hx2.drawImage(grassTex.canvas, 0, 0);   /* фильтр — один раз: c.filter на каждом столбце в Chrome очень медленный */
       if (surface) surface.sprite(himg, G.tex.grass, 'brightness(1.0) saturate(0.75)');
+      const hangOk = (x, y) => grassOk(x, y) && T.isSolid(x, y + 26);
       c.save();
       for (let k = 0; k < tops.length; k += 2) {
         const x = tops[k], y = tops[k + 1];
-        if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y) || !T.isSolid(x, y + 26)) continue;
+        if (!hangOk(x, y)) continue;
         const v = fbm1(x / 30, seed + 151, 2) + 0.4 * fbm1(x / 9, seed + 152, 1); if (v < -0.3) continue;
+        const tp = Math.min(1, (v + 0.3) / 0.25) * runTaper(x, y, hangOk, 8); if (tp < 0.05) continue;   /* v107: концы клочьев сходят на нет */
         anchor(x, y);
-        const hl = 12 + 11 * Math.min(1, (v + 0.3) / 0.8) + hash3(x >> 1, 0, seed + 153) * 5, offset = Math.round(fbm1(x / 70, seed + 154, 2) * 40) + 19;
+        const hl = (12 + 11 * Math.min(1, (v + 0.3) / 0.8) + hash3(x >> 1, 0, seed + 153) * 5) * tp, offset = Math.round(fbm1(x / 70, seed + 154, 2) * 40) + 19;
         c.setTransform(1, 0, 0, -1, x, smoothTop(x, y) + 3);
         c.drawImage(himg, (((x + offset) % gw) + gw) % gw, 0, 1, gh, 0, -hl, 1, hl);
       }
@@ -1324,11 +1339,13 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       ниже и в тени, клочьями; числа rng не тратятся */
       const cimg = makeCanvas(gw, gh), cx2 = cimg.getContext('2d'); cx2.filter = 'brightness(0.95) saturate(0.9)'; cx2.drawImage(grassTex.canvas, 0, 0);
       if (surface) surface.sprite(cimg, G.tex.grass, 'brightness(0.95) saturate(0.9)');
+      const caveOk = (x, y) => y <= waterY - 4 && matAt(x, y) === 1 && flatTop(x, y) && isCaveAt(x, y);
       for (let k = 0; k < tops.length; k += 2) {
         const x = tops[k], y = tops[k + 1];
-        if (y > waterY - 4 || matAt(x, y) !== 1 || !flatTop(x, y) || !isCaveAt(x, y) || fbm1(x / 40, seed + 95, 2) < -0.3) continue;
+        const cv = fbm1(x / 40, seed + 95, 2); if (cv < -0.3 || !caveOk(x, y)) continue;
+        const tp = Math.min(1, (cv + 0.3) / 0.2) * runTaper(x, y, caveOk, 8); if (tp < 0.05) continue;   /* v107: клочья без вертикальных срезов */
         anchor(x, y);
-        const h = gh * (0.36 + (fbm1(x / 24, seed + 96, 2) + 1) * 0.17 + hash3(x >> 2, 0, seed + 97) * 0.08), offset = Math.round(fbm1(x / 90, seed + 98, 2) * 32) + 57;
+        const h = gh * (0.36 + (fbm1(x / 24, seed + 96, 2) + 1) * 0.17 + hash3(x >> 2, 0, seed + 97) * 0.08) * tp, offset = Math.round(fbm1(x / 90, seed + 98, 2) * 32) + 57;
         c.drawImage(cimg, (((x + offset) % gw) + gw) % gw, 0, 1, gh, x, smoothTop(x, y) + 5 - h, 1, h);
       }
     }
@@ -1533,14 +1550,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     if (IC) {
       if (surface) surface.sprite(IC.canvas, 'ivy_crest');
       const cw = IC.w, chh = IC.h, CS = 1.35;   /* крупнее в 1,35 раза — пышнее, как в эталоне */
+      const crestOk = (x, y) => matAt(x, y + 2) === 3 && y <= waterY - 8;
       const csh = makeCanvas(cw, chh), shx = csh.getContext('2d'); shx.drawImage(IC.canvas, 0, 0); shx.globalCompositeOperation = 'source-in'; shx.fillStyle = '#0c0a08'; shx.fillRect(0, 0, cw, chh);   /* тень листвы на камне */
       for (let k = 0; k < tops.length; k += 2) {
         const x = tops[k], y = tops[k + 1];
-        if (matAt(x, y + 2) !== 3 || y > waterY - 8 || fbm1(x / 60, seed + 133, 2) + 0.35 * fbm1(x / 17, seed + 134, 1) < -0.08) continue;
-        const sx = ((Math.floor(x / CS) % cw) + cw) % cw;
+        const iv = fbm1(x / 60, seed + 133, 2) + 0.35 * fbm1(x / 17, seed + 134, 1); if (iv < -0.08 || !crestOk(x, y)) continue;
+        /* v107: у концов клочьев плющ короче и прозрачнее — без вертикального среза листьев при приближении */
+        const tp = Math.min(1, (iv + 0.08) / 0.18) * runTaper(x, y, crestOk, 7); if (tp < 0.05) continue;
+        const sx = ((Math.floor(x / CS) % cw) + cw) % cw, rows = chh * (0.4 + 0.6 * tp);
         anchor(x, y);
-        c.globalAlpha = 0.28; c.drawImage(csh, sx, 0, 1, chh, x + 1.5, y + 1.5, 1, chh * CS); c.globalAlpha = 1;
-        c.drawImage(IC.canvas, sx, 0, 1, chh, x, y - 1.5, 1, chh * CS);
+        c.globalAlpha = 0.28 * Math.min(1, tp * 1.6); c.drawImage(csh, sx, 0, 1, rows, x + 1.5, y + 1.5, 1, rows * CS);
+        c.globalAlpha = Math.min(1, tp * 1.6); c.drawImage(IC.canvas, sx, 0, 1, rows, x, y - 1.5, 1, rows * CS); c.globalAlpha = 1;
       }
     }
     for (let k = 0; !IV && k < tops.length; k += 2) {
