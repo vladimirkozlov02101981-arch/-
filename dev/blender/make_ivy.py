@@ -21,7 +21,8 @@ spec = importlib.util.spec_from_file_location('mt', os.path.join(HERE, 'make_tex
 mt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mt)
 
-CW, CH, K = 32, 80, 4                         # ячейка в ед. мира, во сколько раз крупнее рендер
+CW, CH = 32, 80                               # ячейка в ед. мира
+K = int(os.environ.get('IVY_K', '8'))         # во сколько раз крупнее рендер (v108: 8, было 4 — владелец 28.10 «без размытостей при увеличении»)
 IVY_LEN = [22, 30, 40, 52, 64, 76]            # длина плети (ед.) по ячейкам
 U = 0.01                                      # 1 ед. мира = 1 см сцены
 

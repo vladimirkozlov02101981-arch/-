@@ -15,9 +15,11 @@ spec.loader.exec_module(source)
 source.OUT = str(here.parent.parent / 'assets' / 'tex' / 'surface')
 original_render = source.render
 
+KS = int(os.environ.get('SURFACE_K', '4'))   # v108: 8 — вдвое подробнее для сильного приближения (владелец 28.10)
+
 def render_native(scene, name):
-    scene.render.resolution_x *= 4
-    scene.render.resolution_y *= 4
+    scene.render.resolution_x *= KS
+    scene.render.resolution_y *= KS
     scene.render.resolution_percentage = 100
     scene.cycles.samples = 96
     scene.cycles.use_adaptive_sampling = True

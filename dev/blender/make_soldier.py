@@ -15,7 +15,10 @@ from mathutils import Vector
 GLB = sys.argv[-1]
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.environ.get('SOLDIER_OUT') or os.path.normpath(os.path.join(HERE, '..', '..', 'assets', 'tex'))
-CELL = 144; MPP = 2.3 / CELL; FOOT = (72, 126)
+# SOLDIER_SCALE=2 (v108, владелец 28.10: «без размытостей при увеличении»): листы ×2 (клетка 288 px) — soldier_*_hi.png для
+# сильного приближения; кадры, углы и поза те же, что у листов ×1 (meta не пишется)
+SS = int(os.environ.get('SOLDIER_SCALE', '1')); SUF = '_hi' if SS > 1 else ''
+CELL = 144 * SS; MPP = 2.3 / CELL; FOOT = (72 * SS, 126 * SS)
 ANGLES = [math.radians(a) for a in range(-90, 91, 15)]          # прицел: −90° вверх … +90° вниз (как в игре, y вниз)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -129,6 +132,7 @@ hold_mat = bpy.data.materials.new('hold'); hold_mat.use_nodes = True
 nt = hold_mat.node_tree; nt.nodes.clear(); ho = nt.nodes.new('ShaderNodeHoldout'); o_ = nt.nodes.new('ShaderNodeOutputMaterial'); nt.links.new(ho.outputs[0], o_.inputs[0])
 
 def render_cell(path):
+    if os.environ.get('SOLDIER_RESUME') and os.path.exists(path): return   # возобновление после перерыва
     sc.render.filepath = path; bpy.ops.render.render(write_still=True)
 def render_mask(path):
     # маска визора: визор светится белым, тело — «дырка» (перекрывает визор там, где он за телом)
@@ -177,7 +181,8 @@ for row, (key, act, n) in enumerate(FREE):
             tR.location = S + Vector((0.12, -0.12, 0.42 + 0.12 * math.sin(ph))); tL.location = S + Vector((0.12, 0.12, 0.42 - 0.12 * math.sin(ph)))
             solve_arm('Right', tR.location.copy(), Vector((-1, -0.3, 0))); solve_arm('Left', tL.location.copy(), Vector((-1, 0.3, 0)))
         else: ik(False)
-        f = os.path.join(tmp, 'free_%d_%d.png' % (row, k)); render_cell(f); fm = os.path.join(tmp, 'freem_%d_%d.png' % (row, k)); render_mask(fm)
+        f = os.path.join(tmp, 'free_%d_%d.png' % (row, k)); render_cell(f); fm = os.path.join(tmp, 'freem_%d_%d.png' % (row, k))
+        if SS == 1: render_mask(fm)
         cells.append(('free', row, k, f, fm))
 ik(False)
 # ---- с оружием: строка = угол прицела, столбец 0 — стойка, 1..12 — шаг
@@ -190,7 +195,8 @@ for row, a in enumerate(ANGLES):
         for nme in ARM_BONES: pb[nme].rotation_quaternion = (1, 0, 0, 0)
         S = aim_targets(a); bpy.context.view_layer.update()
         if shoulder is None: shoulder = S.copy()
-        f = os.path.join(tmp, 'aim_%d_%d.png' % (row, col)); render_cell(f); fm = os.path.join(tmp, 'aimm_%d_%d.png' % (row, col)); render_mask(fm)
+        f = os.path.join(tmp, 'aim_%d_%d.png' % (row, col)); render_cell(f); fm = os.path.join(tmp, 'aimm_%d_%d.png' % (row, col))
+        if SS == 1: render_mask(fm)
         cells.append(('aim', row, col, f, fm))
 meta['shoulder'] = [round(FOOT[0] + shoulder.x / MPP, 1), round(FOOT[1] - shoulder.z / MPP, 1)]
 
@@ -205,7 +211,8 @@ for sheet, rows, cols in (('free', len(FREE), 12), ('aim', len(ANGLES), 13)):
     for s, r, c, f, fm in cells:
         if s != sheet: continue
         A[r * CELL:(r + 1) * CELL, c * CELL:(c + 1) * CELL] = load(f)
-        m = load(fm); M[r * CELL:(r + 1) * CELL, c * CELL:(c + 1) * CELL] = m
-    save(A, os.path.join(OUT, 'soldier_%s.png' % sheet)); save(M, os.path.join(OUT, 'soldier_%s_mask.png' % sheet))
-json.dump(meta, open(os.path.join(OUT, 'soldier.json'), 'w'))
+        if SS == 1: M[r * CELL:(r + 1) * CELL, c * CELL:(c + 1) * CELL] = load(fm)
+    save(A, os.path.join(OUT, 'soldier_%s%s.png' % (sheet, SUF)))
+    if SS == 1: save(M, os.path.join(OUT, 'soldier_%s_mask.png' % sheet))
+if SS == 1: json.dump(meta, open(os.path.join(OUT, 'soldier.json'), 'w'))
 print('SOLDIER DONE', meta['shoulder'])

@@ -165,17 +165,25 @@ function drawSoldierSprite(c, s, team, t, an) {
   // стороны тела на экране: при взгляде вправо левая половина (по карте) — дальняя
   const far = face > 0 ? 0 : 1;
   const lostLimbs = [2, 3, 4, 5].filter(i => wl[i] === 3);
+  /* v108: при сильном приближении (больше SA.HI_PX пикселей экрана на единицу карты) — клетка листа ×2, чётко без «мыла» */
+  const m = c.getTransform && c.getTransform(), pxu = m ? Math.hypot(m.a, m.b) : 0;
+  if (pxu > SA.HI_PX * 0.75 && SA.loadHi) SA.loadHi();
+  const hiCv = pxu > SA.HI_PX && SA.hiCell ? SA.hiCell(sheet, row, fr, col, bare) : null;
   if (lostLimbs.length) {
     // потерянная конечность: рука или голень стирается, на её месте — окровавленная культя
-    const cv = SA.tmp || (SA.tmp = makeCanvas(C, C)), tc = cv.getContext('2d');
-    tc.globalCompositeOperation = 'copy'; tc.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, 0, 0, C, C); tc.globalCompositeOperation = 'destination-out';
+    const cv = hiCv ? (SA.tmp2 || (SA.tmp2 = makeCanvas(hiCv.width, hiCv.height))) : (SA.tmp || (SA.tmp = makeCanvas(C, C))), tc = cv.getContext('2d');
+    tc.globalCompositeOperation = 'copy';
+    if (hiCv) { tc.setTransform(1, 0, 0, 1, 0, 0); tc.drawImage(hiCv, 0, 0); tc.setTransform(hiCv.width / C, 0, 0, hiCv.height / C, 0, 0); }
+    else tc.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, 0, 0, C, C);
+    tc.globalCompositeOperation = 'destination-out';
     for (const i of lostLimbs) {
       if (i >= 4) { const isFar = (i - 4) === far; tc.fillRect(isFar ? SA.FOOT[0] - 22 : SA.FOOT[0] - 2, SA.FOOT[1] - 22, 26, 30); }
       else { const isFar = (i - 2) === far; tc.fillRect(isFar ? SA.SHOULDER[0] - 26 : SA.SHOULDER[0] + 2, SA.SHOULDER[1] + 2, 26, 44); }
     }
-    tc.globalCompositeOperation = 'source-over';
+    tc.globalCompositeOperation = 'source-over'; if (hiCv) tc.setTransform(1, 0, 0, 1, 0, 0);
     c.drawImage(cv, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);
-  } else c.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
+  } else if (hiCv) c.drawImage(hiCv, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);
+  else c.drawImage(SA.sheet(sheet, col, bare), fr * C, row * C, C, C, -SA.FOOT[0] * K, -SA.FOOT[1] * K + 1.5, C * K, C * K);   // ступни чуть утоплены в траву
   if (bare) {
     // размер и посадка — по голове модели: она в 0.6 раза меньше нарисованной, шапка сидит на макушке
     const hd = SA.head(sheet, row, fr);

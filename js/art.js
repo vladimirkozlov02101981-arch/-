@@ -318,13 +318,19 @@ const SoldierArt = {
   sheet(name, color, bare = false) {
     const key = name + color + (bare ? ':bare' : ''); let cv = this.cache.get(key); if (cv) return cv;
     const T = TexLib.data['soldier_' + name]; cv = makeCanvas(T.w, T.h); const c = cv.getContext('2d');
-    const img = c.createImageData(T.w, T.h), d = img.data, s = T.d; d.set(s);
+    const img = c.createImageData(T.w, T.h), d = img.data; d.set(T.d);
+    this.recolor(d, T.d, T.w, 1, color, bare);
+    c.putImageData(img, 0, 0); this.cache.set(key, cv); return cv;
+  },
+  /** перекраска брони в цвет команды: d — результат (копия s), s — исходные пиксели, W — ширина картинки, S — пикселей листа
+      на пиксель клетки ×1 (у листов ×2 — 2): строки шлема и жилета считаются в клетке ×1 */
+  recolor(d, s, W, S, color, bare) {
     // светлые пластины брони: на шлеме — цвет команды, остальное — полевая олива (как у настоящей формы)
-    const [tr, tg, tb] = hex2rgb(color), tl = (tr * 0.3 + tg * 0.59 + tb * 0.11) || 1, OL = [96, 104, 70], ol = OL[0] * 0.3 + OL[1] * 0.59 + OL[2] * 0.11, C = this.CELL, W = T.w;
+    const [tr, tg, tb] = hex2rgb(color), tl = (tr * 0.3 + tg * 0.59 + tb * 0.11) || 1, OL = [96, 104, 70], ol = OL[0] * 0.3 + OL[1] * 0.59 + OL[2] * 0.11, C = this.CELL * S;
     for (let j = 0; j < d.length; j += 4) {
       if (s[j + 3] < 8) continue;
       const r = s[j], g = s[j + 1], b = s[j + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = ((j >> 2) / W | 0) % C, helm = !bare && cy < 40, vest = cy >= 46 && cy < 64;
+      const L = r * 0.3 + g * 0.59 + b * 0.11, cy = (((j >> 2) / W | 0) % C) / S, helm = !bare && cy < 40, vest = cy >= 46 && cy < 64;
       if (helm && L > 25) {                                                   // шлем целиком — насыщенный цвет команды (с фактурой и светом модели)
         const f = Math.min(1.5, L / tl * 1.25); d[j] = tr * f; d[j + 1] = tg * f; d[j + 2] = tb * f; continue;
       }
@@ -334,7 +340,36 @@ const SoldierArt = {
       const T3 = helm ? [tr, tg, tb] : OL, f = L / (helm ? tl : ol) * (helm ? 1.0 : 0.95);
       d[j] = r + (T3[0] * f - r) * k; d[j + 1] = g + (T3[1] * f - g) * k; d[j + 2] = b + (T3[2] * f - b) * k;
     }
-    c.putImageData(img, 0, 0); this.cache.set(key, cv); return cv;
+  },
+  /* v108 (владелец 28.10: «графика без размытостей при любом увеличении»): листы ×2 (soldier_*_hi.png, клетка 288 px) грузятся
+     при первом сильном приближении; в цвет команды перекрашиваются только нужные клетки (кэш на 96 клеток ≈ 32 МБ), а не
+     целые листы ×2 (с цветами команд это сотни МБ). Лист ×1 — 2,5 px на единицу карты, ×2 — 5 */
+  HI_PX: 3.0, HI_CELLS: 96,
+  hiState: 0, hiData: {}, hiCells: new Map(),
+  loadHi() {
+    if (this.hiState || typeof Image === 'undefined') return; this.hiState = 1; let left = 2;
+    for (const name of ['free', 'aim']) {
+      const im = new Image(); im.decoding = 'async';
+      im.onload = () => {
+        try { const cv = makeCanvas(im.naturalWidth, im.naturalHeight), cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(im, 0, 0); this.hiData[name] = { w: cv.width, h: cv.height, d: cx.getImageData(0, 0, cv.width, cv.height).data }; }
+        catch (e) { this.hiState = 3; return; }
+        if (--left === 0 && this.hiState === 1) this.hiState = 2;
+      };
+      im.onerror = () => { this.hiState = 3; };
+      im.src = 'assets/tex/soldier_' + name + '_hi.webp';   /* WebP без потерь: 0,8 + 3,6 МБ */
+    }
+  },
+  /** перекрашенная клетка листа ×2 (холст 288×288) или null, пока лист не загружен */
+  hiCell(name, row, fr, color, bare) {
+    const H = this.hiState === 2 && this.hiData[name]; if (!H) return null;
+    const key = name + row + ':' + fr + color + (bare ? ':b' : ''); let cv = this.hiCells.get(key);
+    if (cv) { this.hiCells.delete(key); this.hiCells.set(key, cv); return cv; }   // недавние — в конец очереди
+    const S = 2, C2 = this.CELL * S; if ((fr + 1) * C2 > H.w || (row + 1) * C2 > H.h) return null;
+    cv = makeCanvas(C2, C2); const c = cv.getContext('2d'), img = c.createImageData(C2, C2), d = img.data;
+    for (let y = 0; y < C2; y++) { const a = ((row * C2 + y) * H.w + fr * C2) * 4; d.set(H.d.subarray(a, a + C2 * 4), y * C2 * 4); }
+    this.recolor(d, d.slice(), C2, S, color, bare); c.putImageData(img, 0, 0);
+    this.hiCells.set(key, cv); if (this.hiCells.size > this.HI_CELLS) this.hiCells.delete(this.hiCells.keys().next().value);
+    return cv;
   },
 };
 

@@ -23,7 +23,7 @@ mt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mt)
 
 U = 0.01          # 1 ед. мира = 1 см сцены
-K = 4             # пикселей на единицу в подробной версии
+K = int(os.environ.get('DECOR_K', '8'))   # пикселей на единицу в подробной версии (v108: 8 — владелец 28.10 «без размытостей при увеличении»; было 4)
 
 
 def scene(frame, light=None, seed=1):
@@ -1283,13 +1283,13 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
 
 
 def save_pair(name):
-    """подробная версия уже записана рендером; малая — уменьшение ×2 с учётом прозрачности"""
+    """подробная версия уже записана рендером; малая (2 px на единицу, как прежде) — уменьшение ×(K/2) с учётом прозрачности"""
     hi = os.path.join(ROOT, 'assets', 'tex', 'surface', name + '.png')
-    im = bpy.data.images.load(hi); w, h = im.size
+    im = bpy.data.images.load(hi); w, h = im.size; F = max(1, K // 2)
     a = np.array(im.pixels[:], np.float32).reshape(h, w, 4); pre = a.copy(); pre[..., :3] *= a[..., 3:4]
-    lo = pre.reshape(h // 2, 2, w // 2, 2, 4).mean((1, 3)); al = lo[..., 3:4]
+    lo = pre.reshape(h // F, F, w // F, F, 4).mean((1, 3)); al = lo[..., 3:4]
     lo[..., :3] = np.where(al > 1e-4, lo[..., :3] / np.maximum(al, 1e-4), 0)
-    small = bpy.data.images.new(name + '_small', w // 2, h // 2, alpha=True); small.pixels.foreach_set(lo.ravel())
+    small = bpy.data.images.new(name + '_small', w // F, h // F, alpha=True); small.pixels.foreach_set(lo.ravel())
     small.filepath_raw = os.path.join(ROOT, 'assets', 'tex', name + '.png'); small.file_format = 'PNG'; small.save()
 
 
