@@ -1303,6 +1303,23 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       const offset = meadow ? Math.round(fbm1(x / 90, seed + 93, 2) * 32) : 0;
       c.drawImage(img, (((x + offset) % gw) + gw) % gw, 0, 1, gh, x, smoothTop(x, y) + 5 - h, 1, h);
     }
+    if (meadow) {   /* v104 (критик r35: «трава — войлок 10 px»; эталон — трава свешивается с кромки на 15–25 ед.): свес травы над землёй —
+      та же полоса травы вверх ногами, в тени, клочьями (~75 % длины). Преобразование пишется в команду слоя растений — при
+      приближении свес рисуется из той же ×4 полосы; числа rng не тратятся */
+      const himg = makeCanvas(gw, gh), hx2 = himg.getContext('2d'); hx2.filter = 'brightness(1.0) saturate(0.75)'; hx2.drawImage(grassTex.canvas, 0, 0);   /* фильтр — один раз: c.filter на каждом столбце в Chrome очень медленный */
+      if (surface) surface.sprite(himg, G.tex.grass, 'brightness(1.0) saturate(0.75)');
+      c.save();
+      for (let k = 0; k < tops.length; k += 2) {
+        const x = tops[k], y = tops[k + 1];
+        if (y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y) || !T.isSolid(x, y + 26)) continue;
+        const v = fbm1(x / 30, seed + 151, 2) + 0.4 * fbm1(x / 9, seed + 152, 1); if (v < -0.3) continue;
+        anchor(x, y);
+        const hl = 12 + 11 * Math.min(1, (v + 0.3) / 0.8) + hash3(x >> 1, 0, seed + 153) * 5, offset = Math.round(fbm1(x / 70, seed + 154, 2) * 40) + 19;
+        c.setTransform(1, 0, 0, -1, x, smoothTop(x, y) + 3);
+        c.drawImage(himg, (((x + offset) % gw) + gw) % gw, 0, 1, gh, 0, -hl, 1, hl);
+      }
+      c.restore();
+    }
     if (meadow) {   /* v104 (эталон valley_tower: пол тоннеля зарос травой, критик r35 — «пещера пустая»): трава и на полу тоннелей —
       ниже и в тени, клочьями; числа rng не тратятся */
       const cimg = makeCanvas(gw, gh), cx2 = cimg.getContext('2d'); cx2.filter = 'brightness(0.95) saturate(0.9)'; cx2.drawImage(grassTex.canvas, 0, 0);
