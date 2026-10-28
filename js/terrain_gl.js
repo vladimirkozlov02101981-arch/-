@@ -57,6 +57,7 @@ void main() {
    остальное — кубическая интерполяция нарисованного цвета (без ореолов) */
 const TGL_MAIN_FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler2D; precision highp usampler2D;
+const float TGL_LODK = 0.7;
 uniform sampler2D tComp; uniform usampler2D tF; uniform usampler2D tB; uniform usampler2D tM; uniform sampler2D tFlow; uniform sampler2D tIds; uniform sampler2D tLow; uniform sampler2D tFine;
 uniform sampler2D tN0; uniform sampler2D tN1; uniform sampler2D tN2; uniform sampler2D tN3; uniform sampler2D tN4; uniform sampler2D tN5;
 uniform ivec2 uSize; uniform vec2 uCompSize; uniform vec4 uXf; uniform float uCanvasH;
@@ -94,7 +95,9 @@ float natH(int s, vec2 tc, vec2 gx, vec2 gy) { return dot(natSample(s, tc, gx, g
 /* родной цвет материала в точке карты w (с фото-порами мельче текселя) */
 vec3 natAt(int s, vec2 w, vec2 d) {
   vec4 ni = uNat[s];
-  vec3 c = natSample(s, (w + d) * ni.z / ni.xy, vec2(ni.z / (uXf.x * ni.x), 0.0), vec2(0.0, ni.z / (uXf.y * ni.y)));
+  /* v104 (критик r35: «мелкая деталь на 20–50 % ниже эталона»): уровень мип-карты на полшага ниже (градиент ×0,7) — при
+     обычном масштабе ×4-текстура уменьшается в 3–3,5 раза, и трилинейная выборка съедала зерно камня и волокна досок */
+  vec3 c = natSample(s, (w + d) * ni.z / ni.xy, vec2(TGL_LODK * ni.z / (uXf.x * ni.x), 0.0), vec2(0.0, TGL_LODK * ni.z / (uXf.y * ni.y)));
   if (float(s) == uFine.x) {
     vec2 fc = (w + d) * uFine.y / uFine.zw;
     c *= dot(textureGrad(tFine, fc, vec2(uFine.y / (uXf.x * uFine.z), 0.0), vec2(0.0, uFine.y / (uXf.y * uFine.w))).rgb, vec3(0.299, 0.587, 0.114)) * (255.0 / 128.0);

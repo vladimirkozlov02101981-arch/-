@@ -536,7 +536,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     else if (S.tx.dirt && S.bury) {   /* v94 (эталон valley_tower: стена тоннеля тёмная и ровная — камни на ней не выделяются; у нас — светлые камни и бледные
       круги валунов): тот же грунт, контраст вдвое ниже, темнее */
       texAt(S.tx.dirt, x + 257, y + 131, o); const M = texMeanRGB(S.tx.dirt);
-      r = (M[0] + (o.r - M[0]) * 0.5) * 0.6; g = (M[1] + (o.g - M[1]) * 0.5) * 0.58; bl = (M[2] + (o.b - M[2]) * 0.5) * 0.62;
+      r = (M[0] + (o.r - M[0]) * 0.32) * 0.5; g = (M[1] + (o.g - M[1]) * 0.32) * 0.48; bl = (M[2] + (o.b - M[2]) * 0.32) * 0.52;   /* v104: темнее и ровнее (эталон: стена тоннеля почти чёрная, медиана 15/13/12, камней не видно) */
     }
     else if (S.tx.dirt) { texAt(S.tx.dirt, x + 257, y + 131, o); r = o.r * 0.7; g = o.g * 0.68; bl = o.b * 0.72; }   // земляная пещера: стена из того же грунта с камнями
     else { texAt(S.tx.cave, x, y, o); r = o.r * 1.35; g = o.g * 1.35; bl = o.b * 1.35; }
@@ -1303,6 +1303,18 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       const offset = meadow ? Math.round(fbm1(x / 90, seed + 93, 2) * 32) : 0;
       c.drawImage(img, (((x + offset) % gw) + gw) % gw, 0, 1, gh, x, smoothTop(x, y) + 5 - h, 1, h);
     }
+    if (meadow) {   /* v104 (эталон valley_tower: пол тоннеля зарос травой, критик r35 — «пещера пустая»): трава и на полу тоннелей —
+      ниже и в тени, клочьями; числа rng не тратятся */
+      const cimg = makeCanvas(gw, gh), cx2 = cimg.getContext('2d'); cx2.filter = 'brightness(0.95) saturate(0.9)'; cx2.drawImage(grassTex.canvas, 0, 0);
+      if (surface) surface.sprite(cimg, G.tex.grass, 'brightness(0.95) saturate(0.9)');
+      for (let k = 0; k < tops.length; k += 2) {
+        const x = tops[k], y = tops[k + 1];
+        if (y > waterY - 4 || matAt(x, y) !== 1 || !flatTop(x, y) || !isCaveAt(x, y) || fbm1(x / 40, seed + 95, 2) < -0.3) continue;
+        anchor(x, y);
+        const h = gh * (0.36 + (fbm1(x / 24, seed + 96, 2) + 1) * 0.17 + hash3(x >> 2, 0, seed + 97) * 0.08), offset = Math.round(fbm1(x / 90, seed + 98, 2) * 32) + 57;
+        c.drawImage(cimg, (((x + offset) % gw) + gw) % gw, 0, 1, gh, x, smoothTop(x, y) + 5 - h, 1, h);
+      }
+    }
     if (meadow) {
       c.save(); c.lineWidth = 0.7;
       for (let k = 0; k < tops.length; k += 2) {
@@ -1444,6 +1456,16 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       nextX = x + 40 + rng() * 60; if (rng() < 0.3) continue;
       const col = rng.pick(G.cap.flowers), n = 3 + (rng() * 5 | 0); if (sprites) bunch.push({ n: 0, x: 0, y: -1e9, col });
       for (let j = 0; j < n; j++) { const fx = x + (rng() - 0.5) * 16; if (!T.isSolid(fx, y + 3) || T.isSolid(fx, y - 3)) continue; flower(fx, y + (rng() - 0.5) * 2, 7 + rng() * 11, rng() < 0.75 ? col : rng.pick(G.cap.flowers), 0.9 + rng() * 0.4); }
+    }
+    if (sprites && grassTex && (theme.id === 'valley' || theme.id === 'castle')) {   /* v104: кучки цветов и на полу тоннелей (эталон valley_tower), по хешу */
+      let nx = -1;
+      for (let k = 0; k < tops.length; k += 2) {
+        const x = tops[k], y = tops[k + 1];
+        if (x < nx || y > waterY - 6 || matAt(x, y) !== 1 || !flatTop(x, y) || !isCaveAt(x, y)) continue;
+        nx = x + 44 + hash3(x, 1, seed + 141) * 56; if (hash3(x, 2, seed + 142) < 0.4) continue;
+        const n = 3 + ((hash3(x, 4, seed + 144) * 4) | 0); anchor(x, y);
+        bunch.push({ n, x: x * n, y: y + 1, col: G.cap.flowers[(hash3(x, 3, seed + 143) * G.cap.flowers.length) | 0] });
+      }
     }
     for (const b of bunch) {
       if (!b.n) continue;
@@ -1853,6 +1875,22 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
           c.fillStyle = 'rgba(255,255,255,0.18)';
           c.fillRect(x - 0.5, y - grh * 0.6, 1, 0.8);
         }
+      }
+    }
+    // 2б. v104 (критик r35: «тоннель плоский»): щебень на полу тоннелей долины и замков — угловатые камни 2–9 px со светом сверху слева
+    if (theme.id === 'valley' || theme.id === 'castle') {
+      const rubCols = [[92, 86, 78], [78, 72, 64], [104, 98, 88], [68, 62, 54], [86, 82, 76]];
+      for (let k = 0; k < tops.length; k += 2) {
+        const x = tops[k], y = tops[k + 1];
+        if (y > waterY - 4 || !isCaveFloor(x, y) || !flatTop(x, y) || hash3(x, y, seed + 121) > 0.07) continue;
+        const big = hash3(x, y, seed + 122) > 0.78, R = big ? 3 + hash3(x, 1, seed + 123) * 1.6 : 1.1 + hash3(x, 1, seed + 123) * 1.6;
+        const col = rubCols[(hash3(x, 2, seed + 124) * rubCols.length) | 0], nv = 5 + ((hash3(x, 3, seed + 125) * 3) | 0), rot = hash3(x, 4, seed + 126) * TAU, cy = y - R * 0.5;
+        c.fillStyle = 'rgba(10,8,6,0.5)'; c.beginPath(); c.ellipse(x + R * 0.3, y + 0.5, R * 1.3, R * 0.4, 0, 0, TAU); c.fill();   // контактная тень
+        const gr = c.createLinearGradient(x - R, cy - R, x + R, cy + R);
+        gr.addColorStop(0, `rgb(${col[0] * 1.3 | 0},${col[1] * 1.3 | 0},${col[2] * 1.28 | 0})`); gr.addColorStop(0.5, `rgb(${col[0]},${col[1]},${col[2]})`); gr.addColorStop(1, `rgb(${col[0] * 0.45 | 0},${col[1] * 0.45 | 0},${col[2] * 0.48 | 0})`);
+        c.fillStyle = gr; c.beginPath();
+        for (let v = 0; v < nv; v++) { const a = rot + v / nv * TAU, rr = R * (0.72 + 0.4 * hash3(x, v + 10, seed + 127)), px = x + Math.cos(a) * rr, py = cy + Math.sin(a) * rr * 0.7; if (v) c.lineTo(px, py); else c.moveTo(px, py); }
+        c.closePath(); c.fill();
       }
     }
     // 3. Подземный мох / трава с неравным шагом

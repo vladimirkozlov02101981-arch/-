@@ -1,6 +1,7 @@
-// SHOTS=map:x:y (x=auto -> default camera). OUT=prefix
+// SHOTS=map:x:y (x=auto -> default camera). OUT=prefix. FORCEGL=1 — путь видеокарты (terrain_gl.js) и в headless
 const {chromium}=require('playwright');const SP=process.env.SP;
 (async()=>{const b=await chromium.launch({headless:true});const p=await b.newPage({viewport:{width:1440,height:900}});
+if(process.env.FORCEGL)await p.addInitScript(()=>{window.__forceTerrainGL=true;});   /* FORCEGL=1: ландшафт на видеокарте и на программном рендере — как у игрока с GPU */
 const errs=[];p.on('pageerror',e=>errs.push(e.message));
 await p.goto('http://localhost:3000/?v='+Date.now());await p.waitForSelector('#s-main.show',{timeout:60000});
 for(const spec of (process.env.SHOTS||'valley:auto').split(',')){const [id,x,y]=spec.split(':');
