@@ -48,7 +48,7 @@ D:\Територивар1 и пользовательский Territory-War100 
 - Чёткость при приближении: `js/hires.js` — плитки ×4 в фоновых потоках, сглаживание ступенек по контуру, детали из карт `assets/tex/hi`. Ссылки пиксель→текстура записываются в `js/terrain_visual.js` (`T.texRef`).
 - Локальный Blender проверен пробным рендером: `D:\Program Files\Blender Foundation\Blender 5.2\blender.exe` (5.2 LTS). Скрипты запускай через этот exe с `--background --python`; отдельного Blender MCP в текущем чате нет, обычный Python не содержит bpy.
 - Blender в других окружениях: `pip install bpy` в venv (python 3.11), скрипты `dev/blender/make_textures.py` (`TEX_SCALE=2` — двойное разрешение, `SAVE_BLEND=папка NO_RENDER=1` — сохранить сцену .blend), `make_weapons.py` (`-- blend файл.blend` — витрина всех моделей), `make_soldier.py`. Файл с именем `inspect.py` в рабочей папке ломает bpy.
-- Скриншоты: `SP=<папка> SHOTS=canyon:auto,... OUT=r16 NODE_PATH=node_modules node -r ./dev/tools/pw-chromium.cjs dev/tools/shot.cjs`; максимальный зум: `MAP=castles node ... dev/tools/det.cjs`.
+- Скриншоты: `SP=<папка> SHOTS=canyon:auto,... OUT=r16 NODE_PATH=node_modules node -r ./dev/tools/pw-chromium.cjs dev/tools/shot.cjs`; максимальный зум: `MAP=castles node ... dev/tools/det.cjs`. Кадры для критика — с `FORCEGL=1` (headless Chromium в облаке — программный рендер: без этого ландшафт идёт через плитки hires.js, а не через видеокарту, как у игрока).
 
 ## Код
 - Много файлов с CRLF — правь с сохранением переводов строк. Не вставляй `// комментарий` перед кодом на той же строке — используй `/* */`.
