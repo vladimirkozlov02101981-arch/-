@@ -302,12 +302,14 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
          гладкая бурая полоса: пряди в 1–2 px разной яркости, светлые кончики, тёмные просветы между пучками. Цвет — до фонового
          света темы (×0.52/0.45/0.69): на экране выходит оливковый */
       const kk = Math.min(1, k), sx = x + Math.round(Math.sin(y * 0.45 + hash3(x >> 2, 7, 81) * 6) * 0.8);
-      if (kk < 0.4) { const q = kk / 0.4; r = 205 + (172 - 205) * q; g = 236 + (194 - 236) * q; bl = 92 + (77 - 92) * q; }
-      else { const q = (kk - 0.4) / 0.6; r = 172 + (99 - 172) * q; g = 194 + (103 - 194) * q; bl = 77 + (53 - 77) * q; }
+      /* v102 (r35: «ровная жёлтая лента»; в эталоне мох оливково-золотой — блики ~125/110/48, середина ~95/84/38, провалы почти
+         чёрные): цвет до фонового света (×0.52/0.45/0.69), пучки контрастнее — тёмные просветы, светлые пряди и кончики */
+      if (kk < 0.4) { const q = kk / 0.4; r = 241 + (183 - 241) * q; g = 242 + (185 - 242) * q; bl = 70 + (55 - 70) * q; }
+      else { const q = (kk - 0.4) / 0.6; r = 183 + (87 - 183) * q; g = 185 + (84 - 185) * q; bl = 55 + (32 - 55) * q; }
       const clump = tileAt(tl.t2, x, y * 0.5, 2, 85);                                          // пучки 4–8 px: светлые и в тени
-      f = 0.5 + 0.7 * clump + (hash3(sx, 0, 83) - 0.5) * 0.3 + (n1 - 0.5) * 0.08;
-      if (clump < 0.32 && hash3(sx >> 1, 1, 87) < 0.5) f *= 0.6;                               // просветы между пучками
-      if (t < 1.6 + clump * 2) f *= 1.16;                                                      // светлые кончики
+      f = 0.22 + 1.05 * clump * clump + (hash3(sx, 0, 83) - 0.5) * 0.2 + (n1 - 0.5) * 0.3 + (tileAt(tl.t1, x * 1.3, y * 1.3, 1, 89) - 0.5) * 0.3;   /* кудрявые комочки, не «штрихкод» */
+      if (clump < 0.4 && hash3(sx >> 1, 1, 87) < 0.6) f *= 0.45;                               // просветы между пучками
+      if (t < 1.6 + clump * 2) f *= 1.2;                                                       // светлые кончики
     } else if (S.sod) {
       // Под настоящими травинками — живой пятнистый дерн: нерегулярные пятна почвы, корневые волокна и мягкий переход к грунту
       const broadTone = (tileAt(tl.t2, x, y, 4, 83) - 0.5) * 0.20;
@@ -376,7 +378,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
     if (S.mossLip && capT > 0 && sd < 16) {                                                   /* v90: свисающие пряди мха (эталон Alien) */
       const dl = mossDrip(tl, x);
-      if (sd < dl) { const q = sd / dl, f = (0.55 + 0.45 * tileAt(tl.t1, x, sd, 1, 89)) * (1 - q * 0.55); r = 140 * f; g = 165 * f; bl = 62 * f; o.tT = null; o.tex = false; }
+      if (sd < dl) { const q = sd / dl, f = (0.55 + 0.45 * tileAt(tl.t1, x, sd, 1, 89)) * (1 - q * 0.55); r = 118 * f; g = 116 * f; bl = 50 * f; o.tT = null; o.tex = false; }   /* v102: свес в тени — тёмно-оливковый, не салатовый */
     }
     if (sd < 70 && (S.grassy || S.sod)) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70);   /* корни — только под травой (r34: в песчанике каньона — «V-царапины») */ if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
     { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
@@ -613,8 +615,17 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
         if (prm && prm.h > 60) { const k = 1.1 - 0.35 * Math.min(1, Math.max(0, (y - prm.y0) / prm.h)); r *= k; g *= k; bl *= k; }
         if (S.glass && !isBack) {
           // корпус судна: железные полосы с заклёпками, мокрая тёмная полоса и водоросли у ватерлинии
-          const bx = ((x % 186) + 186) % 186;
-          if (bx < 7) { const e = bx < 1 || bx > 5.5 ? 0.55 : 1; r = 58 * e + n1 * 10; g = 56 * e + n1 * 10; bl = 54 * e + n1 * 10; if (bx >= 2 && bx < 5 && ((y % 24) + 24) % 24 < 3) { r = 120; g = 112; bl = 100; } }
+          /* v102 (критик r35: «железные полосы — серая изолента 8 px»; эталон — тёмные кованые полосы 4–5 px с заклёпками):
+             полоса 5 px тёмного железа с ржавчиной, светлая кромка слева, тень на доске справа, круглые заклёпки с бликом */
+          const bx = ((x % 186) + 186) % 186, ry = ((y % 22) + 22) % 22;
+          if (bx < 5) {
+            const rust = tileAt(tl.t2, x * 3, y * 0.7, 2, 57), k = 0.85 + n1 * 0.25;
+            r = (30 + rust * 22) * k; g = (27 + rust * 12) * k; bl = (25 + rust * 4) * k;
+            if (bx < 1) { r *= 1.9; g *= 1.85; bl *= 1.8; } else if (bx >= 4) { r *= 0.6; g *= 0.6; bl *= 0.6; }
+            const dx = bx - 2.5, dy = ry - 11, d2 = dx * dx + dy * dy;
+            if (d2 < 2.9) { const lit = -(dx + dy); r = 70 + lit * 26; g = 62 + lit * 22; bl = 52 + lit * 18; if (d2 < 0.6 && lit > 0) { r = 150; g = 138; bl = 118; } }
+            else if (d2 < 4.4 && dx + dy > 0) { r *= 0.55; g *= 0.55; bl *= 0.55; }
+          } else if (bx < 7) { const k = bx < 6 ? 0.55 : 0.78; r *= k; g *= k; bl *= k; }   // тень полосы на доске
           const dw = S.waterY - y;
           if (dw < 70 && dw > -40) {
             const wet = Math.max(0, Math.min(1, 1 - dw / 70)); r *= 1 - 0.35 * wet; g *= 1 - 0.3 * wet; bl *= 1 - 0.3 * wet;
@@ -1001,7 +1012,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const seed = map.seed || 1;
   const colOff = new Float32Array(W), capN = new Float32Array(W), capS = new Float32Array(W);
   // рваный нижний край травяной шапки: стебли свисают на землю зубцами разной длины
-  const fringe = new Float32Array(W); for (let x = 0; x < W; x++) { const ph = (x + hash3(x >> 2, 0, seed) * 3) % 4, tip = 1 - Math.abs(ph - 2) / 2; fringe[x] = tip * tip * (G.cap.blades ? (theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' ? 1 + hash3(x >> 2, 1, seed) * 4 : 4 + hash3(x >> 2, 1, seed) * 11) : hash3(x >> 2, 1, seed) * 2.5); }   /* у травы-текстуры бахрома короткая: длинные столбики при приближении — полосы */
+  const fringe = new Float32Array(W); for (let x = 0; x < W; x++) { const ph = (x + hash3(x >> 2, 0, seed) * 3) % 4, tip = 1 - Math.abs(ph - 2) / 2; fringe[x] = tip * tip * (G.cap.blades ? (theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien' ? 1 + hash3(x >> 2, 1, seed) * 4 : 4 + hash3(x >> 2, 1, seed) * 11) : hash3(x >> 2, 1, seed) * 2.5); if (theme.id === 'alien') fringe[x] += Math.max(0, fbm1(x / 13, seed + 33, 2) + 0.15) * 7; }   /* у травы-текстуры бахрома короткая: длинные столбики при приближении — полосы */
   for (let x = 0; x < W; x++) { colOff[x] = fbm1(x / 420, seed + 5, 3) * 28; capN[x] = (fbm1(x / 55, seed + 7, 2) + 1) * 0.5; capS[x] = Math.abs(Math.sin(x * 0.2 + capN[x] * 9)); }
   // снежная шапка: низ — мягкие наплывы-языки без «пилы» и ступенек; под ней редкие сосульки разной длины, группами
   const snowLip = G.cap.snow ? new Float32Array(W) : null;
@@ -1508,11 +1519,16 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
   // иллюминаторы на корпусе корабля у ватерлинии
   if (theme.id === 'tropical') {
     const py = waterY - 46; let lastP = -999;
+    /* v102 (критик r35: «кольца иллюминаторов плоские»): объёмный иллюминатор из Blender (make_decor.py porthole) — латунное
+       кольцо, фланец с болтами, тёмное стекло с бликом; в слое растений — чёткий при приближении. Без спрайта — прежний рисунок */
+    const PH = TexLib.data.porthole1;
+    if (PH && surface) surface.sprite(PH.canvas, 'porthole1');
     for (let x = 0; x < W; x += 6) {
       if (x - lastP < 150 || py < 0 || matAt(x, py) !== 4) continue;
       let ok = true; for (const [dx, dy] of [[-12, 0], [12, 0], [0, -12], [0, 12]]) if (!T.isSolid(x + dx, py + dy) || matAt(x + dx, py + dy) !== 4) ok = false;
       if (!ok) continue; lastP = x;
       c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.arc(x + 1.5, py + 2, 11.7, 0, TAU); c.fill();   /* r33: иллюминаторы ×1,3 (эталон ~22 px) */
+      if (PH) { anchor(x, py); (surface ? cs : c).drawImage(PH.canvas, x - 14, py - 14, 28, 28); continue; }
       const br = c.createLinearGradient(x - 11, py - 11, x + 11, py + 11); br.addColorStop(0, '#d8b068'); br.addColorStop(0.5, '#b08a40'); br.addColorStop(1, '#5a3c16');
       c.fillStyle = br; c.beginPath(); c.arc(x, py, 11, 0, TAU); c.fill();
       const gl = c.createRadialGradient(x - 2.6, py - 2.6, 1, x, py, 7.8); gl.addColorStop(0, '#4a6a70'); gl.addColorStop(0.6, '#1a2a30'); gl.addColorStop(1, '#0a1216');

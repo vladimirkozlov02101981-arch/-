@@ -1445,7 +1445,7 @@ def alien_mushroom(name, seed, px=560):
     H = 3.0; cam = sc.camera; cam.data.ortho_scale = H
     cam.location = (0, -10, H / 2 - 0.08); cam.rotation_euler = (math.radians(90), 0, 0)
 
-    def tissue(nm, col, dark, sss, rough=0.5, fibers=False, emit=None, es=0.0, sss_rad=(0.5, 0.2, 0.6), zgrad=False):
+    def tissue(nm, col, dark, sss, rough=0.5, fibers=False, emit=None, es=0.0, sss_rad=(0.5, 0.2, 0.6), zgrad=False, warts=0.0):
         m, nt, b = principled(nm, rough, 0.35); N = nt.nodes; Lk = nt.links
         for key in ('Subsurface Weight', 'Subsurface'):
             if key in b.inputs: b.inputs[key].default_value = sss; break
@@ -1472,11 +1472,26 @@ def alien_mushroom(name, seed, px=560):
             mr.inputs['To Min'].default_value = 0.35; mr.inputs['To Max'].default_value = 1.15; Lk.new(sep.outputs['Z'], mr.inputs['Value'])
             mul = N.new('ShaderNodeVectorMath'); mul.operation = 'SCALE'; Lk.new(colsock, mul.inputs[0]); Lk.new(mr.outputs['Result'], mul.inputs['Scale'])
             colsock = mul.outputs['Vector']
+        wt = None
+        if warts:   # v102 (критик r35: «гриб пластиковый»; в эталоне шляпка в мелких бугорках и светлых пятнах): бугорки по ячейкам
+            vo = N.new('ShaderNodeTexVoronoi'); vo.inputs['Scale'].default_value = 26.0
+            if 'Randomness' in vo.inputs: vo.inputs['Randomness'].default_value = 0.9
+            Lk.new(tc.outputs['Object'], vo.inputs['Vector'])
+            wr = N.new('ShaderNodeMapRange'); wr.inputs['From Min'].default_value = 0.0; wr.inputs['From Max'].default_value = 0.42
+            wr.inputs['To Min'].default_value = 1.0; wr.inputs['To Max'].default_value = 0.0; Lk.new(vo.outputs['Distance'], wr.inputs['Value'])
+            sp = N.new('ShaderNodeTexNoise'); sp.inputs['Scale'].default_value = 7.0; sp.inputs['Detail'].default_value = 4.0; Lk.new(tc.outputs['Object'], sp.inputs['Vector'])
+            sm = N.new('ShaderNodeMapRange'); sm.inputs['From Min'].default_value = 0.45; sm.inputs['From Max'].default_value = 0.7
+            sm.inputs['To Min'].default_value = 0.8; sm.inputs['To Max'].default_value = 1.0 + warts * 0.55; Lk.new(sp.outputs['Fac'], sm.inputs['Value'])
+            sc2 = N.new('ShaderNodeVectorMath'); sc2.operation = 'SCALE'; Lk.new(colsock, sc2.inputs[0]); Lk.new(sm.outputs['Result'], sc2.inputs['Scale'])
+            colsock = sc2.outputs['Vector']   # светлые и тёмные пятна по шляпке
+            wt = N.new('ShaderNodeMath'); wt.operation = 'MULTIPLY'; Lk.new(wr.outputs['Result'], wt.inputs[0]); wt.inputs[1].default_value = warts * 1.6
         Lk.new(colsock, b.inputs['Base Color'])
         nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 60; nz.inputs['Detail'].default_value = 8
         Lk.new(tc.outputs['Object'], nz.inputs['Vector'])
-        bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.45 if fibers else 0.25
+        bp = N.new('ShaderNodeBump'); bp.inputs['Strength'].default_value = 0.45 if fibers else (0.6 if warts else 0.25)
         h = N.new('ShaderNodeMath'); h.operation = 'ADD'; Lk.new(src.outputs['Fac'], h.inputs[0]); Lk.new(nz.outputs['Fac'], h.inputs[1])
+        if wt:
+            h2 = N.new('ShaderNodeMath'); h2.operation = 'ADD'; Lk.new(h.outputs['Value'], h2.inputs[0]); Lk.new(wt.outputs['Value'], h2.inputs[1]); h = h2
         Lk.new(h.outputs['Value'], bp.inputs['Height']); Lk.new(bp.outputs['Normal'], b.inputs['Normal'])
         return m
 
@@ -1486,7 +1501,7 @@ def alien_mushroom(name, seed, px=560):
     NR, SEG = 60, 28; verts = []; faces = []
     for i in range(NR + 1):
         t = i / NR; c0 = axis(t)
-        rad = 0.075 + 0.07 * (1 - t) ** 1.6 + 0.10 * max(0.0, 0.12 - t) / 0.12
+        rad = 0.105 + 0.07 * (1 - t) ** 1.6 + 0.10 * max(0.0, 0.12 - t) / 0.12 + 0.06 * max(0.0, t - 0.86) / 0.14   # v102: ножка толще (эталон), под шляпкой раструб
         for k in range(SEG):
             a = k / SEG * math.tau; wob = 1 + 0.06 * noise.noise(Vector((math.cos(a) * 2, math.sin(a) * 2, t * 6 + seed)))
             verts.append((c0.x + math.cos(a) * rad * wob, c0.y + math.sin(a) * rad * 0.92 * wob, c0.z - 0.05))
@@ -1511,7 +1526,7 @@ def alien_mushroom(name, seed, px=560):
         v.co = Vector((p.x * R * d, p.y * R * 0.92 * d, zz * R)) + top + Vector((0, 0, 0.03))
     cap = bpy.data.meshes.new('cap'); bm.to_mesh(cap); bm.free()
     for pl in cap.polygons: pl.use_smooth = True
-    cap.materials.append(tissue('cap', (0.86, 0.66, 0.84), (0.42, 0.28, 0.48), 0.4, rough=0.36, emit=(0.85, 0.35, 0.9), es=0.06, sss_rad=(0.8, 0.3, 0.9), zgrad=True))
+    cap.materials.append(tissue('cap', (0.92, 0.64, 0.90), (0.46, 0.26, 0.52), 0.35, rough=0.62, emit=(0.85, 0.35, 0.9), es=0.06, sss_rad=(0.8, 0.3, 0.9), zgrad=True, warts=1.0))   # v102: матовая, в бугорках и пятнах — не «пластик»
     sc.collection.objects.link(bpy.data.objects.new('cap', cap))
     # пластинки снизу: тонкие радиальные лопасти от шейки до края
     bm = bmesh.new()

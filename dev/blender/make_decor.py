@@ -1206,6 +1206,44 @@ def alienbush(name, seed, tip):
     return sc
 
 
+def porthole(name, seed):
+    """иллюминатор борта (критик r35: «кольца плоские»; эталон — латунное кольцо 3–4 ед. с тёмным стеклом): объёмное кольцо-тор
+    из потёртой латуни, плоский фланец с 8 болтами, утопленное тёмное стекло с отражением заката. Смотрит в камеру, центр кадра"""
+    sc, rng = scene(28, ((1.0, 0.80, 0.55), 5.6), seed)
+    C = Vector((0, 0, 12 * U))                       # центр кадра 28 ед. (низ кадра — z = −2 ед.)
+    rot = Matrix.Rotation(math.radians(90), 4, 'X')  # ось тора — к камере (−Y)
+    brass, nt, b = mt.principled('brass', 0.3, 0.5); N, L = nt.nodes, nt.links
+    if 'Metallic' in b.inputs: b.inputs['Metallic'].default_value = 1.0
+    tc = N.new('ShaderNodeTexCoord'); nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 900; nz.inputs['Detail'].default_value = 6
+    L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); E = ramp.color_ramp.elements
+    E[0].position = 0.35; E[0].color = (*mt.lin((0.30, 0.26, 0.13)), 1); E[1].position = 0.62; E[1].color = (*mt.lin((0.80, 0.64, 0.30)), 1)
+    L.new(nz.outputs['Fac'], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])   # потёртая латунь с тёмными пятнами
+    rr = N.new('ShaderNodeMapRange'); rr.inputs['To Min'].default_value = 0.42; rr.inputs['To Max'].default_value = 0.22
+    L.new(nz.outputs['Fac'], rr.inputs['Value']); L.new(rr.outputs['Result'], b.inputs['Roughness'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.25; L.new(nz.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=64, radius1=11.0 * U, radius2=11.0 * U, depth=0.8 * U, matrix=Matrix.Translation(C + Vector((0, 0.6 * U, 0))) @ rot)   # фланец
+    me = bpy.data.meshes.new(name + '_f'); bm.to_mesh(me); bm.free(); obj(name + '_f', me, brass, sc)
+    # кольцо: тор (большой радиус 8,9, сечение 1,7 ед.)
+    bm = bmesh.new(); R0, r0, NU, NV = 8.9, 1.7, 96, 24
+    vs = [[bm.verts.new(C + rot @ Vector(((R0 + r0 * math.cos(v / NV * math.tau)) * math.cos(u / NU * math.tau) * U, (R0 + r0 * math.cos(v / NV * math.tau)) * math.sin(u / NU * math.tau) * U, r0 * math.sin(v / NV * math.tau) * U * 0.8))) for v in range(NV)] for u in range(NU)]
+    for u in range(NU):
+        for v in range(NV): bm.faces.new((vs[u][v], vs[(u + 1) % NU][v], vs[(u + 1) % NU][(v + 1) % NV], vs[u][(v + 1) % NV]))
+    me = bpy.data.meshes.new(name + '_r'); bm.to_mesh(me); bm.free(); obj(name + '_r', me, brass, sc)
+    # болты на фланце
+    bm = bmesh.new()
+    for q in range(8):
+        a = q / 8 * math.tau + math.pi / 8
+        bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=0.85 * U, matrix=Matrix.Translation(C + Vector((math.cos(a) * 10.3 * U, 0, math.sin(a) * 10.3 * U))) @ Matrix.Diagonal((1, 0.6, 1, 1)))
+    me = bpy.data.meshes.new(name + '_b'); bm.to_mesh(me); bm.free(); obj(name + '_b', me, mat_col('bolt', (0.30, 0.24, 0.14), 0.45, 0.5), sc)
+    # стекло: утопленный тёмный диск, глянец отражает тёплое небо
+    gl, nt2, g2 = mt.principled('pglass', 0.06, 0.6); g2.inputs['Base Color'].default_value = (*mt.lin((0.04, 0.06, 0.07)), 1)
+    bm = bmesh.new(); bmesh.ops.create_cone(bm, cap_ends=True, segments=64, radius1=7.4 * U, radius2=7.4 * U, depth=0.3 * U, matrix=Matrix.Translation(C + Vector((0, -0.25 * U, 0))) @ rot)   # перед фланцем, под кольцом
+    me = bpy.data.meshes.new(name + '_g'); bm.to_mesh(me); bm.free(); obj(name + '_g', me, gl, sc)
+    sc.world.node_tree.nodes['Background'].inputs[0].default_value = (*mt.lin((0.78, 0.62, 0.50)), 1)   # закатное небо — блик на стекле и латуни
+    return sc
+
 DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'snowman1': (snowman, 11, 80), 'snowman2': (snowman, 12, 80),
     'cactus1': (cactus, 21, 90), 'cactus2': (cactus, 22, 90), 'cactus3': (cactus, 23, 90),
@@ -1217,6 +1255,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'column1': (column, 121, 96), 'column2': (column, 122, 96), 'column_ruin1': (column, 123, 96), 'column_ruin2': (column, 124, 96),
     'pot1': (potjar, 131, 36), 'pot2': (potjar, 132, 36),
     'barrel1': (barrel, 133, 32), 'barrel2': (barrel, 134, 32),
+    'porthole1': (porthole, 135, 28),
     'drygrass1': (drygrass, 141, 36), 'drygrass2': (drygrass, 142, 36), 'drygrass3': (drygrass, 143, 36), 'drygrass4': (drygrass, 144, 36),
     'crystal_c1': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 81, 56), 'crystal_c2': (lambda n, s: crystals(n, s, (0.35, 0.95, 1.0)), 82, 56),
     'crystal_m1': (lambda n, s: crystals(n, s, (1.0, 0.43, 0.96)), 83, 56), 'crystal_m2': (lambda n, s: crystals(n, s, (1.0, 0.43, 0.96)), 84, 56),

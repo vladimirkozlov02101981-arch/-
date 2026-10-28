@@ -112,7 +112,7 @@ const THEMES = {
       strata: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98', '#50387a'], band: 28, bandSharp: 0.3,
       rock: ['#4a3470', '#5a3f86', '#3c2a5e', '#6a4c98'],
       pebbles: ['#6a55a0', '#56448a', '#7d68b8'], smoothStones: true, stoneRim: '#7ae8ff',
-      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], glowTex2: [250, 110, 255], glowRaw: true, glowDirt: true, glowMin: 110 /* v93: тени граней кристалла тоже светятся (на малой текстуре мелкие кристаллы темнее 150 — серели от gain) */, gain: [1.62, 1.8, 1.0] /* v91: новая порода (make_rubble.py: валуны, щебень, мокрый блеск) — по замеру кадра alien:1700:1000 к эталону 25/23/25 (v70: [1.12, 1.28, 0.72] для прежней) */ },
+      outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', glowTex: [90, 235, 255], glowTex2: [250, 110, 255], glowRaw: true, glowDirt: true, glowMin: 135, glowK: 1.5 /* v102 (r35: «кристаллы — плоские наклейки»): грани в текстуре (alien_crystals2.py facets), свечение слабее и только у светлых граней — ореол не заливает рельеф; v93: тени граней кристалла тоже светятся (на малой текстуре мелкие кристаллы темнее 150 — серели от gain) */, gain: [1.62, 1.8, 1.0] /* v91: новая порода (make_rubble.py: валуны, щебень, мокрый блеск) — по замеру кадра alien:1700:1000 к эталону 25/23/25 (v70: [1.12, 1.28, 0.72] для прежней) */ },
     },
     scatter: ['crystal', 'pod', 'alienbush', 'alienplant', 'alienbush', 'pod', 'alienbush', 'crystal'],   /* r28: растений на островах вдвое больше; v91: соцветия (эталон — густая лиловая кромка) */
     weather: 'spores', birds: false, ambient: '#8474b0', gravity: 0.72, ambientSound: 'space', glow: true,
@@ -127,7 +127,7 @@ const THEMES = {
       { kind: 'islands', color: '#5c3161', fog: '#a45a74', base: 0.0, amp: 0.26, p: 0.2, trees: '#4a2550', treeKind: 'palm' },
     ],
     clouds: { n: 7, color: '#ffb38a', shade: '#b0567a', alpha: 0.85 },
-    liquid: { kind: 'water', top: '#4fc3d9', mid: '#1f7fa6', deep: '#0c2f55', foam: '#fff4e0', alpha: 0.8, glint: '#ffcf8a' },
+    liquid: { kind: 'water', top: '#3c7d7e', mid: '#185160', deep: '#092834', foam: '#fff4e0', alpha: 0.84, glint: '#ffcf8a', glintK: 1.6, rippleK: 1.5 },   /* v102 (r35: «плоская бирюза», эталон у поверхности 26/46/51, золотые отблески): темнее, отблесков и ряби больше */
     ground: {
       cap: { cols: ['#93de58', '#5fb236', '#3d8426'], thick: 8, blades: ['#79cf45', '#5aae33', '#96e05c', '#4a9a2c'], flowers: ['#ff4f7b', '#ffcf3d', '#ff8a3d', '#ffffff'], beach: { cols: ['#fbe5a8', '#f0d08c', '#ddb56f'], range: 70 } },
       soil: '#a0703f', soilDepth: 30,

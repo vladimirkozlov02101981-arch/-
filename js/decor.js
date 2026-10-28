@@ -541,9 +541,11 @@ const DECOR = {
     if (hasSprite) {
       /* верх шляпки освещён: в слое света (он поднимает множитель ночного освещения Alien) — эллипс по шляпке спрайта
          (кадр 3 м: центр шляпки ≈ 0,59 высоты спрайта, полуширина ≈ 0,23), ярче сверху; без него купол был плоским тёмным */
-      if (g) { const D0 = 150 * s, hx = x, hy = y + 3 - D0 * 0.67, rx = D0 * 0.22, ry = D0 * 0.06;
-        g.save(); g.translate(hx, hy); g.scale(1, ry / rx); const gr = g.createRadialGradient(-rx * 0.25, -rx * 0.35, 0, 0, 0, rx);
-        gr.addColorStop(0, 'rgba(255,225,250,0.85)'); gr.addColorStop(0.5, 'rgba(255,190,240,0.35)'); gr.addColorStop(1, 'rgba(255,170,240,0)');
+      /* v102 (критик r35: «гриб пластиковый»): подсветка шире и ровнее — горячее пятно сверху читалось глянцевым бликом и
+         прятало пятнистую фактуру шляпки */
+      if (g) { const D0 = 150 * s, hx = x, hy = y + 3 - D0 * 0.66, rx = D0 * 0.27, ry = D0 * 0.085;
+        g.save(); g.translate(hx, hy); g.scale(1, ry / rx); const gr = g.createRadialGradient(-rx * 0.12, -rx * 0.18, 0, 0, 0, rx);
+        gr.addColorStop(0, 'rgba(255,215,248,0.5)'); gr.addColorStop(0.6, 'rgba(255,190,240,0.32)'); gr.addColorStop(1, 'rgba(255,170,240,0)');
         g.fillStyle = gr; circ(g, 0, 0, rx); g.restore(); }
       return;
     }

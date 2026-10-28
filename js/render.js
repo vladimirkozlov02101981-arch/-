@@ -700,7 +700,7 @@ class Renderer {
     }
     if (!lava) this.drawReflection(c, wy, t);
     c.save();
-    const span = Math.max(1, x1 - x0), far = span > 9000, fc = hex2rgb(L.foam);
+    const span = Math.max(1, x1 - x0), far = span > 9000, fc = hex2rgb(L.foam), gk = L.glintK || 1, rk = L.rippleK || 1;   /* сила отблесков и ряби темы */
     const edge = (dy) => { c.beginPath(); for (let x = x0; x <= x1 + step; x += step) { const y = wy + dy + this.wave(x, tt, 0) * amp; if (x === x0) c.moveTo(x, y); else c.lineTo(x, y); } c.stroke(); };
     if (lava) { c.lineWidth = 3; c.strokeStyle = 'rgba(255,240,170,0.9)'; edge(0); }
     else if (far) { c.lineWidth = 1.5; c.strokeStyle = rgba(L.foam, 0.45); edge(0); }
@@ -723,7 +723,7 @@ class Renderer {
         const h1 = hash3(tx, i, 31), h2 = hash3(tx, i, 32), dep = h2 * h2, dark = i % 3 !== 0;
         const gx = tx * P + h1 * P + Math.sin(t * (0.5 + h2) + i) * 6, gy = wy + this.wave(gx, tt, 0) * amp + 3 + dep * 60, len = (5 + hash3(tx, i, 33) * 16) * (1 - dep * 0.5);
         c.lineWidth = dark ? 1.3 : 0.9;
-        c.strokeStyle = dark ? `rgba(0,20,36,${(0.2 * (1 - dep * 0.7)).toFixed(3)})` : `rgba(${fc[0]},${fc[1]},${fc[2]},${(0.2 * (1 - dep)).toFixed(3)})`;
+        c.strokeStyle = dark ? `rgba(0,20,36,${(0.2 * rk * (1 - dep * 0.7)).toFixed(3)})` : `rgba(${fc[0]},${fc[1]},${fc[2]},${(0.2 * rk * (1 - dep)).toFixed(3)})`;
         c.beginPath(); c.moveTo(gx - len, gy); c.quadraticCurveTo(gx, gy + (dark ? 1.3 : -1.1), gx + len, gy); c.stroke();
       }
     }
@@ -745,7 +745,7 @@ class Renderer {
       const sunX = x0 + span * 0.72;
       const glintCol = hex2rgb(L.glint || '#ffffff');
       c.save();
-      for (let i = 0; i < 170; i++) {
+      for (let i = 0, nG = Math.round(170 * Math.min(2, gk)); i < nG; i++) {
         const drift = t * (8 + (i % 7) * 2.2);
         const gx = x0 + (((i * 157.3 + drift) % span) + span) % span;
         const depthFrac = Math.pow((i * 11 % 31) / 30, 1.7);
@@ -758,9 +758,9 @@ class Renderer {
         const shimmer = Math.sin(phase);
         if (shimmer < 0.15 && nearSun < 0.6) continue;
         const bright = Math.max(0, (shimmer - 0.15) / 0.85);
-        const alpha = (0.10 + 0.65 * nearSun) * bright * (1 - depthFrac * 0.75);
+        const alpha = (0.10 * gk + 0.65 * nearSun) * bright * (1 - depthFrac * 0.75);
         if (alpha <= 0.02) continue;
-        const rw = (1.6 + (i % 6) * 1.0 + nearSun * 5) * (0.8 + 0.4 * bright);
+        const rw = (1.6 + (i % 6) * 1.0 + nearSun * 5) * (0.8 + 0.4 * bright) * (1 + (gk - 1) * 1.5);   /* у тропиков — длинные полосы отражённого заката */
         const rh = Math.max(0.3, (0.35 + nearSun * 0.4) * (0.6 + 0.5 * (1 - depthFrac)));
         c.fillStyle = `rgba(${glintCol[0]},${glintCol[1]},${glintCol[2]},${Math.min(1, alpha).toFixed(3)})`;
         c.beginPath();
