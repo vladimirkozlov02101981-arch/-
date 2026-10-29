@@ -282,6 +282,26 @@ function snowRockL(L) {
   return 200;
 }
 
+/* v110 (критик r36: горящих окон 8,6–10,6 % фасада при ~5 % в эталоне; «битые» окна — у погашенного горящего окна оставались
+   силуэты шторы и мебели): гаснет половина окон, стекло погасшего окна — тёмное с отражением неба, как у тёмных окон текстуры
+   (геометрия окна — make_facade.py: ячейка 32×40, стекло 7…25 × 8,5…31, рама 5 %, переплёт по 0,5 и 0,38) */
+const WIN_OFF = 0.5, OFFP = { r: 0, g: 0, b: 0 };
+function offGlass(S, lx, ly, idx, o) {
+  const cx = ((lx % 32) + 32) % 32, cy = ((ly % 40) + 40) % 40; if (cx < 7 || cx >= 25 || cy < 8.5 || cy >= 31) return false;
+  const wc = Math.floor(lx / 32), wr = Math.floor(ly / 40); if (hash3(wc, wr, idx * 7 + 11) >= WIN_OFF) return false;
+  texAt(S.tx.facade, lx - cx + 11, ly - cy + 23, OFFP);   /* горит ли это окно в текстуре: середина нижней створки */
+  if (OFFP.r * 0.3 + OFFP.g * 0.59 + OFFP.b * 0.11 < 95) return false;
+  if (!S.darkWin) {   /* тёмные окна самой текстуры (ячейки 32×40 плитки 160×320): стекло погасшего окна берётся из них — тот же вид
+                         и та же родная ×4 при приближении */
+    S.darkWin = []; const T = S.tx.facade;
+    for (let r = 0; r * 40 < T.h; r++) for (let c = 0; c * 32 < T.w; c++) { texAt(T, c * 32 + 11, r * 40 + 23, OFFP); if (OFFP.r * 0.3 + OFFP.g * 0.59 + OFFP.b * 0.11 < 60) S.darkWin.push([c * 32, r * 40]); }
+  }
+  if (!S.darkWin.length) return false;
+  const dw = S.darkWin[(hash3(wc, wr, idx * 7 + 13) * S.darkWin.length) | 0];
+  texAt(S.tx.facade, dw[0] + cx, dw[1] + cy, o); o.r *= S.tgR; o.g *= S.tgG; o.b *= S.tgB; o.tex = true;   /* стены и тёмные окна: яркость по эталону (gain темы) */
+  return true;
+}
+
 /** цвет материала в точке. Результат в o: r,g,b; свечение ga/gr/gg/gb; блеск spec */
 function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
@@ -688,17 +708,21 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
           if (ly < 6) { r = 44 + n1 * 12; g = 46 + n1 * 12; bl = 54 + n1 * 12; if (ly >= 2 && ly < 3.5 && (x % 44) < 22) { r = 240; g = 206; bl = 80; } }
           else if (x % 90 < 2) { r *= 0.68; g *= 0.68; bl *= 0.68; }
         } else if (P.cornice) { r *= 1.18; g *= 1.18; bl *= 1.18; }
-        else if (S.flatSlab && !isBack) {   /* v103 (r35: плиты-«подушки» почти чёрные; эталон — серый бетон, мокрая светлая
+        else if (S.flatSlab && !isBack) {   /* v110: зерно бетона в 1–3 px (критик r36: «торцы гладкие, HF 2») */
+          { const gk = 0.76 + 0.48 * tileAt(tl.t1, x * 3, y * 3, 0, 57) + (n1 - 0.5) * 0.26, L0 = (r + g + bl) / 3; r = (L0 + (r - L0) * 0.45) * gk; g = (L0 + (g - L0) * 0.45) * gk; bl = (L0 + (bl - L0) * 0.45) * gk; }   /* и цвет нейтральнее: синеву даёт ночной свет */
+          /* v103 (r35: плиты-«подушки» почти чёрные; эталон — серый бетон, мокрая светлая
           кромка сверху, тёмный низ): лицевой бетон светлее, верхние 2 px — отблеск неба */
-          r *= 1.45; g *= 1.45; bl *= 1.5; if (t < 2) { const k = 1.55 - t * 0.2; r = r * k + 10; g = g * k + 12; bl = bl * k + 18; }
+          o.tex = true;   /* v110: свет как у текстуры из Blender — без S-кривой и с половинной тенью (низ плиты не тонет в синеве) */
+          r *= 1.65; g *= 1.65; bl *= 1.62; if (t < 2) { const k = 1.55 - t * 0.2; r = r * k + 10; g = g * k + 12; bl = bl * k + 18; }
         }
         else if (P.win && prm && S.tx.facade && isBack && !(P.found && y > prm.y0 + prm.h - P.found + 2)) {   /* окна — только на задней стене здания, не на земле и не в фундаменте */                                              // фасад из Blender: окна, кондиционеры, водостоки
           texAt(S.tx.facade, x - prm.x0, y - prm.y0, o); r = o.r; g = o.g; bl = o.b; o.tex = true;
+          if (offGlass(S, x - prm.x0, y - prm.y0, info.idx, o)) { r = o.r; g = o.g; bl = o.b; break; }
           const lum = r * 0.3 + g * 0.59 + bl * 0.11;
           if (lum > 120 && Math.max(r, g, bl) - Math.min(r, g, bl) > 12 || lum > 175) {
             // свет каждого окна свой (ячейка окна в координатах здания, а не плитки): часть гаснет, у остальных — разная яркость и тон
             const wc = Math.floor((x - prm.x0) / 32), wr = Math.floor((y - prm.y0) / 40), hw = hash3(wc, wr, info.idx * 7 + 11), ht = hash3(wc, wr, info.idx * 7 + 12);
-            if (hw < 0.12) { r *= 0.16; g *= 0.17; bl *= 0.2; }   /* v93: гаснет меньше окон — горящих 1,9 % кадра при эталоне 3,2 % */
+            if (hw < WIN_OFF) { r *= 0.16; g *= 0.17; bl *= 0.2; }   /* погасшее окно (стекло целиком — offGlass ниже) */
             else { const k = 0.95 + hw * 0.52, warmW = ht < 0.86;   /* v103 (r35: окна тусклее эталона — 208/159/113 против 235/176/113): ×1,3 */   /* r33: тёплых окон ~60 %, холодных ~10 % */ r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
               o.emit = true; o.emitTex = true; o.ga = (isBack ? 150 : 230) * (0.6 + hw * 0.4); o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           }
@@ -889,7 +913,8 @@ function floorShade(S, mt, x, y, t, i, W, m, back, sid, infos, o) {
   if (tf >= 8 || y - t - 2 < 0 || !back[i - (t + 2) * W] || m[i - (t + 2) * W]) return;
   const WT = TexLib.data.wood_light;
   if (mt === 5) {   /* бетонное перекрытие: тёмная затёртая стяжка с редкими швами плит (светлая «плитка» 118–148 под ночным грейдом города была сиреневыми пластинами: L 79 против 48 у эталона) */
-    let v; if (S.tx.concrete) { texAt(S.tx.concrete, x, y * 2 + 23, o); v = (o.r + o.g + o.b) / 3 * 0.5; } else v = 70 + o.n1 * 12;
+    let v; if (S.flatSlab) v = 62 + o.n1 * 10 + (hash3(x >> 1, y, 71) - 0.5) * 8;   /* v110: ровная серая стяжка (текстура бетона, растянутая ×2 по высоте, давала чёрные полосы) */
+    else if (S.tx.concrete) { texAt(S.tx.concrete, x, y * 2 + 23, o); v = (o.r + o.g + o.b) / 3 * 0.5; } else v = 70 + o.n1 * 12;
     o.r = v * 1.06; o.g = v * 0.99; o.b = v * 0.8; if (x % 48 < 1) { o.r *= 0.6; o.g *= 0.6; o.b *= 0.6; }   /* r24: под ночным грейдом стяжка синела (B/R 1.27) */
   } else if (mt === 6) { const tl2 = ((x >> 4) + (y >> 3)) & 1; const v = 118 + tl2 * 16 + o.n1 * 14; o.r = v; o.g = v * 0.97; o.b = v * 0.92; if ((x & 15) === 0) { o.r *= 0.6; o.g *= 0.6; o.b *= 0.6; } }
   else if (WT) { texAt(WT, x * 1.0, y * 2 + 37, o); const l = (o.r + o.g + o.b) / 3; o.r = (l + (o.r - l) * 0.68) * 0.97; o.g = (l + (o.g - l) * 0.68) * 0.93; o.b = (l + (o.b - l) * 0.68) * 0.86; }   /* доски пола: спокойнее, без «оранжевого пластика» */
@@ -897,7 +922,7 @@ function floorShade(S, mt, x, y, t, i, W, m, back, sid, infos, o) {
   const ek = mt === 5 ? 0.2 : 0.4;   /* у бетона кромка скромнее */
   if (under && tf < 2) { o.r *= 0.45; o.g *= 0.45; o.b *= 0.45; }   // под баррикадой — контактная тень вместо освещённой кромки
   else if (!under && tf < 1.2) { o.r = o.r * (1 - ek) + 255 * ek; o.g = o.g * (1 - ek) + 236 * ek; o.b = o.b * (1 - ek) + 200 * ek; }   // освещённая кромка пола
-  else if (tf >= 6.5) { o.r *= 0.35; o.g *= 0.35; o.b *= 0.35; }   // тёмный шов между полом и перекрытием
+  else if (tf >= 6.5) { const k = S.flatSlab ? 0.62 : 0.35; o.r *= k; o.g *= k; o.b *= k; }   // тёмный шов между полом и перекрытием (у плит города мягче)
   o.tex = true; o.tT = null;
 }
 
@@ -1122,7 +1147,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         // объём: нормаль из размытой высоты
         const hl = x > 0 ? HF[i - 1] : 0, hr = x < W - 1 ? HF[i + 1] : 0, hu = y > 0 ? HF[i - W] : 0, hd = y < H - 1 ? HF[i + W] : 255;
         let nx = (hl - hr) * KN, ny = (hu - hd) * KN;
-        if (S.flatSlab && mt === 5 && dd > 2.5) { const q = Math.max(0.15, 1 - (dd - 2.5) * 0.5); nx *= q; ny *= q; }   /* v103 (критик r35: «подушки торцов»): бетон — плоская грань и фаска 2–3 px, а не цилиндр из размытой высоты */
+        if (S.flatSlab && mt === 5 && dd > 1.2) { const q = Math.max(0.1, 1 - (dd - 1.2) * 0.7); nx *= q; ny *= q; }   /* v110: фаска 1–2 px, углы прямые */   /* v103 (критик r35: «подушки торцов»): бетон — плоская грань и фаска 2–3 px, а не цилиндр из размытой высоты */
         const inv = 1 / Math.sqrt(nx * nx + ny * ny + 1); nx *= inv; ny *= inv; const nz = inv;
         const lam = nx * LX + ny * LY + nz * LZ;
         let f = 1 + (lam - LZ) * 1.05; if (f < 0.5) f = 0.5;
@@ -1133,6 +1158,8 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
         if (BD[i] < 10 && mt !== 8) f *= 0.7 + BD[i] * 0.03;                  // низ навесов темнее
         const shd = dd <= 30 ? shadowAt(x, y) : 0;                              // отброшенная тень
         if (shd > 0.02) f *= 1 - shd * (mt === 3 ? 0.18 : o.cap ? CAPSH : 0.42);   /* на снегу тень мягче: рассеянный лунный свет и отражение снега (без «грязных пятен») */
+        if (S.flatSlab && mt === 5) f = Math.max(f, 0.66);   /* v110 (критик r36: плиты — «тёмно-синие балки» 10/13/35): низ плиты под комнатой не тонет
+           в черноту — холодная тень, S-кривая и ночной свет окрашивали его в густо-синий; эталон — бетон ~35/38/53 */
         // блик на гладких материалах
         if (o.spec > 0) { const sp = nx * HX + ny * HY + nz * HZ, base = HZ; if (sp > base) { const k = Math.min(1, (sp - base) / (1 - base)); const s = k * k * 120 * o.spec; r += s; g += s; bl += s; } }
         if (o.tex) f = 1 + (f - 1) * 0.55;                                     // в текстуре из Blender свет уже есть — наш только поддерживает форму
@@ -1160,7 +1187,10 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
           r += (rim[0] - r) * k; g += (rim[1] - g) * k; bl += (rim[2] - bl) * k;
         }
         // неоновая подсветка кромок зданий (ночной город): розовая и голубая по кварталам
-        if (S.neon && dd > 3 && dd <= 9 && !o.cap) { const nc = S.neon[(x >> 8) & 1], q = 1 - (dd - 3) / 6, k = q * q * 0.85; r += (nc[0] - r) * k; g += (nc[1] - g) * k; bl += (nc[2] - bl) * k; if (gimg && q > 0.5) { const j2 = i * 4; gimg[j2] = nc[0]; gimg[j2 + 1] = nc[1]; gimg[j2 + 2] = nc[2]; gimg[j2 + 3] = 150 * q; } }
+        /* v110 (критик r36: межэтажные плиты — тёмно-синие «балки», крыша и торцы — фиолетовые «подушки»): неон — только у кромок на
+           фоне неба (у потолков и полов комнат с задней стеной — нет) и слабее (0,85 → 0,45) */
+        const nE = Math.ceil(dd) + 1, inner = (q2) => q2 >= 0 && q2 < N && !m[q2] && back && back[q2] > 0;
+        if (S.neon && dd > 3 && dd <= 9 && !o.cap && !(inner(i - nE * W) || inner(i + nE * W) || inner(i - nE) || inner(i + nE))) { const nc = S.neon[(x >> 8) & 1], q = 1 - (dd - 3) / 6, k = q * q * 0.45; r += (nc[0] - r) * k; g += (nc[1] - g) * k; bl += (nc[2] - bl) * k; if (gimg && q > 0.5) { const j2 = i * 4; gimg[j2] = nc[0]; gimg[j2 + 1] = nc[1]; gimg[j2 + 2] = nc[2]; gimg[j2 + 3] = 150 * q; } }
         // отражённый свет неба: поверхность получает оттенок горизонта — передний план в тон картине
         if (dd < 60 && ny < 0 && !(o.cap && S.grassy)) { const kb = (1 - dd / 60) * Math.min(1, -ny * 2.5) * 0.16; r += (bounce[0] - r) * kb; g += (bounce[1] - g) * kb; bl += (bounce[2] - bl) * kb; }
         if (!o.tex) r += (r - 118) * 0.12, g += (g - 118) * 0.12, bl += (bl - 118) * 0.12;   // S-кривая: глубже тени, ярче свет
@@ -1299,12 +1329,15 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
   if (grassTex) {
     // Отдельные пучки разной высоты; низкая светлая кромка долины и замков.
     const gh = grassTex.h, gw = grassTex.w, meadow = theme.id === 'valley' || theme.id === 'castle';
+    /* v110 (критик r36: «трава сине-зелёная и вдвое темнее»; эталон — оттенок 57°, медиана 74/72/30 в долине, 50/49/23 на закате
+       в замках, у нас было 85°, 33/46/16): фильтр полосы травы подобран по пикселям текстуры (sepia → hue → saturate → brightness) */
+    const GF = theme.id === 'castle' ? 'sepia(0.2) hue-rotate(-22deg) saturate(0.7) brightness(1.3)' : 'sepia(0.39) hue-rotate(-17deg) saturate(1.05) brightness(1.85)';
     let img = grassTex.canvas;
     if (meadow) {
       img = makeCanvas(gw, gh); const sx = img.getContext('2d');
-      sx.filter = 'brightness(1.2) saturate(0.8)'; sx.drawImage(grassTex.canvas, 0, 0);
+      sx.filter = GF; sx.drawImage(grassTex.canvas, 0, 0);
     }
-    if (surface) surface.sprite(img, G.tex.grass, meadow ? 'brightness(1.2) saturate(0.8)' : 'none');   // ×4 версия — assets/tex/surface/<имя>.png
+    if (surface) surface.sprite(img, G.tex.grass, meadow ? GF : 'none');   // ×4 версия — assets/tex/surface/<имя>.png
     // основание травы — по сглаженной высоте поверхности (среднее соседних столбцов того же уступа): низ травы идёт по склону
     // ровной линией, а не ступеньками пикселей (при приближении была «лесенка» на границе травы и дёрна)
     const grassOk = (x, y) => !(y > waterY - 4 || y > beachY || matAt(x, y) !== 1 || !flatTop(x, y) || isCaveAt(x, y));
@@ -1319,8 +1352,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     if (meadow) {   /* v104 (критик r35: «трава — войлок 10 px»; эталон — трава свешивается с кромки на 15–25 ед.): свес травы над землёй —
       та же полоса травы вверх ногами, в тени, клочьями (~75 % длины). Преобразование пишется в команду слоя растений — при
       приближении свес рисуется из той же ×4 полосы; числа rng не тратятся */
-      const himg = makeCanvas(gw, gh), hx2 = himg.getContext('2d'); hx2.filter = 'brightness(1.0) saturate(0.75)'; hx2.drawImage(grassTex.canvas, 0, 0);   /* фильтр — один раз: c.filter на каждом столбце в Chrome очень медленный */
-      if (surface) surface.sprite(himg, G.tex.grass, 'brightness(1.0) saturate(0.75)');
+      const himg = makeCanvas(gw, gh), hx2 = himg.getContext('2d'); hx2.filter = GF + ' brightness(0.62)'; hx2.drawImage(grassTex.canvas, 0, 0);   /* фильтр — один раз: c.filter на каждом столбце в Chrome очень медленный */
+      if (surface) surface.sprite(himg, G.tex.grass, GF + ' brightness(0.62)');
       const hangOk = (x, y) => grassOk(x, y) && T.isSolid(x, y + 26);
       c.save();
       for (let k = 0; k < tops.length; k += 2) {
@@ -1337,8 +1370,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     }
     if (meadow) {   /* v104 (эталон valley_tower: пол тоннеля зарос травой, критик r35 — «пещера пустая»): трава и на полу тоннелей —
       ниже и в тени, клочьями; числа rng не тратятся */
-      const cimg = makeCanvas(gw, gh), cx2 = cimg.getContext('2d'); cx2.filter = 'brightness(0.95) saturate(0.9)'; cx2.drawImage(grassTex.canvas, 0, 0);
-      if (surface) surface.sprite(cimg, G.tex.grass, 'brightness(0.95) saturate(0.9)');
+      const cimg = makeCanvas(gw, gh), cx2 = cimg.getContext('2d'); cx2.filter = GF + ' brightness(0.7)'; cx2.drawImage(grassTex.canvas, 0, 0);
+      if (surface) surface.sprite(cimg, G.tex.grass, GF + ' brightness(0.7)');
       const caveOk = (x, y) => y <= waterY - 4 && matAt(x, y) === 1 && flatTop(x, y) && isCaveAt(x, y);
       for (let k = 0; k < tops.length; k += 2) {
         const x = tops[k], y = tops[k + 1];
