@@ -50,7 +50,7 @@ const expected = {
   arctic: ['rock_arctic', 'cave_arctic', 'cap_snow', 'tree_pine_snow1', 'tree_pine_snow2', 'snowman1', 'snowman2', 'igloo1', 'icecrystal1', 'icecrystal2', 'rocksnow1', 'rocksnow2', 'wood_light', 'ladder_wood', 'metal_station', 'metal_steel'],   /* с версии 38 у станции тоже заснеженные ели; v40: декор и россыпь из Blender */
   volcano: ['rock_volcano', 'cave_volcano', 'cap_ash', 'stone_dark', 'deadtree_char1', 'deadtree_char2', 'spike1', 'spike2', 'obsidian1', 'obsidian2', 'lavarock1', 'lavarock2', 'bones1', 'wood_light', 'ladder_wood', 'metal_steel', 'lava_surface'],   /* v40: декор и россыпь из Blender */
   alien: ['rock_alien', 'cave_alien', 'grass_alien', 'alien_tree1', 'alien_tree2', 'crystal_c1', 'crystal_c2', 'crystal_m1', 'crystal_m2', 'crystal_h1', 'crystal_h2', 'crystal_h3', 'crystal_h4', 'alienplant1', 'alienplant2', 'pod1', 'tentacle1', 'wood_light', 'ladder_steel', 'metal_ufo', 'striplight1', 'alienbush1', 'alienbush2'],   /* v40: декор и россыпь из Blender */
-  pirate: ['dirt_tropical', 'cave_wall', 'grass_tropical', 'wood_hull', 'stone_light', 'ivy', 'palm1', 'palm2', 'palm3', 'barrel1', 'barrel2', 'rockb1', 'rockb2', 'wood_light', 'bush1', 'bush2', 'ladder_wood', 'flower1', 'flower2', 'flower3', 'flower4', 'flower5', 'flower6', 'flower7', 'lantern1', 'porthole1'],   /* v40: декор и россыпь из Blender */
+  pirate: ['dirt_tropical', 'cave_wall', 'grass_tropical', 'wood_hull', 'stone_light', 'ivy', 'palm1', 'palm2', 'palm3', 'barrel1', 'barrel2', 'rockb1', 'rockb2', 'wood_light', 'bush1', 'bush2', 'ladder_wood', 'flower1', 'flower2', 'flower3', 'flower4', 'flower5', 'flower6', 'flower7', 'lantern1', 'porthole1', 'sea_body', 'sea_glint'],   /* v40: декор и россыпь из Blender; v111: лента моря (WebP) */
   castles: ['dirt_castle', 'cave_wall', 'grass_valley', 'stone_castle', 'ivy', 'ivy_crest', 'wood_hull', 'wood_light', 'tree_oak1', 'tree_oak2', 'tree_oak3', 'tree_pine1', 'tree_pine2', 'haystack1', 'bush1', 'bush2', 'rock1', 'rock2', 'rock3', 'ladder_wood', 'flower1', 'flower2', 'flower3', 'flower4', 'flower5', 'flower6', 'flower7', 'leaf1', 'leaf2', 'leaf3', 'leaf4', 'roots1', 'roots2', 'roots3', 'cottage1', 'lantern1'],   /* v40: декор и россыпь из Blender */
   city: ['concrete_city', 'facade_city', 'wood_light', 'ladder_steelY', 'metal_steel', 'tree_birch1']   /* v89: берёза в кадке (planter) */   /* v41: металл из Blender (make_metal.py) */
 };
@@ -63,7 +63,7 @@ for (const [id, names] of Object.entries(expected)) test('Selected ' + id + ' wa
   assert.deepEqual(Array.from(assets.surface).sort(), names.filter(n => SURF.includes(n)).sort());
   const ready = f.TexLib.loadForMap(id), again = f.TexLib.loadForMap(map);
   assert.equal(new Set(f.requests).size, f.requests.length);
-  const required = Array.from(f.TexLib.commonNames()).concat(names).map(n => 'assets/tex/' + n + '.png')
+  const required = Array.from(f.TexLib.commonNames()).concat(names).map(n => 'assets/tex/' + n + (f.TexLib.webp && f.TexLib.webp.has(n) ? '.webp' : '.png'))
     .concat(Array.from(assets.surface, n => 'assets/tex/surface/' + n + '.png'), 'assets/maps/' + id + '.png');
   assert.deepEqual(f.requests.slice().sort(), required.sort());
   assert(f.images.every(i => i.fetchPriority === 'high'));

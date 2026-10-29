@@ -127,7 +127,7 @@ const THEMES = {
       { kind: 'islands', color: '#5c3161', fog: '#a45a74', base: 0.0, amp: 0.26, p: 0.2, trees: '#4a2550', treeKind: 'palm' },
     ],
     clouds: { n: 7, color: '#ffb38a', shade: '#b0567a', alpha: 0.85 },
-    liquid: { kind: 'water', top: '#3c7d7e', mid: '#185160', deep: '#092834', foam: '#fff4e0', alpha: 0.84, glint: '#ffcf8a', glintK: 1.6, rippleK: 1.5 },   /* v102 (r35: «плоская бирюза», эталон у поверхности 26/46/51, золотые отблески): темнее, отблесков и ряби больше */
+    liquid: { kind: 'water', top: '#3c7d7e', mid: '#185160', deep: '#092834', foam: '#fff4e0', alpha: 0.84, glint: '#ffcf8a', glintK: 1.6, rippleK: 1.5, sea: { band: 56, near: 2.6, px: 7, drift: 2.5, windK: 0.012, a0: 0.95, a1: 0.62, contrast: 1.5, mean: [34, 57, 62], under: ['#16627a', '#0a4a5e', '#05293a'] } },   /* v111 (r36: «σL 9,7, нет гребней»): полоса моря из Blender (render.js, drawSea) — band ед. высотой, у зрителя волны в near раз крупнее, px — пикселей текстуры на ед. у борта; under — толща под полосой (эталон 22/74/89 → 5/46/60). v102 (r35: «плоская бирюза», эталон у поверхности 26/46/51, золотые отблески): темнее, отблесков и ряби больше */
     ground: {
       cap: { cols: ['#93de58', '#5fb236', '#3d8426'], thick: 8, blades: ['#79cf45', '#5aae33', '#96e05c', '#4a9a2c'], flowers: ['#ff4f7b', '#ffcf3d', '#ff8a3d', '#ffffff'], beach: { cols: ['#fbe5a8', '#f0d08c', '#ddb56f'], range: 70 } },
       soil: '#a0703f', soilDepth: 30,

@@ -43,7 +43,7 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
     }
     // исходные PNG сохраняют цвет, прозрачность и мелкие границы без потерь WebP
     const texDir = path.join(root, 'assets/tex');
-    if (fs.existsSync(texDir)) for (const f of fs.readdirSync(texDir)) if (f.endsWith('.png')) {
+    if (fs.existsSync(texDir)) for (const f of fs.readdirSync(texDir)) if (f.endsWith('.png') || f.endsWith('.webp')) {   // v111: ленты моря — WebP
       const p = 'assets/tex/' + f; assets[p] = dataUri(p);
     }
   } finally {
@@ -82,7 +82,7 @@ const dataUri = (p) => `data:${MIME[path.extname(p)]};base64,${b64(p)}`;
   });
   // пути к ресурсам → встроенные данные
   const patch = {
-    'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.png`', 'im.src = ASSET(`assets/tex/${n}.png`)'], ['im.src = `assets/tex/hi/${n}.webp`', 'im.src = ASSET(`assets/tex/hi/${n}.webp`)'], ['const src = `assets/tex/fine/${n}.webp`', 'const src = ASSET(`assets/tex/fine/${n}.webp`)'], ['const src = `assets/tex/native/${n}.webp`', 'const src = ASSET(`assets/tex/native/${n}.webp`)'], ['im.src = `assets/tex/surface/${n}.png`', 'im.src = ASSET(`assets/tex/surface/${n}.png`)']],
+    'js/art.js': [['img.src = `assets/maps/${id}.png`', 'img.src = ASSET(`assets/maps/${id}.png`)'], ['im.src = `assets/tex/${n}.${this.webp.has(n) ? \'webp\' : \'png\'}`', 'im.src = ASSET(`assets/tex/${n}.${this.webp.has(n) ? \'webp\' : \'png\'}`)'], ['im.src = `assets/tex/hi/${n}.webp`', 'im.src = ASSET(`assets/tex/hi/${n}.webp`)'], ['const src = `assets/tex/fine/${n}.webp`', 'const src = ASSET(`assets/tex/fine/${n}.webp`)'], ['const src = `assets/tex/native/${n}.webp`', 'const src = ASSET(`assets/tex/native/${n}.webp`)'], ['im.src = `assets/tex/surface/${n}.png`', 'im.src = ASSET(`assets/tex/surface/${n}.png`)']],
     'js/ui.js': [['url("assets/maps/${m.id}.png")', 'url("${ASSET(`assets/maps/${m.id}.png`)}")'], ['img.src = `assets/maps/${m.id}-thumb.webp`', 'img.src = ASSET(`assets/maps/${m.id}-thumb.webp`)'], ['preview.src = `assets/maps/${m.id}-thumb.webp`', 'preview.src = ASSET(`assets/maps/${m.id}-thumb.webp`)']],
     'js/audio.js': [['fetch(`assets/sfx/${n}.ogg`)', 'fetch(ASSET(`assets/sfx/${n}.ogg`))']],
   };

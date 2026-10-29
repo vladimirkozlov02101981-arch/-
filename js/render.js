@@ -628,7 +628,7 @@ class Renderer {
   }
   wave(x, t, ph) { return Math.sin(x * 0.018 + t * 1.5 + ph) * 3 + Math.sin(x * 0.047 - t * 2.1 + ph * 2) * 1.8 + Math.sin(x * 0.11 + t * 3.2) * 0.7; }
   /** отражение в воде: полосы кадра над линией воды зеркально переносятся вниз, дрожат по волнам и гаснут с глубиной */
-  drawReflection(c, wy, t) {
+  drawReflection(c, wy, t, k0 = 1) {
     const m = c.getTransform(), cv = c.canvas, sy = Math.round(wy * m.d + m.f);
     if (sy <= 0 || sy >= cv.height - 2) return;
     const depth = Math.min(sy, cv.height - sy, Math.round(200 * m.d)), band = Math.max(1, Math.round(2 * this.dpr));
@@ -641,7 +641,7 @@ class Renderer {
     r.drawImage(cv, 0, sy - depth, cv.width, depth, 0, 0, HW, HD);   // снимок полосы над водой, размыт — вода не зеркало
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
     for (let k = 0; k < depth; k += band) {
-      const q = 1 - k / depth, a = (0.06 + 0.3 * Math.pow(q, 1.6)) * (0.86 + 0.14 * Math.sin(t * 2.4 + k * 0.08));
+      const q = 1 - k / depth, a = k0 * (0.06 + 0.3 * Math.pow(q, 1.6)) * (0.86 + 0.14 * Math.sin(t * 2.4 + k * 0.08));
       const dx = (Math.sin(t * 1.8 + k * 0.065) * 2.2 + Math.sin(t * 3.1 + k * 0.16) * 1.3 + Math.cos(k * 0.28 - t * 0.9) * 0.8) * (1 + (k / depth) * 2) * m.d;
       c.globalAlpha = Math.max(0, Math.min(1, a));
       c.drawImage(this.reflCv, 0, (depth - k - band) / 4, HW, band / 4, dx, sy + k, cv.width, band);
@@ -679,6 +679,134 @@ class Renderer {
     }
     c.restore();
   }
+  /** лучи света в толще воды: мягкие наклонные клинья, медленно колышутся (y0 — откуда начинаются) */
+  drawRays(c, L, x0, span, wy, t, col = L.top) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const rayCol = hex2rgb(col);
+    for (let i = 0; i < 9; i++) {
+      const rx = x0 + ((((i * 311.7 + Math.sin(t * 0.25 + i) * 40) % span) + span) % span), w = 26 + (i % 3) * 18, len = 170 + (i % 4) * 60;
+      const g = c.createLinearGradient(0, wy, 0, wy + len); g.addColorStop(0, `rgba(${rayCol[0]},${rayCol[1]},${rayCol[2]},${0.10 + 0.05 * Math.sin(t * 0.7 + i)})`); g.addColorStop(1, `rgba(${rayCol[0]},${rayCol[1]},${rayCol[2]},0)`);
+      c.fillStyle = g; c.beginPath(); c.moveTo(rx, wy + 2); c.lineTo(rx + w, wy + 2); c.lineTo(rx + w * 0.6 + len * 0.35, wy + len); c.lineTo(rx + len * 0.35 - w * 0.4, wy + len); c.closePath(); c.fill();
+    }
+    c.restore();
+  }
+  /** уровни детализации ленты моря (вдвое меньше каждый): узор холста берёт текстуру без мип-карт, и сжатая вдали
+      волна рябила бы. Блики сжимаются «максимумом» из четырёх пикселей — далёкие искры не гаснут */
+  seaMips(T, glint, K = 1, mean = null) {
+    const key = glint ? 'seaMG' : 'seaMB';
+    if (this[key] && this[key].src === T.canvas) return this[key].mips;
+    const mips = []; let cv = T.canvas, sd0 = 0;
+    for (let l = 0; l < 6; l++) {
+      if (!glint) { const n = makeCanvas(cv.width, cv.height); n.getContext('2d').drawImage(cv, 0, 0); const sd = this.seaContrast(n, l ? sd0 : 0, K, mean); if (!l) sd0 = sd; cv = n; }
+      mips.push({ cv, pats: new Map(), pat(ctx) { let p = this.pats.get(ctx); if (p === undefined) { p = ctx.createPattern(this.cv, 'repeat'); this.pats.set(ctx, p); } return p && typeof p.setTransform === 'function' ? p : null; } });
+      if (cv.width < 128 || cv.height < 16) break;
+      const n = makeCanvas(cv.width >> 1, cv.height >> 1), x = n.getContext('2d');
+      if (glint) { x.imageSmoothingEnabled = false; x.globalCompositeOperation = 'lighten'; for (const ox of [0, 0.5]) for (const oy of [0, 0.5]) x.drawImage(cv, ox, oy, n.width, n.height); }
+      else { x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(cv, 0, 0, n.width, n.height); }
+      cv = n;
+    }
+    this[key] = { src: T.canvas, mips }; return mips;
+  }
+  /** контраст ленты моря: отклонения от среднего растягиваются — уровень 0 в K раз, уменьшенные уровни до σ яркости
+      уровня 0 (иначе усреднение гасит гребни, и вдали вода — ровная бирюза). Возвращает σ после растяжения */
+  seaContrast(cv, sdT, K, mean) {
+    try {
+      const x = cv.getContext('2d', { willReadFrequently: true }), im = x.getImageData(0, 0, cv.width, cv.height), d = im.data, n = d.length / 4;
+      let mr = 0, mg = 0, mb = 0, s2 = 0;
+      for (let i = 0; i < d.length; i += 4) { mr += d[i]; mg += d[i + 1]; mb += d[i + 2]; }
+      mr /= n; mg /= n; mb /= n; const mL = mr * 0.3 + mg * 0.59 + mb * 0.11;
+      for (let i = 0; i < d.length; i += 4) { const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 - mL; s2 += l * l; }
+      const sd = Math.sqrt(s2 / n), k = sdT ? Math.max(1, Math.min(3, sdT * 0.92 / Math.max(1e-3, sd))) : K;
+      const [tr, tg, tb] = mean || [mr, mg, mb];   // средний цвет — к эталонному (отклонения, т. е. гребни и отблески, свои)
+      if (Math.abs(k - 1) > 0.01 || mean) { for (let i = 0; i < d.length; i += 4) { d[i] = tr + (d[i] - mr) * k; d[i + 1] = tg + (d[i + 1] - mg) * k; d[i + 2] = tb + (d[i + 2] - mb) * k; } x.putImageData(im, 0, 0); }
+      return sd * k;
+    } catch (e) { return sdT || 0; }
+  }
+  /** v111 (критик r36: «вода пиратов плоская: σL 9,7 при эталоне 25+, нет гребней, оранжевых отблесков и пены у борта»).
+      Море как на эталоне: у ватерлинии — полоса поверхности, океан из Blender (dev/blender/make_sea.py: бесшовная лента
+      с отражением закатного неба), положенная полосами в 1–2 пикселя экрана с перспективой — у борта волны мельче и
+      сжаты, к зрителю в S.near раз крупнее; ближние ряды при сдвиге камеры плывут быстрее дальних, волны дрейфуют по
+      ветру. Поверх — размытое отражение кадра (тёмный борт, светлое небо), солнечные блики «осветлением» (два встречных
+      слоя попеременно, ярче на дорожке под солнцем), пена у борта и камней, светлая кромка нижнего края полосы; ниже —
+      толща воды с лучами и каустикой. false — рисовать нечем (тогда прежняя вода) */
+  drawSea(c, sc, L, S, x0, x1, wy, t, tt, amp, step) {
+    const m = c.getTransform(); if (m.b || m.c || !(m.a > 0) || !(m.d > 0) || typeof DOMMatrix === 'undefined') return false;
+    const TB = TexLib.data.sea_body, TG = TexLib.data.sea_glint, mb = this.seaMips(TB, false, S.contrast || 1.3, S.mean), mg = TG ? this.seaMips(TG, true) : null;
+    const B = S.band || 56, yT = wy - 6, rN = S.near || 2.6, sTop = S.px || 12, a = (rN - 1) / B, span = x1 - x0, xc = (x0 + x1) / 2;
+    const T0 = (TB.h - 2) * rN / B, rowAt = (v) => T0 * (1 - 1 / (1 + a * v)) / a;   // ряд ленты на глубине полосы v: вдали сжато
+    const dtw = Math.min(0.1, Math.max(0, t - (this.seaT === undefined ? t : this.seaT))); this.seaT = t;
+    const wind = (sc.turn && sc.turn.wind) || 0; this.seaD = (this.seaD || 0) + dtw * ((S.drift || 2.5) + wind * (S.windK || 0));   // дрейф копится: ветер сменился — без скачка
+    const D = this.seaD;
+    this.drawRays(c, L, x0, span, wy + B - 10, t, S.under[0]);
+    this.drawCaustics(c, L, x0, x1, wy + B - 8, t);
+    const r0 = Math.ceil(m.d * yT + m.f), r1 = Math.floor(m.d * (yT + B) + m.f), k = Math.max(1, Math.ceil((r1 - r0) / 200));
+    if (r1 <= r0) return false;
+    const rows = [];   // полосы по целым пикселям экрана: соседние не перекрываются и не просвечивают на стыках
+    for (let r = r0; r < r1; r += k) {
+      const ya = (r - m.f) / m.d, yb = (Math.min(r1, r + k) - m.f) / m.d, v0 = ya - yT, v1 = yb - yT;
+      rows.push([ya, yb, v0, v1, 1 + a * (v0 + v1) / 2, rowAt(v0), rowAt(v1)]);
+    }
+    const lay = (ctx, mips, mir, dd, alpha) => {
+      for (const [ya, yb, v0, v1, rr, tA, tB] of rows) {
+        const hx = sTop / rr / m.a, vy = (tB - tA) / ((yb - ya) * m.d), lv = Math.max(0, Math.min(mips.length - 1, Math.floor(Math.log2(Math.max(1, Math.max(hx, vy)))))), f = 1 << lv;
+        const pat = mips[lv].pat(ctx); if (!pat) return false;
+        const A = (mir ? -rr : rr) / sTop * f, s = (yb - ya) / (tB - tA);
+        pat.setTransform(new DOMMatrix([A, 0, 0, s * f, xc - xc * rr + dd * rr, ya - s * tA]));
+        ctx.globalAlpha = alpha((v0 + v1) / 2); ctx.fillStyle = pat; ctx.fillRect(x0, ya, span, yb - ya);
+      }
+      return true;
+    };
+    c.save();
+    c.beginPath(); c.moveTo(x0, yT + B + 3);
+    for (let x = x0; x <= x1 + step; x += step) c.lineTo(x, wy + this.wave(x, tt, 0) * amp);
+    c.lineTo(x1 + step, yT + B + 3); c.closePath(); c.clip();
+    const a0 = S.a0 || 0.95, a1 = S.a1 || 0.8;
+    if (!lay(c, mb, false, D, (v) => a0 + (a1 - a0) * v / B)) { c.restore(); return false; }
+    c.globalAlpha = 1; this.drawReflection(c, wy, t, S.refl || 0.35);   // отражение борта и неба, разбитое волнами (слабо — волны его дробят)
+    if (mg) {
+      const W = c.canvas.width, H = r1 - r0, G = this.seaGCv || (this.seaGCv = makeCanvas(W, H));
+      if (G.width !== W || G.height < H) { G.width = W; G.height = Math.max(H, G.height); }
+      const g = G.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, G.width, G.height);
+      g.setTransform(m.a, 0, 0, m.d, m.e, m.f - r0); g.globalCompositeOperation = 'lighter'; g.imageSmoothingEnabled = true;
+      const tw = 0.5 + 0.5 * Math.sin(t * 0.8);   // два встречных слоя попеременно: искры гаснут и вспыхивают
+      lay(g, mg, false, D * 1.7, () => 0.12 + 0.88 * tw); lay(g, mg, true, 211 - D * 1.3, () => 0.12 + 0.88 * (1 - tw));
+      g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'destination-in'; g.globalAlpha = 1;
+      const gk = L.glintK || 1, sx = W * 0.72, gr = g.createLinearGradient(0, 0, W, 0);   // солнечная дорожка: под солнцем ярко, в стороне — редкие искры
+      for (let i = 0; i <= 16; i++) { const d = (i / 16 * W - sx) / (W * 0.15); gr.addColorStop(i / 16, `rgba(255,255,255,${Math.min(1, (S.glint0 || 0.3) * gk + Math.exp(-d * d)).toFixed(3)})`); }
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 1; c.drawImage(G, 0, 0, W, H, 0, r0, W, H); c.restore();
+    }
+    // пена у борта и камней: где у ватерлинии твёрдое — рваная кромка пены, бежит вдоль борта
+    const Tm = sc.terrain, mask = Tm && Tm.mask, fc = hex2rgb(L.foam);
+    if (mask) {
+      c.fillStyle = `rgb(${fc[0]},${fc[1]},${fc[2]})`;
+      for (let x = Math.max(1, Math.floor(x0 / 2) * 2), xe = Math.min(Tm.W - 2, x1); x <= xe; x += 2) {
+        const yw = wy + this.wave(x, tt, 0) * amp, yi = Math.round(yw);
+        if (yi < 4 || yi + 2 >= Tm.H || !(mask[(yi - 3) * Tm.W + x] || mask[(yi - 1) * Tm.W + x] || mask[(yi + 1) * Tm.W + x])) continue;
+        const h = hash3(x >> 1, 7, 61), n1 = Math.sin(x * 0.13 + t * 1.7 + h) * 0.5 + Math.sin(x * 0.047 - t * 0.9 + 1.3) * 0.5;
+        const al = (0.2 + 0.5 * n1) * (0.55 + 0.45 * h); if (al < 0.06) continue;
+        c.globalAlpha = Math.min(0.8, al); c.beginPath(); c.ellipse(x, yw + 0.6 + h * 1.8, 1.4 + h * 2.4, 0.6 + h * 0.9, 0, 0, TAU); c.fill();
+      }
+    }
+    c.restore();
+    // кромка: тонкий блик по линии воды и светлый нижний край полосы (изнанка поверхности, как на эталоне)
+    c.save(); c.lineWidth = 1; c.lineCap = 'round';
+    const seg = 36;
+    for (let sx = Math.floor(x0 / seg) * seg; sx < x1 + step; sx += seg) {
+      const al = 0.08 + 0.4 * Math.max(0, Math.sin(sx * 0.031 + t * 0.6) * 0.55 + Math.sin(sx * 0.0117 - t * 0.33) * 0.45);
+      if (al < 0.14) continue;
+      c.strokeStyle = `rgba(${fc[0]},${fc[1]},${fc[2]},${al.toFixed(3)})`; c.beginPath();
+      for (let x = sx, n = 0; n < 5; x += seg / 4, n++) { const y = wy - 0.4 + this.wave(x, tt, 0) * amp; if (!n) c.moveTo(x, y); else c.lineTo(x, y); }
+      c.stroke();
+    }
+    const yb = yT + B; c.lineWidth = 1.1; c.strokeStyle = 'rgba(150,215,226,0.45)'; c.beginPath();
+    for (let x = x0; x <= x1 + step; x += step) { const y = yb + this.wave(x * 1.7, tt * 1.3, 1.1) * 0.35; if (x === x0) c.moveTo(x, y); else c.lineTo(x, y); }
+    c.stroke();
+    const gl = c.createLinearGradient(0, yb, 0, yb + 12); gl.addColorStop(0, 'rgba(120,200,216,0.18)'); gl.addColorStop(1, 'rgba(120,200,216,0)');
+    c.fillStyle = gl; c.fillRect(x0, yb, span, 12);
+    c.restore();
+    return true;
+  }
   drawLiquid(c, sc, v, t, back) {
     const L = sc.theme.liquid, wy = sc.waterY; if (v.y1 < wy - 20) return;
     const lava = L.kind === 'lava'; const tt = lava ? t * 0.35 : t; const amp = lava ? 1.4 : 1;
@@ -686,9 +814,13 @@ class Renderer {
     c.beginPath(); c.moveTo(x0, bot);
     for (let x = x0; x <= x1 + step; x += step) c.lineTo(x, wy + (back ? -6 : 0) + this.wave(x, tt, back ? 2.3 : 0) * amp);
     c.lineTo(x1 + step, bot); c.closePath();
-    if (back) { c.fillStyle = css(shadec(L.mid, lava ? 1 : 0.8)); c.fill(); return; }
-    const g = c.createLinearGradient(0, wy - 6, 0, wy + 280); g.addColorStop(0, L.top); g.addColorStop(0.22, L.mid); g.addColorStop(1, L.deep);
+    if (back) { if (L.sea && x1 - x0 <= 9000 && typeof TexLib !== 'undefined' && TexLib.data.sea_body) return;   /* у моря дальняя полоса — сама лента (drawSea), без тёмной ступеньки над ней */
+      c.fillStyle = css(shadec(L.mid, lava ? 1 : 0.8)); c.fill(); return; }
+    const sea = !lava && L.sea && x1 - x0 <= 9000 && typeof TexLib !== 'undefined' && TexLib.data.sea_body ? L.sea : null;   /* v111: море с полосой поверхности (drawSea) */
+    const g = sea ? c.createLinearGradient(0, wy + (sea.band || 56) - 6, 0, wy + (sea.band || 56) + 224) : c.createLinearGradient(0, wy - 6, 0, wy + 280);
+    if (sea) { g.addColorStop(0, sea.under[0]); g.addColorStop(0.3, sea.under[1]); g.addColorStop(1, sea.under[2]); } else { g.addColorStop(0, L.top); g.addColorStop(0.22, L.mid); g.addColorStop(1, L.deep); }
     c.save(); c.globalAlpha = L.alpha; c.fillStyle = g; c.fill(); c.restore();
+    if (sea && this.drawSea(c, sc, L, sea, x0, x1, wy, t, tt, amp, step)) return;
     // лава: настоящая корка — тёмные плиты и светящиеся трещины расплава (dev/tools/make_lava.py), медленно дрейфует;
     // к глубине темнее. Без текстуры — прежняя заливка с плитами-эллипсами
     const LT = lava && typeof TexLib !== 'undefined' && TexLib.data.lava_surface;
@@ -732,15 +864,7 @@ class Renderer {
       if (!LT) for (let i = 0; i < 24; i++) { const gx = x0 + (((i * 173.3 + t * 9 * (i % 3 + 1)) % span) + span) % span; c.beginPath(); c.ellipse(gx, wy + 8 + (i * 7 % 40), 12 + (i % 5) * 5, 3, 0, 0, TAU); c.fill(); }
       c.globalCompositeOperation = 'lighter'; const g2 = c.createLinearGradient(0, wy - 50, 0, wy + 70); g2.addColorStop(0, 'rgba(255,120,30,0)'); g2.addColorStop(0.42, 'rgba(255,150,50,0.35)'); g2.addColorStop(1, 'rgba(255,150,50,0)'); c.fillStyle = g2; c.fillRect(x0, wy - 50, span, 120);   /* жар над лавой — без резкой нижней границы */
     } else {
-      // лучи света в толще воды: мягкие наклонные клинья, медленно колышутся
-      c.save(); c.globalCompositeOperation = 'lighter';
-      const rayCol = hex2rgb(L.top);
-      for (let i = 0; i < 9; i++) {
-        const rx = x0 + ((((i * 311.7 + Math.sin(t * 0.25 + i) * 40) % span) + span) % span), w = 26 + (i % 3) * 18, len = 170 + (i % 4) * 60;
-        const g = c.createLinearGradient(0, wy, 0, wy + len); g.addColorStop(0, `rgba(${rayCol[0]},${rayCol[1]},${rayCol[2]},${0.10 + 0.05 * Math.sin(t * 0.7 + i)})`); g.addColorStop(1, `rgba(${rayCol[0]},${rayCol[1]},${rayCol[2]},0)`);
-        c.fillStyle = g; c.beginPath(); c.moveTo(rx, wy + 2); c.lineTo(rx + w, wy + 2); c.lineTo(rx + w * 0.6 + len * 0.35, wy + len); c.lineTo(rx + len * 0.35 - w * 0.4, wy + len); c.closePath(); c.fill();
-      }
-      c.restore();
+      this.drawRays(c, L, x0, span, wy, t);   // лучи света в толще воды
       // рябь и солнечные блики: прерывистые мерцающие эллиптические блики, сгущающиеся в солнечную дорожку
       const sunX = x0 + span * 0.72;
       const glintCol = hex2rgb(L.glint || '#ffffff');
@@ -872,8 +996,10 @@ class Renderer {
     if (T.ox !== undefined && !sc.freeWalk) {
       c.save(); c.setLineDash([6, 6]); c.lineWidth = 2;
       for (const bx of [T.ox - WALK_BUDGET, T.ox + WALK_BUDGET]) {
-        const near = Math.abs(s.x - bx) < 160;
-        c.strokeStyle = near ? 'rgba(255,190,90,0.85)' : 'rgba(255,255,255,0.15)';   // вдали — едва заметно, вблизи бойца — ярко
+        /* v111 (критик r36: «вертикальный пунктир на борту»): граница видна, только когда боец к ней подходит, — плавно
+           проявляется за 220 ед. и ярка с 70 ед.; вдали на кадре нет висящей в воздухе штриховки */
+        const a = 0.85 * Math.max(0, Math.min(1, (220 - Math.abs(s.x - bx)) / 150)); if (a < 0.02) continue;
+        c.strokeStyle = `rgba(255,190,90,${a.toFixed(3)})`;
         c.beginPath(); c.moveTo(bx, s.y - 90); c.lineTo(bx, s.y + 30); c.stroke();
       }
       c.restore();
