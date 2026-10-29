@@ -302,6 +302,8 @@ function offGlass(S, lx, ly, idx, o) {
   return true;
 }
 
+/* v112: цвет мха шапки Alien до фонового света темы (×0.52/0.45/0.69): верх, середина, губа; яркость — из текстуры cap_moss */
+const MOSS_C = [[232, 228, 82], [198, 194, 70], [104, 102, 44]];
 /** цвет материала в точке. Результат в o: r,g,b; свечение ga/gr/gg/gb; блеск spec */
 function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
   const tl = S.tiles, LX = LIGHT.x, LY = LIGHT.y, LZ = LIGHT.z;
@@ -324,12 +326,21 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       const kk = Math.min(1, k), sx = x + Math.round(Math.sin(y * 0.45 + hash3(x >> 2, 7, 81) * 6) * 0.8);
       /* v102 (r35: «ровная жёлтая лента»; в эталоне мох оливково-золотой — блики ~125/110/48, середина ~95/84/38, провалы почти
          чёрные): цвет до фонового света (×0.52/0.45/0.69), пучки контрастнее — тёмные просветы, светлые пряди и кончики */
+      if (S.tx.cap) {
+        /* v112 (критик r36: «мох — соломенные пряди, эталон — бархатные подушки, светлые верхушки ~130/110/70»): подушки, щели и
+           ворс — из текстуры мха (dev/blender/make_moss.py, cap_moss; яркость q ниже, на видеокарте при приближении — родная ×4),
+           здесь — только ровный цвет шапки: оливково-золотой сверху, к губе темнее; без прядей-«соломы» */
+        if (kk < 0.5) { const q = kk / 0.5; r = MOSS_C[0][0] + (MOSS_C[1][0] - MOSS_C[0][0]) * q; g = MOSS_C[0][1] + (MOSS_C[1][1] - MOSS_C[0][1]) * q; bl = MOSS_C[0][2] + (MOSS_C[1][2] - MOSS_C[0][2]) * q; }
+        else { const q = (kk - 0.5) / 0.5; r = MOSS_C[1][0] + (MOSS_C[2][0] - MOSS_C[1][0]) * q; g = MOSS_C[1][1] + (MOSS_C[2][1] - MOSS_C[1][1]) * q; bl = MOSS_C[1][2] + (MOSS_C[2][2] - MOSS_C[1][2]) * q; }
+        f = 1 + (n1 - 0.5) * 0.06; if (t < 1.2) f *= 1.08;
+      } else {
       if (kk < 0.4) { const q = kk / 0.4; r = 241 + (183 - 241) * q; g = 242 + (185 - 242) * q; bl = 70 + (55 - 70) * q; }
       else { const q = (kk - 0.4) / 0.6; r = 183 + (87 - 183) * q; g = 185 + (84 - 185) * q; bl = 55 + (32 - 55) * q; }
       const clump = tileAt(tl.t2, x, y * 0.5, 2, 85);                                          // пучки 4–8 px: светлые и в тени
       f = 0.22 + 1.05 * clump * clump + (hash3(sx, 0, 83) - 0.5) * 0.2 + (n1 - 0.5) * 0.3 + (tileAt(tl.t1, x * 1.3, y * 1.3, 1, 89) - 0.5) * 0.3;   /* кудрявые комочки, не «штрихкод» */
       if (clump < 0.4 && hash3(sx >> 1, 1, 87) < 0.6) f *= 0.45;                               // просветы между пучками
       if (t < 1.6 + clump * 2) f *= 1.2;                                                       // светлые кончики
+      }
     } else if (S.sod) {
       // Под настоящими травинками — живой пятнистый дерн: нерегулярные пятна почвы, корневые волокна и мягкий переход к грунту
       const broadTone = (tileAt(tl.t2, x, y, 4, 83) - 0.5) * 0.20;
@@ -390,7 +401,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
       if (k > 0.8) f *= 1 - (k - 0.8) * 1.4;
     }
     r *= f; g *= f; bl *= f;
-    if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = (o.r + o.g + o.b) / S.capMean; r *= q; g *= q; bl *= q; }   // комья снега, зерно песка и пепла из Blender (v44: снег тоже в полную силу — как у родной ×4)
+    if (S.tx.cap) { texAt(S.tx.cap, x, y, o); const q = 1 + ((o.r + o.g + o.b) / S.capMean - 1) * S.capK; r *= q; g *= q; bl *= q; }   // комья снега, зерно песка и пепла из Blender (v44: снег тоже в полную силу — как у родной ×4)
   } else if (mt === 1 && S.tx.dirt) {
     // фотореалистичная земля из Blender: цвет и свет уже в текстуре; добавляем тень под травяной губой и глубину
     const sd = t - capT; texAt(S.tx.dirt, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
@@ -398,7 +409,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (capT > 0 && sd < 12) { const k = sd < 5 ? 0.42 : 0.62 + (sd - 5) * 0.054; r *= k; g *= k * 0.96; bl *= k * 0.93; }
     if (S.mossLip && capT > 0 && sd < 16) {                                                   /* v90: свисающие пряди мха (эталон Alien) */
       const dl = mossDrip(tl, x);
-      if (sd < dl) { const q = sd / dl, f = (0.55 + 0.45 * tileAt(tl.t1, x, sd, 1, 89)) * (1 - q * 0.55); r = 118 * f; g = 116 * f; bl = 50 * f; o.tT = null; o.tex = false; }   /* v102: свес в тени — тёмно-оливковый, не салатовый */
+      if (sd < dl) { const q = sd / dl; if (S.tx.cap) { texAt(S.tx.cap, x, y + 61, o); const f = (o.r + o.g + o.b) / S.capMean * (1 - q * 0.55) * 0.62; r = MOSS_C[1][0] * f; g = MOSS_C[1][1] * f; bl = MOSS_C[1][2] * f; o.tex = false; }   /* v112: свес — тот же мох (текстура: чётко при приближении) */
+        else { const f = (0.55 + 0.45 * tileAt(tl.t1, x, sd, 1, 89)) * (1 - q * 0.55); r = 118 * f; g = 116 * f; bl = 50 * f; o.tT = null; o.tex = false; } }   /* v102: свес в тени — тёмно-оливковый, не салатовый */
     }
     if (sd < 70 && (S.grassy || S.sod)) { const dvr = Math.abs(veinAt(tl.tv, x * 1.35 + 311, y * 0.75) - 0.5), wr = 0.014 * (1 - sd / 70);   /* корни — только под травой (r34: в песчанике каньона — «V-царапины») */ if (dvr < wr) { const k = (1 - dvr / wr) * 0.7; r += (48 - r) * k; g += (30 - g) * k; bl += (18 - bl) * k; } }   // корни
     { const dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))); r *= 1 - 0.08 * dk; g *= 1 - 0.09 * dk; bl *= 1 - 0.08 * dk; }   /* как в эталонах: порода не темнеет с глубиной */
@@ -1056,7 +1068,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, glowTex2: G.tex && G.tex.glowTex2, glowRaw: !!(G.tex && G.tex.glowRaw), glowDirt: !!(G.tex && G.tex.glowDirt), glowMin: G.tex && G.tex.glowMin || 150, glowDot: G.tex && G.tex.glowDot || 0.93, glowK: G.tex && G.tex.glowK || 2.4, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', mossLip: theme.id === 'alien', bury: theme.id === 'valley' || theme.id === 'castle', soilBand: theme.id === 'valley' || theme.id === 'castle' ? (() => { const a = new Float32Array(H); for (let yy = 0; yy < H; yy++) a[yy] = 1 + 0.12 * fbm1(yy / 46, seed + 401, 2); return a; })() : null, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : theme.id === 'alien' ? [[70, 66, 40], [52, 50, 30], [40, 34, 24]] /* мох Alien как в эталоне: тёмный оливково-бурый (медиана 65/54/34), а не салатовая полоса */ : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rubbleCap: theme.id === 'desert', flatSlab: theme.id === 'city', noBoulders: theme.id === 'city', hotCore: !!(G.veins && G.veins.hot), hotRim: G.veins && G.veins.hot ? (() => { const a = new Float32Array(W); for (let x = 0; x < W; x++) { const v = fbm1(x / 70, seed + 141, 2) + 0.4 * fbm1(x / 23, seed + 142, 1); a[x] = Math.max(0, Math.min(1, (v - S_RIM0) / 0.18)); } return a; })() : null, rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, glowTex2: G.tex && G.tex.glowTex2, glowRaw: !!(G.tex && G.tex.glowRaw), glowDirt: !!(G.tex && G.tex.glowDirt), glowMin: G.tex && G.tex.glowMin || 150, glowDot: G.tex && G.tex.glowDot || 0.93, glowK: G.tex && G.tex.glowK || 2.4, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', mossLip: theme.id === 'alien', bury: theme.id === 'valley' || theme.id === 'castle', soilBand: theme.id === 'valley' || theme.id === 'castle' ? (() => { const a = new Float32Array(H); for (let yy = 0; yy < H; yy++) a[yy] = 1 + 0.12 * fbm1(yy / 46, seed + 401, 2); return a; })() : null, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : theme.id === 'alien' ? [[70, 66, 40], [52, 50, 30], [40, 34, 24]] /* мох Alien как в эталоне: тёмный оливково-бурый (медиана 65/54/34), а не салатовая полоса */ : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), capK: (G.tex && G.tex.capK) || 1, texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rubbleCap: theme.id === 'desert', flatSlab: theme.id === 'city', noBoulders: theme.id === 'city', hotCore: !!(G.veins && G.veins.hot), hotRim: G.veins && G.veins.hot ? (() => { const a = new Float32Array(W); for (let x = 0; x < W; x++) { const v = fbm1(x / 70, seed + 141, 2) + 0.4 * fbm1(x / 23, seed + 142, 1); a[x] = Math.max(0, Math.min(1, (v - S_RIM0) / 0.18)); } return a; })() : null, rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -1446,8 +1458,8 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
           if (DR) {
             const D = R * 2.4; if (surface) surface.sprite(DR.canvas, dn);
             c.save(); c.translate(x, y + 3); if ((x >> 4) & 1) c.scale(-1, 1); c.drawImage(DR.canvas, -D / 2, -D, D, D); c.restore();
-            if (gc) { const gx = x, gy = y - D * 0.3, gR = D * 0.42, gr = gc.createRadialGradient(gx, gy, 0, gx, gy, gR), rgb = cols[1] === '#5ff4ff' ? '95,244,255' : '255,110,246';
-              gr.addColorStop(0, `rgba(${rgb},0.32)`); gr.addColorStop(0.5, `rgba(${rgb},0.12)`); gr.addColorStop(1, `rgba(${rgb},0)`); gc.fillStyle = gr; gc.beginPath(); gc.arc(gx, gy, gR, 0, TAU); gc.fill(); }
+            if (gc) { const gx = x, gy = y - D * 0.32, gR = D * 0.6, gr = gc.createRadialGradient(gx, gy, 0, gx, gy, gR), rgb = cols[1] === '#5ff4ff' ? '95,244,255' : '255,110,246';   /* v112 (r36: «гроздья с ореолом»): ореол шире и ярче */
+              gr.addColorStop(0, `rgba(${rgb},0.55)`); gr.addColorStop(0.4, `rgba(${rgb},0.22)`); gr.addColorStop(1, `rgba(${rgb},0)`); gc.fillStyle = gr; gc.beginPath(); gc.arc(gx, gy, gR, 0, TAU); gc.fill(); }
             c = NULL_CTX; gq = null;
           }
           for (let ci = 0; ci < numCryst; ci++) {

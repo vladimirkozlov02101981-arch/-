@@ -395,22 +395,55 @@ def watertower(name, seed):
     return sc
 
 
-def crystals(name, seed, col):
-    """кристаллы Alien: 5–7 светящихся изнутри гранёных призм веером из каменного основания"""
-    sc, rng = scene(56, ((0.85, 0.85, 1.0), 3.6), seed)
-    bm = bmesh.new()
-    for i in range(rng.randint(5, 7)):
-        a = (i / 6 - 0.5) * 1.3 + rng.uniform(-0.12, 0.12); L = rng.uniform(14, 30) * (1.3 if abs(a) < 0.25 else 1); w = rng.uniform(2.6, 4.6)
-        d = Vector((math.sin(a), rng.uniform(-0.35, 0.35), math.cos(a))).normalized()
-        prism(bm, Vector((rng.uniform(-5, 5), rng.uniform(-3, 3), -1)) * U, d, L * U, w * U, 6, 0.24, rng)
-    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
-    for p in me.polygons: p.use_smooth = False
-    deep = tuple(c * 0.34 for c in col)   # v91: насыщеннее (эталон) — прежние 0.55 и свечение 0.55 давали пастельные «леденцы»
-    o = obj(name, me, mat_glow('crystal', deep, col, 0.32, 0.04, 0.3), sc)
-    for p in me.polygons: p.use_smooth = False
-    base = lumpy_sphere('base', Vector((0, 0, -2 * U)), 9 * U, seed, 0.25, 0.45); obj('base', base, mt.mat_stone('rockb', (0.12, 0.10, 0.14), (0.30, 0.27, 0.32), rough=0.85, spec=0.2, scale=60, bumpk=1.3), sc)
-    return sc
+def mat_crystal(name, col, core=float(os.environ.get('CRY_CORE', '0.45')), rim=float(os.environ.get('CRY_RIM', '2.0'))):
+    """v111 (критик r36: «кристаллы — пастельные пластиковые леденцы»; эталон — прозрачные, светятся изнутри, яркие грани и
+    острия): тёмное насыщенное стекло (пропускание, гладкие блики) + свечение — ровное ядро и яркая кайма по скользящим
+    к взгляду граням (Layer Weight → Facing), к острию ярче"""
+    m, nt, b = mt.principled(name, 0.03, 0.6)
+    b.inputs['Base Color'].default_value = (*mt.lin(tuple(c * 0.22 for c in col)), 1)
+    for key in ('Transmission Weight', 'Transmission'):
+        if key in b.inputs: b.inputs[key].default_value = float(os.environ.get('CRY_TRANS', '0.2')); break
+    b.inputs['IOR'].default_value = 1.55
+    lw = nt.nodes.new('ShaderNodeLayerWeight'); lw.inputs['Blend'].default_value = 0.35
+    pw = nt.nodes.new('ShaderNodeMath'); pw.operation = 'POWER'; pw.inputs[1].default_value = 1.6
+    nt.links.new(lw.outputs['Facing'], pw.inputs[0])
+    tc = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tc.outputs['Object'], sep.inputs[0])
+    up = nt.nodes.new('ShaderNodeMapRange'); up.clamp = True; nt.links.new(sep.outputs['Z'], up.inputs['Value'])
+    up.inputs['From Min'].default_value, up.inputs['From Max'].default_value = 0.0, 0.3
+    up.inputs['To Min'].default_value, up.inputs['To Max'].default_value = 0.7, 1.4
+    k = nt.nodes.new('ShaderNodeMath'); k.operation = 'MULTIPLY_ADD'
+    nt.links.new(pw.outputs[0], k.inputs[0]); k.inputs[1].default_value = rim; k.inputs[2].default_value = core
+    s2 = nt.nodes.new('ShaderNodeMath'); s2.operation = 'MULTIPLY'; nt.links.new(k.outputs[0], s2.inputs[0]); nt.links.new(up.outputs['Result'], s2.inputs[1])
+    fa = nt.nodes.new('ShaderNodeAttribute'); fa.attribute_name = 'fr'   # своя яркость у каждой грани — гранёный камень, а не ровный пластик
+    s3 = nt.nodes.new('ShaderNodeMath'); s3.operation = 'MULTIPLY'; nt.links.new(s2.outputs[0], s3.inputs[0]); nt.links.new(fa.outputs['Fac'], s3.inputs[1])
+    s2 = s3
+    for key in ('Emission Color', 'Emission'):
+        if key in b.inputs: b.inputs[key].default_value = (*mt.lin(col), 1); break
+    nt.links.new(s2.outputs[0], b.inputs['Emission Strength'])
+    return m
 
+
+def crystals(name, seed, col):
+    """кристаллы Alien — друза: v111 6–11 гранёных призм (критик r36: «гроздья 5–12 осколков»), высокие в середине, мелкие
+    сколы у основания наружу; стекло светится изнутри, грани и острия ярче (mat_crystal); каменное основание"""
+    sc, rng = scene(56, ((0.85, 0.85, 1.0), 2.2), seed)
+    sc.view_settings.view_transform = 'Standard'; sc.view_settings.look = 'None'   # AgX выбеливал насыщенное свечение в пастель
+    sc.world.node_tree.nodes['Background'].inputs[1].default_value = 0.25
+    bm = bmesh.new(); n = rng.randint(6, 11)
+    for i in range(n):
+        f = i / (n - 1) - 0.5; a = f * 1.5 + rng.uniform(-0.14, 0.14)
+        L = rng.uniform(13, 24) * (1.45 - abs(f) * 1.1) * (1.0 if rng.random() < 0.75 else 0.55); w = rng.uniform(2.0, 4.2) * (0.75 + 0.5 * L / 30)
+        d = Vector((math.sin(a), rng.uniform(-0.45, 0.45), math.cos(a))).normalized()
+        prism(bm, Vector((f * 9 + rng.uniform(-2.5, 2.5), rng.uniform(-3, 3), -1.5)) * U, d, L * U, w * U, 6, 0.24, rng)
+    for i in range(rng.randint(3, 5)):                       # мелкие сколы у основания — веером наружу
+        a = rng.choice((-1, 1)) * rng.uniform(0.9, 1.35); d = Vector((math.sin(a), rng.uniform(-0.5, 0.5), math.cos(a))).normalized()
+        prism(bm, Vector((rng.uniform(-8, 8), rng.uniform(-3, 3), -1)) * U, d, rng.uniform(5, 9) * U, rng.uniform(1.3, 2.2) * U, 6, 0.3, rng)
+    me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
+    fr = me.attributes.new('fr', 'FLOAT', 'FACE'); fr.data.foreach_set('value', [0.35 + 1.3 * rng.random() ** 1.5 for _ in me.polygons])
+    o = obj(name, me, mat_crystal('crystal', col), sc)
+    for p in me.polygons: p.use_smooth = False
+    base = lumpy_sphere('base', Vector((0, 0, -2.5 * U)), 10 * U, seed, 0.28, 0.42); obj('base', base, mt.mat_stone('rockb', (0.10, 0.09, 0.12), (0.26, 0.23, 0.29), rough=0.85, spec=0.2, scale=60, bumpk=1.3), sc)
+    return sc
 
 
 def crystals_hang(name, seed, col):
