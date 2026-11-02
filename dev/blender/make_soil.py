@@ -31,9 +31,9 @@ R = int(os.environ.get('HF_R', '4'))
 STYLES = {
     # (радиус от, до, ед.; сколько; высота купола в долях радиуса)
     'castle': dict(name='dirt_castle', seed=31, T=1024,
-                   stones=[((12, 34), 48, (0.34, 0.52)), ((6, 12), 230, (0.3, 0.5)), ((2.5, 6), 1300, (0.28, 0.55)), ((0.8, 2.5), 9000, (0.3, 0.6))],
+                   stones=[((12, 30), 40, (0.34, 0.52)), ((6, 12), 200, (0.3, 0.5)), ((2.5, 6), 1100, (0.28, 0.55)), ((0.8, 2.5), 9000, (0.3, 0.6))],
                    soil=(84, 56, 36), soil2=(58, 38, 24), sand=(132, 104, 76), stone=[(98, 88, 80), (86, 78, 72), (110, 98, 88), (78, 70, 64), (104, 92, 80)],
-                   roots=140, light=dict(col=(1.0, 0.86, 0.68), elev=26, energy=5.0)),
+                   roots=140, light=dict(col=(1.0, 0.86, 0.68), elev=26, energy=5.0), angular=True),   # v114 (r36: «тёплые угловатые камни вместо гальки»)
     'valley': dict(name='dirt_valley', seed=41, T=1024,
                    stones=[((14, 30), 22, (0.32, 0.5)), ((6, 14), 150, (0.3, 0.5)), ((2.5, 6), 1200, (0.28, 0.55)), ((0.8, 2.5), 8000, (0.3, 0.6))],
                    soil=(92, 70, 52), soil2=(62, 46, 34), sand=(140, 118, 92), stone=[(118, 112, 104), (104, 98, 92), (132, 124, 112), (96, 90, 84), (124, 112, 98)],
@@ -83,14 +83,16 @@ def field(st):
             yy, xx = np.meshgrid((ys + 0.5) / R - y0, (xs + 0.5) / R - x0, indexing='ij')
             ca, sa = math.cos(ang), math.sin(ang)
             u = (xx * ca + yy * sa) / sx; v = (-xx * sa + yy * ca) * sx; d = np.sqrt(u * u + v * v) / r
-            dome = np.sqrt(np.clip(1 - d * d, 0, 1)) ** rng.uniform(0.35, 0.8) * top
+            ang_ = st.get('angular')
+            dome = np.sqrt(np.clip(1 - d * d, 0, 1)) ** (rng.uniform(0.2, 0.45) if ang_ else rng.uniform(0.35, 0.8)) * top
             h = dome
-            for _f in range(rng.integers(3, 6) if r > 10 else rng.integers(2, 4)):    # колотые грани (у крупных — больше)
-                fa = rng.uniform(0, math.tau)
-                h = np.minimum(h, top * (rng.uniform(0.7, 0.95) - rng.uniform(0.25, 0.8) * (u * math.cos(fa) + v * math.sin(fa)) / r))
+            nf = (rng.integers(5, 9) if r > 4 else rng.integers(3, 6)) if ang_ else (rng.integers(3, 6) if r > 10 else rng.integers(2, 4))
+            for _f in range(nf):    # колотые грани (у крупных — больше); angular — глыбы: плоский верх, крутые сколы со всех сторон
+                fa = rng.uniform(0, math.tau) if not ang_ else (_f / nf + rng.uniform(-0.12, 0.12)) * math.tau
+                h = np.minimum(h, top * ((rng.uniform(0.8, 1.0) - rng.uniform(0.7, 1.4) * (u * math.cos(fa) + v * math.sin(fa)) / r) if ang_ else (rng.uniform(0.7, 0.95) - rng.uniform(0.25, 0.8) * (u * math.cos(fa) + v * math.sin(fa)) / r)))
             h = h - top * rng.uniform(0.15, 0.4)                                     # нижняя часть в земле
             yi, xi = ys % N, xs % N; sub = np.ix_(yi, xi)
-            Hs = H[sub]; take = (d < 1) & (h > Hs) & (ID[sub] == 0)
+            Hs = H[sub]; take = (d < 1) & (h > Hs) & (ID[sub] == 0)   # у angular контур — многоугольник сколов внутри эллипса
             if not take.any(): continue
             Hs[take] = h[take]; H[sub] = Hs
             ids = ID[sub]; ids[take] = nid; ID[sub] = ids
@@ -112,13 +114,18 @@ def field(st):
     for _ in range(2): near = (near + np.roll(near, R, 0) + np.roll(near, -R, 0) + np.roll(near, R, 1) + np.roll(near, -R, 1)) / 5
     ring = np.clip(near * 2.2, 0, 1) * (~st_m)
     C *= (1 - ring * 0.28)[..., None]
+    if os.environ.get('SOIL_MASK'):   # маска камней (для доводки цвета родной текстуры: dev/tools/warm_stones.py)
+        from PIL import Image
+        Image.fromarray((st_m * 255).astype(np.uint8)).save(os.environ['SOIL_MASK'])
     return H.astype(np.float32), np.clip(C, 0, 255).astype(np.float32)
 
 
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     for key in (argv or list(STYLES)):
-        st = STYLES[key]; H, C = field(st)
+        st = dict(STYLES[key]); st['T'] = int(os.environ.get('SOIL_T', st['T']))   # SOIL_T — малый кусок для пробы
+        if st['T'] != STYLES[key]['T']: st['stones'] = [(rr, max(1, int(c * (st['T'] / STYLES[key]['T']) ** 2)), hk) for rr, c, hk in st['stones']]
+        H, C = field(st)
         hf.render_blocks(mt, st['name'], H, C, None, R2=R, up=1, light=st.get('light'), samples=128, rough=0.9, spec=0.15, micro=0.06, hgrain=0.3, cgrain=0.5, speck=0.004,
                          out_dir=os.environ.get('HF_OUT'))   # HF_OUT — другая папка (проба при HF_R=1)
         print('SOIL', st['name'], flush=True)

@@ -35,7 +35,9 @@ streak = fnoise(4 * K, 60 * K, 3)                                               
 stain = fnoise(26 * K, 48 * K, 4)                                                 # крупные пятна: выгоревшее/грязное
 pores = fnoise(0.5 * K, 2.2 * K, 5)
 fine = fnoise(0.35 * K, 3.5 * K, 7) * 0.7 + fnoise(0.18 * K, 0.6 * K, 8) * 0.3
-dash = fnoise(0.15 * K, 1.4 * K, 9)                                              # поры-штрихи     # волокна и поры в 1–2 текселя (критик r24: обшивка была фактически ×1)
+dash = fnoise(0.15 * K, 1.4 * K, 9)                                              # поры-штрихи
+micro = fnoise(0.12 * K, 1.1 * K, 10)                                            # v115 (цель владельца «чётко, как в реальности»): волоконца в 1 тексель
+scr = fnoise(0.1 * K, 9 * K, 11)                                                 # царапины вдоль доски — тонкие светлые штрихи     # волокна и поры в 1–2 текселя (критик r24: обшивка была фактически ×1)
 warp = fnoise(10 * K, 40 * K, 6)
 
 DARK = np.array([30, 18, 11], np.float32); MID = np.array([70, 45, 27], np.float32); LIGHT = np.array([122, 86, 52], np.float32)   # контраст шире (эталон: sd 26 против 16)
@@ -58,7 +60,8 @@ for r in range(ROWS):
         sub = (slice(y0, y1), cols)
         fy = (yy[y0:y1][:, :len(xs)] - y0) / K                          # 0..ROW поперёк доски
         fx = (xs[None, :] / K - ja).astype(np.float32) * np.ones_like(fy)   # 0..L вдоль доски
-        v = 0.5 + tone + fiber[sub] * 0.14 + streak[sub] * 0.09 + stain[sub] * 0.07 + pores[sub] * 0.05 + fine[sub] * 0.12
+        v = 0.5 + tone + fiber[sub] * 0.14 + streak[sub] * 0.09 + stain[sub] * 0.07 + pores[sub] * 0.05 + fine[sub] * 0.16 + micro[sub] * 0.07
+        v += np.clip(scr[sub] - 2.6, 0, 1) * 0.35                                  # редкие царапины
         # чёткие линии годичных слоёв (≈1–2 текселя) с волной и поры-штрихи: деталь, которая видна только при приближении
         sp = rng.uniform(1.2, 2.4); t = (fy + warp[sub] * 1.5 + fiber[sub] * 0.35) / sp
         dl = np.abs((t - np.floor(t)) - 0.5) * sp * K
@@ -97,7 +100,9 @@ for (bx, by, br) in bolts:
     img[cyy, cxx] = img[cyy, cxx] * (1 - ring[..., None]) + np.array([74, 40, 22], np.float32) * ring[..., None]
     head = d < 1
     hl = np.clip(1 - np.hypot(gx - (bx - R * 0.35), gy - (by - R * 0.35)) / (R * 0.75), 0, 1)
-    col = np.array([34, 30, 28], np.float32)[None, None] * (0.8 + 0.4 * (1 - d))[..., None] + np.array([96, 88, 78], np.float32) * hl[..., None]
+    hs = np.clip(1 - np.hypot(gx - (bx - R * 0.3), gy - (by - R * 0.3)) / (R * 0.28), 0, 1) ** 2   # блик на куполе головки — металл, а не плоский кружок
+    col = np.array([34, 30, 28], np.float32)[None, None] * (0.8 + 0.4 * (1 - d))[..., None] + np.array([96, 88, 78], np.float32) * hl[..., None] + np.array([120, 112, 98], np.float32) * hs[..., None]
+    col *= np.where(d > 0.82, 0.55, 1.0)[..., None]                                  # тёмный край головки
     img[cyy[head], cxx[head]] = col[head]
 img = np.clip(img + 0.5, 0, 255).astype(np.uint8)
 name = sys.argv[1] if len(sys.argv) > 1 else 'wood_hull'

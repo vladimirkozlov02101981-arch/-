@@ -152,7 +152,7 @@ const TexLib = {
   },
   surfaceHi: {},
   fine: {},
-  fineAvail: new Set(['dirt_valley', 'dirt_castle']),
+  fineAvail: new Set(['dirt_valley', 'dirt_castle', 'wood_hull', 'wood_ship', 'wood_light', 'facade_city', 'concrete_city', 'rock_volcano', 'stone_dark', 'rock_alien', 'rock_canyon', 'rock_arctic', 'stone_castle', 'stone_valley', 'stone_light', 'dirt_canyon', 'cap_sand', 'dirt_tropical', 'cap_ash', 'cap_snow', 'cap_moss', 'metal_steel']),
   /** цветные фотодетали: 128 = исходный цвет, 8 текселей на игровую единицу */
   loadFine(n) {
     if (this.fine[n] !== undefined) return this.fine[n];

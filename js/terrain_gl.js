@@ -58,10 +58,10 @@ void main() {
 const TGL_MAIN_FS = `#version 300 es
 precision highp float; precision highp int; precision highp sampler2D; precision highp usampler2D;
 const float TGL_LODK = 0.7;
-uniform sampler2D tComp; uniform usampler2D tF; uniform usampler2D tB; uniform usampler2D tM; uniform sampler2D tFlow; uniform sampler2D tIds; uniform sampler2D tLow; uniform sampler2D tFine;
+uniform sampler2D tComp; uniform usampler2D tF; uniform usampler2D tB; uniform usampler2D tM; uniform sampler2D tFlow; uniform sampler2D tIds; uniform sampler2D tLow; uniform sampler2D tFine; uniform sampler2D tFine1; uniform sampler2D tFine2;
 uniform sampler2D tN0; uniform sampler2D tN1; uniform sampler2D tN2; uniform sampler2D tN3; uniform sampler2D tN4; uniform sampler2D tN5;
 uniform ivec2 uSize; uniform vec2 uCompSize; uniform vec4 uXf; uniform float uCanvasH;
-uniform vec4 uNat[6]; uniform vec4 uLow[6]; uniform vec4 uFine;
+uniform vec4 uNat[6]; uniform vec4 uLow[6]; uniform vec4 uFine; uniform vec4 uFine1; uniform vec4 uFine2;
 uniform int uNL; uniform vec4 uLP[16]; uniform vec4 uLC[16]; uniform float uBump; uniform vec4 uLiq; uniform vec3 uLiqC;
 out vec4 fragColor;
 const vec3 Y3 = vec3(0.3, 0.59, 0.11);
@@ -111,6 +111,12 @@ vec3 natCR(int s, vec2 tc, vec2 sz) {
   vec3 r = natLod0(s, vec2(t12.x, t0.y)) * a + natLod0(s, vec2(t0.x, t12.y)) * b + natLod0(s, t12) * c + natLod0(s, vec2(t3.x, t12.y)) * d + natLod0(s, vec2(t12.x, t3.y)) * e;
   return max(r / (a + b + c + d + e), vec3(0.0));
 }
+/* мелкие детали мельче текселя родной (8 текселей на единицу, 128 = без изменений): множитель яркости; F — слот, масштаб,
+   ширина и высота картинки деталей. v115: до трёх материалов карты (раньше — один) */
+float fineMul(sampler2D t, vec4 F, vec2 p) {
+  vec2 fc = p * F.y / F.zw;
+  return dot(textureGrad(t, fc, vec2(F.y / (uXf.x * F.z), 0.0), vec2(0.0, F.y / (uXf.y * F.w))).rgb, vec3(0.299, 0.587, 0.114)) * (255.0 / 128.0);
+}
 /* родной цвет материала в точке карты w (с фото-порами мельче текселя) */
 vec3 natAt(int s, vec2 w, vec2 d) {
   vec4 ni = uNat[s];
@@ -120,10 +126,10 @@ vec3 natAt(int s, vec2 w, vec2 d) {
   float mg = ni.z / max(uXf.x, 1e-3);   /* текселей родной на пиксель экрана: меньше 1 — увеличение */
   vec3 c = mg >= 1.0 ? natSample(s, tc, gx, gy) : natCR(s, tc, ni.xy);
   if (mg >= 0.8 && mg < 1.0) c = mix(c, natSample(s, tc, gx, gy), (mg - 0.8) / 0.2);   /* плавный переход без «щелчка» при масштабировании */
-  if (float(s) == uFine.x) {
-    vec2 fc = (w + d) * uFine.y / uFine.zw;
-    c *= dot(textureGrad(tFine, fc, vec2(uFine.y / (uXf.x * uFine.z), 0.0), vec2(0.0, uFine.y / (uXf.y * uFine.w))).rgb, vec3(0.299, 0.587, 0.114)) * (255.0 / 128.0);
-  }
+  float fs = float(s);
+  if (fs == uFine.x) c *= fineMul(tFine, uFine, w + d);
+  else if (fs == uFine1.x) c *= fineMul(tFine1, uFine1, w + d);
+  else if (fs == uFine2.x) c *= fineMul(tFine2, uFine2, w + d);
   return c;
 }
 /* слот родной текстуры материала L (−1 — нет) и сдвиг его текстуры d */
@@ -283,13 +289,13 @@ class TerrainGL {
     this.pFlow = this.program(TGL_FLOW_FS); this.pMain = this.program(TGL_MAIN_FS);
     this.vao = gl.createVertexArray(); this.fb = gl.createFramebuffer();
     this.uFlow = this.locations(this.pFlow, ['tComp', 'tM', 'tF', 'tB', 'uSize']);
-    this.uMain = this.locations(this.pMain, ['tComp', 'tF', 'tB', 'tM', 'tFlow', 'tIds', 'tLow', 'tFine', 'tN0', 'tN1', 'tN2', 'tN3', 'tN4', 'tN5', 'uSize', 'uCompSize', 'uXf', 'uCanvasH', 'uNat', 'uLow', 'uFine', 'uNL', 'uLP', 'uLC', 'uBump', 'uLiq', 'uLiqC']);
+    this.uMain = this.locations(this.pMain, ['tComp', 'tF', 'tB', 'tM', 'tFlow', 'tIds', 'tLow', 'tFine', 'tFine1', 'tFine2', 'tN0', 'tN1', 'tN2', 'tN3', 'tN4', 'tN5', 'uSize', 'uCompSize', 'uXf', 'uCanvasH', 'uNat', 'uLow', 'uFine', 'uFine1', 'uFine2', 'uNL', 'uLP', 'uLC', 'uBump', 'uLiq', 'uLiqC']);
     this.dummy = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.dummy);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([128, 128, 128, 255]));
     this.dummyU = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.dummyU);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8UI, 1, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, new Uint8Array([0]));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    this.terr = null; this.tex = null; this.slots = []; this.fineSlot = -1; this.scratchCv = null;
+    this.terr = null; this.tex = null; this.slots = []; this.fineSlots = []; this.scratchCv = null;
   }
   program(fs) {
     const gl = this.gl, p = gl.createProgram();
@@ -339,7 +345,7 @@ class TerrainGL {
     const gl = this.gl;
     if (this.tex) for (const t of Object.values(this.tex)) gl.deleteTexture(t);
     for (const s of this.slots || []) if (s.fineTex) gl.deleteTexture(s.fineTex);
-    this.tex = null; this.slots = []; this.terr = null; this.fineSlot = -1;
+    this.tex = null; this.slots = []; this.terr = null; this.fineSlots = [];
   }
   /** новая карта: цвет, ссылки на текстуры, направление контура, малые текстуры материалов (родные — по мере загрузки) */
   bind(sc) {
@@ -435,7 +441,7 @@ class TerrainGL {
           gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
           if (f.img) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, f.w, f.h, gl.RGBA, gl.UNSIGNED_BYTE, f.img);
           else { const d = f.d, buf = new Uint8Array(f.w * f.h * 4); for (let k = 0, j = 0; k < buf.length; k += 4, j += 3) { buf[k] = d[j]; buf[k + 1] = d[j + 1]; buf[k + 2] = d[j + 2]; buf[k + 3] = 255; } gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, f.w, f.h, gl.RGBA, gl.UNSIGNED_BYTE, buf, 0); }
-          gl.generateMipmap(gl.TEXTURE_2D); s.fine = f; if (this.fineSlot < 0) this.fineSlot = i;
+          gl.generateMipmap(gl.TEXTURE_2D); s.fine = f; if (this.fineSlots.length < 3 && !this.fineSlots.includes(i)) this.fineSlots.push(i);
         }
       }
     }
@@ -464,7 +470,13 @@ class TerrainGL {
       const bindT = (unit, tex, loc, dummy) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex || dummy || this.dummy); gl.uniform1i(loc, unit); };
       bindT(0, this.tex.comp, u.tComp); bindT(1, this.tex.F, u.tF, this.dummyU); bindT(2, this.tex.B, u.tB, this.dummyU); bindT(3, this.tex.M, u.tM, this.dummyU);
       bindT(4, this.tex.flow, u.tFlow); bindT(5, this.tex.ids, u.tIds); bindT(6, this.tex.low, u.tLow);
-      const fs = this.fineSlot >= 0 ? this.slots[this.fineSlot] : null, fineOk = !!(fs && fs.fineTex && fs.fine); bindT(7, fineOk && fs.fineTex, u.tFine);
+      /* мелкие детали: до трёх материалов карты — блоки 7, 14, 15 (WebGL2 гарантирует 16) */
+      const fineU = [[7, u.tFine, u.uFine], [14, u.tFine1, u.uFine1], [15, u.tFine2, u.uFine2]];
+      for (let k = 0; k < 3; k++) {
+        const si = this.fineSlots[k], fs = si !== undefined ? this.slots[si] : null, ok = !!(fs && fs.fineTex && fs.fine);
+        bindT(fineU[k][0], ok && fs.fineTex, fineU[k][1]);
+        gl.uniform4f(fineU[k][2], ok ? si : -1, ok ? fs.fine.scale : 1, ok ? fs.fine.w : 1, ok ? fs.fine.h : 1);
+      }
       const nat = new Float32Array(TGL_SLOTS * 4), low = new Float32Array(TGL_SLOTS * 4);
       for (let i = 0; i < TGL_SLOTS; i++) {
         const s = this.slots[i]; bindT(8 + i, s && s.tex, u['tN' + i]);
@@ -473,7 +485,6 @@ class TerrainGL {
         if (s.tex && s.nat) nat.set([s.nat.w, s.nat.h, s.nat.k, 1], i * 4);
       }
       gl.uniform4fv(u.uNat, nat); gl.uniform4fv(u.uLow, low);
-      gl.uniform4f(u.uFine, fineOk ? this.fineSlot : -1, fineOk ? fs.fine.scale : 1, fineOk ? fs.fine.w : 1, fineOk ? fs.fine.h : 1);
       gl.uniform2i(u.uSize, W, H); gl.uniform2f(u.uCompSize, W + 2 * TGL_PAD, H + 2 * TGL_PAD);
       gl.uniform4f(u.uXf, m.a, m.d, m.e, m.f); gl.uniform1f(u.uCanvasH, cv.height);
       // свет кадра (FX.frameLights): только источники в кадре, самые сильные

@@ -46,7 +46,8 @@ async function mapHash(page){return page.evaluate(()=>{let h=2166136261;for(cons
     await host.keyboard.press('Escape');await host.waitForFunction(()=>App.game.turn.weapon===null);await host.keyboard.press('Numpad1');await host.waitForFunction(()=>!!App.game.turn.weapon);
     await host.evaluate(()=>{App.ctl.aimMode='keys';App.ctl.aim=Math.PI/2;App.ctl.send({c:'fire',aim:Math.PI/2,pw:.22});});
     await host.waitForFunction(()=>App.game.turn.phase==='settle'||App.game.turn.team===1,null,{timeout:20000});await host.waitForTimeout(350);
-    assert.notEqual(await mapHash(host),before);assert.equal(await mapHash(host),await mapHash(guest));
+    /* гость применяет снимок ландшафта, когда тот дойдёт по сети: ждём до 10 с (как при начальной синхронизации выше), затем сравниваем */
+    assert.notEqual(await mapHash(host),before);{let hh=await mapHash(host),hg=await mapHash(guest);for(let i=0;i<40&&hh!==hg;i++){await host.waitForTimeout(250);hh=await mapHash(host);hg=await mapHash(guest);}assert.equal(hh,hg);}
     // Keep the network active while preventing guest rendering for >90 snapshots.
     await guest.evaluate(()=>{window.savedRemoteUpdate=App.remote.update;App.remote.update=()=>{};});
     await host.evaluate(()=>{const g=App.game;g.carve(1200,1450,27);const s=g.soldiers.find(s=>s.team===1);s.drown(g);});
