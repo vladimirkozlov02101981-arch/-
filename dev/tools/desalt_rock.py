@@ -1,6 +1,6 @@
 """Убирает белую «соль» на тёмной породе (критик r36, Арктика: «меньше белых точек-соли в 1 px»).
 
-python dev/tools/desalt_rock.py <родная.webp> <выход.png> [--k 7] [--thr 22] [--keep 0.15] [--dark 95] [--gain 1.04] [--frost 0.7] [--snowk 1.3] [--icicles 0.3] [--seams 1]
+python dev/tools/desalt_rock.py <родная.webp> <выход.png> [--k 7] [--thr 22] [--keep 0.15] [--dark 95] [--gain 0.86] [--frost 0.7] [--snowk 1.3] [--icicles 0.14] [--seams 1]
 затем: python dev/make_native.py <выход.png> <имя> --no-match --lossy --quality 90   (малая — точное уменьшение родной)
 
 Крупинки — светлые пятнышки уже k пикселей родной текстуры, ярче фона больше чем на thr (белый «цилиндр»: L − открытие L):
@@ -35,9 +35,9 @@ def main():
     ap.add_argument('src'); ap.add_argument('out')
     ap.add_argument('--k', type=int, default=7); ap.add_argument('--keep', type=float, default=0.45); ap.add_argument('--thr', type=float, default=30)
     ap.add_argument('--dark', type=float, default=95)
-    ap.add_argument('--gain', type=float, default=1.04); ap.add_argument('--frost', type=float, default=0.7)
+    ap.add_argument('--gain', type=float, default=0.86); ap.add_argument('--frost', type=float, default=0.7)
     ap.add_argument('--frostd', type=float, default=24); ap.add_argument('--snowL', type=float, default=108)
-    ap.add_argument('--snowk', type=float, default=1.3); ap.add_argument('--icicles', type=float, default=0.3); ap.add_argument('--seams', type=int, default=1)
+    ap.add_argument('--snowk', type=float, default=1.3); ap.add_argument('--icicles', type=float, default=0.14); ap.add_argument('--seams', type=int, default=1)
     a = ap.parse_args()
     img = np.asarray(Image.open(a.src).convert('RGB'), dtype=np.float32)
     L = img @ np.array([0.299, 0.587, 0.114], np.float32)
@@ -82,23 +82,23 @@ def main():
                 ys.append(y)
             ya, yb = min(ys), max(ys)
             if yb - ya < 40: continue
-            xs = x0 + np.cumsum(rng.normal(0, 0.35, yb - ya + 1)); wd = rng.uniform(2.5, 3.5); n += 1
+            xs = x0 + np.cumsum(rng.normal(0, 0.35, yb - ya + 1)); wd = rng.uniform(6, 10); n += 1   # v121 (критик r38: «чёрные волоски 1–2 px»): мягкая впадина 4–7 px кадра
             for k, y in enumerate(range(ya, yb + 1)):
                 cx = xs[k]
-                for xx in range(int(cx - wd - 2), int(cx + wd + 3)):
+                for xx in range(int(cx - wd - 4), int(cx + wd + 3)):
                     dxx = xx - cx; xw = xx % W; yw = y % H
-                    if abs(dxx) < wd: al = min(1.0, wd - abs(dxx)); out[yw, xw] = out[yw, xw] * (1 - al * 0.85) + np.array([12, 15, 22], np.float32) * al * 0.85
-                    elif -wd - 2 < dxx <= -wd: out[yw, xw] = np.minimum(255, out[yw, xw] * 1.25 + 6)   # светлая кромка слева (свет сверху слева)
+                    if abs(dxx) < wd: q = 1 - abs(dxx) / wd; out[yw, xw] = out[yw, xw] * (1 - 0.42 * q * q * (3 - 2 * q))   # глубже к середине, ΔL −15…−20
+                    elif -wd - 4 < dxx <= -wd: out[yw, xw] = np.minimum(255, out[yw, xw] * 1.22 + 4)   # светлая фаска слева (свет сверху слева)
         print('seams: %d' % n)
     if a.icicles > 0:
         H, W = L.shape; rng = np.random.default_rng(9)
-        g = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), 40, mode='wrap')
+        g = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), 110, mode='wrap')   # v121: гроздьями (критик r38: «по 1–3 под каждой кромкой» → 4–6 гроздьев, ≥ 60 % кромок без сосулек)
         thick = snow.copy()
         for q in range(1, 15): thick &= np.roll(snow, q, 0)                 # над кромкой ≥ 15 px снега — карниз, а не тонкая полоса
         edge = thick & ~np.roll(snow, -1, 0)                               # снег, под ним порода: нижняя кромка полосы
         ey, ex = np.nonzero(edge)
         thr = np.quantile(g[ey, ex], 1 - a.icicles)
-        sel = (g[ey, ex] > thr) & (rng.random(len(ey)) < 1 / 34)
+        sel = (g[ey, ex] > thr) & (rng.random(len(ey)) < 1 / 13)
         n = 0
         for y0, x0 in zip(ey[sel], ex[sel]):
             u = rng.random(); Lc = rng.uniform(25, 50) if u < 0.7 else rng.uniform(50, 80) if u < 0.95 else rng.uniform(80, 110)
