@@ -564,7 +564,10 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     }
   } else if (mt === 12 && (S.tx.rock || S.tx.dirt || S.tx.cave)) {
     // задняя стена: та же порода, что и скала вокруг (в скальных картах), иначе — плиты пещеры
-    if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); r = o.r * 1.05 * S.tgR; g = o.g * 1.05 * S.tgG; bl = o.b * 1.05 * S.tgB; o.ga = 0; }
+    if (S.caveBack && S.tx.cave) {   /* v114 (критик r36, каньон: «стены пещер — та же слоистая порода; в эталоне потрескавшиеся плиты»):
+      задняя стена тоннеля — плиты с трещинами (cave_canyon, родная ×4), средний цвет — как у прежней стены из породы (caveBackK) */
+      texAt(S.tx.cave, x, y, o); const K = S.caveBackK; r = o.r * K[0] * S.tgR; g = o.g * K[1] * S.tgG; bl = o.b * K[2] * S.tgB; o.ga = 0; }
+    else if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); r = o.r * 1.05 * S.tgR; g = o.g * 1.05 * S.tgG; bl = o.b * 1.05 * S.tgB; o.ga = 0; }
     else if (S.tx.dirt && S.bury) {   /* v94 (эталон valley_tower: стена тоннеля тёмная и ровная — камни на ней не выделяются; у нас — светлые камни и бледные
       круги валунов): тот же грунт, контраст вдвое ниже, темнее */
       texAt(S.tx.dirt, x + 257, y + 131, o); const M = texMeanRGB(S.tx.dirt);
@@ -1068,7 +1071,7 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
   const capMat = new Uint8Array(16); for (const k of (G.capMats || [1])) capMat[k] = 1;
   const V = getVoronoi();
   const S = {
-    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, glowTex2: G.tex && G.tex.glowTex2, glowRaw: !!(G.tex && G.tex.glowRaw), glowDirt: !!(G.tex && G.tex.glowDirt), glowMin: G.tex && G.tex.glowMin || 150, glowDot: G.tex && G.tex.glowDot || 0.93, glowK: G.tex && G.tex.glowK || 2.4, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', mossLip: theme.id === 'alien', bury: theme.id === 'valley' || theme.id === 'castle', soilBand: theme.id === 'valley' || theme.id === 'castle' ? (() => { const a = new Float32Array(H); for (let yy = 0; yy < H; yy++) a[yy] = 1 + 0.12 * fbm1(yy / 46, seed + 401, 2); return a; })() : null, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : theme.id === 'alien' ? [[70, 66, 40], [52, 50, 30], [40, 34, 24]] /* мох Alien как в эталоне: тёмный оливково-бурый (медиана 65/54/34), а не салатовая полоса */ : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), capK: (G.tex && G.tex.capK) || 1, texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rubbleCap: theme.id === 'desert', flatSlab: theme.id === 'city', noBoulders: theme.id === 'city', hotCore: !!(G.veins && G.veins.hot), hotRim: G.veins && G.veins.hot ? (() => { const a = new Float32Array(W); for (let x = 0; x < W; x++) { const v = fbm1(x / 70, seed + 141, 2) + 0.4 * fbm1(x / 23, seed + 142, 1); a[x] = Math.max(0, Math.min(1, (v - S_RIM0) / 0.18)); } return a; })() : null, rockDirt: !!G.rockDirt, rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
+    tiles: getTiles(), colOff, vs: V.s, vl: V.l, grassy: !!G.cap.blades && !G.cap.snow, glowTex: G.tex && G.tex.glowTex, glowTex2: G.tex && G.tex.glowTex2, glowRaw: !!(G.tex && G.tex.glowRaw), glowDirt: !!(G.tex && G.tex.glowDirt), glowMin: G.tex && G.tex.glowMin || 150, glowDot: G.tex && G.tex.glowDot || 0.93, glowK: G.tex && G.tex.glowK || 2.4, sod: theme.id === 'valley' || theme.id === 'castle' || theme.id === 'alien', mossLip: theme.id === 'alien', bury: theme.id === 'valley' || theme.id === 'castle', soilBand: theme.id === 'valley' || theme.id === 'castle' ? (() => { const a = new Float32Array(H); for (let yy = 0; yy < H; yy++) a[yy] = 1 + 0.12 * fbm1(yy / 46, seed + 401, 2); return a; })() : null, rootCols: G.tex && G.tex.grass && TexLib.data[G.tex.grass] ? (theme.id === 'valley' || theme.id === 'castle' ? [[83, 100, 49], [68, 75, 38], [51, 44, 29]] : theme.id === 'alien' ? [[70, 66, 40], [52, 50, 30], [40, 34, 24]] /* мох Alien как в эталоне: тёмный оливково-бурый (медиана 65/54/34), а не салатовая полоса */ : [[82, 102, 34], [60, 76, 24], [54, 42, 24]]) : null, tx: { dirt: G.tex && TexLib.data[G.tex.dirt], cave: G.tex && TexLib.data[G.tex.cave], rock: G.tex && TexLib.data[G.tex.rock], concrete: G.tex && TexLib.data[G.tex.concrete], facade: G.tex && TexLib.data[G.tex.facade], cap: G.tex && TexLib.data[G.tex.cap] }, capMean: texMean(G.tex && TexLib.data[G.tex.cap]), capK: (G.tex && G.tex.capK) || 1, texGain: 1, tgR: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[0] : G.tex.gain) : 1, tgG: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[1] : G.tex.gain) : 1, tgB: (G.tex && G.tex.gain) ? (Array.isArray(G.tex.gain) ? G.tex.gain[2] : G.tex.gain) : 1, smoothStones: !!G.smoothStones, rimCol: G.stoneRim ? hex2rgb(G.stoneRim) : null, H, pebD: G.pebDensity || 1, snowy: !!G.cap.snow, rubbleCap: theme.id === 'desert', flatSlab: theme.id === 'city', noBoulders: theme.id === 'city', hotCore: !!(G.veins && G.veins.hot), hotRim: G.veins && G.veins.hot ? (() => { const a = new Float32Array(W); for (let x = 0; x < W; x++) { const v = fbm1(x / 70, seed + 141, 2) + 0.4 * fbm1(x / 23, seed + 142, 1); a[x] = Math.max(0, Math.min(1, (v - S_RIM0) / 0.18)); } return a; })() : null, rockDirt: !!G.rockDirt, caveBack: !!(G.tex && G.tex.caveBack), caveBackK: (G.tex && G.tex.caveBackK) || [1, 1, 1], rimK: G.rimK || 0.2, hullTop: waterY - 300, waterY, backK: G.backK || 1, glass: theme.id === 'tropical', neon: G.neonRim ? G.neonRim.map(hex2rgb) : null, sun: G.sun ? hex2rgb(G.sun) : null, hasWaterline: (theme.id === 'tropical' || theme.id === 'castle') && waterY < H, kelpCol: theme.id === 'tropical' ? [32, 58, 26] : [48, 76, 32], waterDeep: theme.liquid && theme.liquid.deep ? hex2rgb(theme.liquid.deep) : [12, 47, 85],
     capCols: G.cap.cols.map(hex2rgb), beach: G.cap.beach ? G.cap.beach.cols.map(hex2rgb) : null,
     beachY: G.cap.beach ? waterY - G.cap.beach.range : 1e9,
     strata: G.strata.map(hex2rgb), L: G.strata.length,
@@ -1960,20 +1963,25 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       }
     }
     // 2б. v104 (критик r35: «тоннель плоский»): щебень на полу тоннелей долины и замков — угловатые камни 2–9 px со светом сверху слева
-    if (theme.id === 'valley' || theme.id === 'castle') {
-      const rubCols = [[92, 86, 78], [78, 72, 64], [104, 98, 88], [68, 62, 54], [86, 82, 76]];
+    // v114 (критик r36, каньон: «карнизы полок из щебня»; эталон — светлая россыпь песчаника по полу тоннелей): и в каньоне, вдвое
+    // гуще; камни — в слое растений (cs): при приближении перерисовываются чётко, а не растягиваются
+    if (theme.id === 'valley' || theme.id === 'castle' || theme.id === 'desert') {
+      const sand = theme.id === 'desert', dens = sand ? 0.22 : 0.07;
+      const rubCols = sand ? [[176, 132, 90], [156, 114, 76], [194, 152, 106], [136, 98, 66], [168, 128, 92]] : [[92, 86, 78], [78, 72, 64], [104, 98, 88], [68, 62, 54], [86, 82, 76]];
       for (let k = 0; k < tops.length; k += 2) {
         const x = tops[k], y = tops[k + 1];
-        if (y > waterY - 4 || !isCaveFloor(x, y) || !flatTop(x, y) || hash3(x, y, seed + 121) > 0.07) continue;
-        const big = hash3(x, y, seed + 122) > 0.78, R = big ? 3 + hash3(x, 1, seed + 123) * 1.6 : 1.1 + hash3(x, 1, seed + 123) * 1.6;
+        if (y > waterY - 4 || !isCaveFloor(x, y) || !flatTop(x, y) || hash3(x, y, seed + 121) > dens) continue;
+        anchor(x, y);
+        const big = hash3(x, y, seed + 122) > (sand ? 0.7 : 0.78), R = (big ? 3 + hash3(x, 1, seed + 123) * 1.6 : 1.1 + hash3(x, 1, seed + 123) * 1.6) * (sand ? 1.35 : 1);
         const col = rubCols[(hash3(x, 2, seed + 124) * rubCols.length) | 0], nv = 5 + ((hash3(x, 3, seed + 125) * 3) | 0), rot = hash3(x, 4, seed + 126) * TAU, cy = y - R * 0.5;
-        c.fillStyle = 'rgba(10,8,6,0.5)'; c.beginPath(); c.ellipse(x + R * 0.3, y + 0.5, R * 1.3, R * 0.4, 0, 0, TAU); c.fill();   // контактная тень
-        const gr = c.createLinearGradient(x - R, cy - R, x + R, cy + R);
+        cs.fillStyle = 'rgba(10,8,6,0.5)'; cs.beginPath(); cs.ellipse(x + R * 0.3, y + 0.5, R * 1.3, R * 0.4, 0, 0, TAU); cs.fill();   // контактная тень
+        const gr = cs.createLinearGradient(x - R, cy - R, x + R, cy + R);
         gr.addColorStop(0, `rgb(${col[0] * 1.3 | 0},${col[1] * 1.3 | 0},${col[2] * 1.28 | 0})`); gr.addColorStop(0.5, `rgb(${col[0]},${col[1]},${col[2]})`); gr.addColorStop(1, `rgb(${col[0] * 0.45 | 0},${col[1] * 0.45 | 0},${col[2] * 0.48 | 0})`);
-        c.fillStyle = gr; c.beginPath();
-        for (let v = 0; v < nv; v++) { const a = rot + v / nv * TAU, rr = R * (0.72 + 0.4 * hash3(x, v + 10, seed + 127)), px = x + Math.cos(a) * rr, py = cy + Math.sin(a) * rr * 0.7; if (v) c.lineTo(px, py); else c.moveTo(px, py); }
-        c.closePath(); c.fill();
+        cs.fillStyle = gr; cs.beginPath();
+        for (let v = 0; v < nv; v++) { const a = rot + v / nv * TAU, rr = R * (0.72 + 0.4 * hash3(x, v + 10, seed + 127)), px = x + Math.cos(a) * rr, py = cy + Math.sin(a) * rr * 0.7; if (v) cs.lineTo(px, py); else cs.moveTo(px, py); }
+        cs.closePath(); cs.fill();
       }
+      anchor(null);
     }
     // 3. Подземный мох / трава с неравным шагом
     let nextMossX = -1;

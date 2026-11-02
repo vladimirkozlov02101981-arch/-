@@ -44,7 +44,7 @@ const THEMES = {
       strata: ['#e39b5b', '#c97944', '#f2b877', '#b4643a', '#d98b52', '#a8552f', '#eaa66a'], band: 17, bandSharp: 0.55,
       rock: ['#d98b52', '#c47444', '#e8a468', '#b3623a', '#cf8250'],
       pebbles: ['#b98a5e', '#9c6f48', '#d0a57a'],
-      outline: '#4d240f', veins: null, ceiling: null, capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand', gain: [0.94, 0.98, 1.08] /* v88: по замеру r34 порода была на 47 % светлее эталона (L 96 против 66); r24: порода каньона была на 22 % ярче эталона */ },
+      outline: '#4d240f', veins: null, ceiling: null, capMats: [1, 2], tex: { dirt: 'dirt_canyon', rock: 'rock_canyon', cave: 'cave_canyon', cap: 'cap_sand', caveBack: true, caveBackK: [2.48, 2.93, 3.46] /* v114: стены тоннелей — плиты cave_canyon, средний цвет как у прежней стены из породы (×1,05 к rock_canyon) */, gain: [0.94, 0.98, 1.08] /* v88: по замеру r34 порода была на 47 % светлее эталона (L 96 против 66); r24: порода каньона была на 22 % ярче эталона */ },
     },
     scatter: ['rock', 'drygrass', 'cactusSmall', 'drygrass', 'rock', 'drygrass', 'skull', 'tumbleweed'], scatterRock: true,
     weather: 'dust', birds: false, ambient: null, ambientSound: 'wind',
