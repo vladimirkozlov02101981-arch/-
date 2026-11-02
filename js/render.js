@@ -692,12 +692,16 @@ class Renderer {
   }
   /** уровни детализации ленты моря (вдвое меньше каждый): узор холста берёт текстуру без мип-карт, и сжатая вдали
       волна рябила бы. Блики сжимаются «максимумом» из четырёх пикселей — далёкие искры не гаснут */
-  seaMips(T, glint, K = 1, mean = null) {
+  seaMips(T, glint, K = 1, mean = null, tint = null) {
     const key = glint ? 'seaMG' : 'seaMB';
     if (this[key] && this[key].src === T.canvas) return this[key].mips;
     const mips = []; let cv = T.canvas, sd0 = 0;
     for (let l = 0; l < 6; l++) {
       if (!glint) { const n = makeCanvas(cv.width, cv.height); n.getContext('2d').drawImage(cv, 0, 0); const sd = this.seaContrast(n, l ? sd0 : 0, K, mean); if (!l) sd0 = sd; cv = n; }
+      else if (!l && tint) {   /* v117 (критик r37: «тёплых бликов 0,5 %, нужно ~2 %»): блики окрашены в цвет закатного солнца — белое ядро → оранжевое */
+        const n = makeCanvas(cv.width, cv.height), x = n.getContext('2d', { willReadFrequently: true }); x.drawImage(cv, 0, 0);
+        try { const im = x.getImageData(0, 0, n.width, n.height), d = im.data; for (let i = 0; i < d.length; i += 4) { d[i] = d[i] * tint[0]; d[i + 1] = d[i + 1] * tint[1]; d[i + 2] = d[i + 2] * tint[2]; } x.putImageData(im, 0, 0); cv = n; } catch (e) { /* без окраски */ }
+      }
       mips.push({ cv, pats: new Map(), pat(ctx) { let p = this.pats.get(ctx); if (p === undefined) { p = ctx.createPattern(this.cv, 'repeat'); this.pats.set(ctx, p); } return p && typeof p.setTransform === 'function' ? p : null; } });
       if (cv.width < 128 || cv.height < 16) break;
       const n = makeCanvas(cv.width >> 1, cv.height >> 1), x = n.getContext('2d');
@@ -731,7 +735,7 @@ class Renderer {
       толща воды с лучами и каустикой. false — рисовать нечем (тогда прежняя вода) */
   drawSea(c, sc, L, S, x0, x1, wy, t, tt, amp, step) {
     const m = c.getTransform(); if (m.b || m.c || !(m.a > 0) || !(m.d > 0) || typeof DOMMatrix === 'undefined') return false;
-    const TB = TexLib.data.sea_body, TG = TexLib.data.sea_glint, mb = this.seaMips(TB, false, S.contrast || 1.3, S.mean), mg = TG ? this.seaMips(TG, true) : null;
+    const TB = TexLib.data.sea_body, TG = TexLib.data.sea_glint, mb = this.seaMips(TB, false, S.contrast || 1.3, S.mean), mg = TG ? this.seaMips(TG, true, 1, null, S.glintTint) : null;
     const B = S.band || 56, yT = wy - 6, rN = S.near || 2.6, sTop = S.px || 12, a = (rN - 1) / B, span = x1 - x0, xc = (x0 + x1) / 2;
     const T0 = (TB.h - 2) * rN / B, rowAt = (v) => T0 * (1 - 1 / (1 + a * v)) / a;   // ряд ленты на глубине полосы v: вдали сжато
     const dtw = Math.min(0.1, Math.max(0, t - (this.seaT === undefined ? t : this.seaT))); this.seaT = t;
@@ -784,6 +788,7 @@ class Renderer {
         const yw = wy + this.wave(x, tt, 0) * amp, yi = Math.round(yw);
         if (yi < 4 || yi + 2 >= Tm.H || !(mask[(yi - 3) * Tm.W + x] || mask[(yi - 1) * Tm.W + x] || mask[(yi + 1) * Tm.W + x])) continue;
         const h = hash3(x >> 1, 7, 61), n1 = Math.sin(x * 0.13 + t * 1.7 + h) * 0.5 + Math.sin(x * 0.047 - t * 0.9 + 1.3) * 0.5;
+        c.globalAlpha = 0.42 + 0.2 * h; c.fillRect(x - 1, yw - 0.6, 2.2, 1.6 + h * 0.8);   /* v117 (критик r37: «светлая линия касания 2–4 px, L≈95–100, по всему борту») */
         const al = (0.2 + 0.5 * n1) * (0.55 + 0.45 * h); if (al < 0.06) continue;
         c.globalAlpha = Math.min(0.8, al); c.beginPath(); c.ellipse(x, yw + 0.6 + h * 1.8, 1.4 + h * 2.4, 0.6 + h * 0.9, 0, 0, TAU); c.fill();
       }

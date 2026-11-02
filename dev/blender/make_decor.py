@@ -395,7 +395,7 @@ def watertower(name, seed):
     return sc
 
 
-def mat_crystal(name, col, core=float(os.environ.get('CRY_CORE', '0.45')), rim=float(os.environ.get('CRY_RIM', '2.0'))):
+def mat_crystal(name, col, core=float(os.environ.get('CRY_CORE', '0.7')), rim=float(os.environ.get('CRY_RIM', '2.4'))):
     """v111 (критик r36: «кристаллы — пастельные пластиковые леденцы»; эталон — прозрачные, светятся изнутри, яркие грани и
     острия): тёмное насыщенное стекло (пропускание, гладкие блики) + свечение — ровное ядро и яркая кайма по скользящим
     к взгляду граням (Layer Weight → Facing), к острию ярче"""
@@ -417,8 +417,10 @@ def mat_crystal(name, col, core=float(os.environ.get('CRY_CORE', '0.45')), rim=f
     fa = nt.nodes.new('ShaderNodeAttribute'); fa.attribute_name = 'fr'   # своя яркость у каждой грани — гранёный камень, а не ровный пластик
     s3 = nt.nodes.new('ShaderNodeMath'); s3.operation = 'MULTIPLY'; nt.links.new(s2.outputs[0], s3.inputs[0]); nt.links.new(fa.outputs['Fac'], s3.inputs[1])
     s2 = s3
+    ds = float(os.environ.get('CRY_DESAT', '0.38'))   # v117 (критик r37: кристаллы насыщенность 0,6–0,67 при 0,42 у эталона, p95 L 156 при 225) — светлее и бледнее
+    ec = tuple(c * (1 - ds) + ds for c in col)
     for key in ('Emission Color', 'Emission'):
-        if key in b.inputs: b.inputs[key].default_value = (*mt.lin(col), 1); break
+        if key in b.inputs: b.inputs[key].default_value = (*mt.lin(ec), 1); break
     nt.links.new(s2.outputs[0], b.inputs['Emission Strength'])
     return m
 

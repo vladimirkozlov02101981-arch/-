@@ -2,7 +2,7 @@
 лишайником»). Тема замков усиливает зелёный и синий (gain [1, 1.45, 1.85] — для рыжей земли), поэтому нейтральные камни
 текстуры на экране голубеют; здесь они заранее сдвигаются в тёплую сторону.
 
-python dev/tools/warm_stones.py <родная.png|webp> <маска.png> <выход.png> [--ratio 1,0.56,0.44] [--mix 0.85] [--lichen 0.14] [--seed 4]
+python dev/tools/warm_stones.py <родная.png|webp> <маска.png> <выход.png> [--ratio 1,0.66,0.475] [--mix 0.85] [--lichen 0.14] [--seed 4]
 затем: python dev/make_native.py <выход.png> dirt_castle --no-match --lossy --quality 90
 
 Маска — камни, как их разложил генератор (dev/blender/make_soil.py, SOIL_MASK=…), того же размера, что и родная.
@@ -23,7 +23,7 @@ Image.MAX_IMAGE_PIXELS = None
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('src'); ap.add_argument('mask'); ap.add_argument('out')
-    ap.add_argument('--ratio', default='1,0.56,0.44'); ap.add_argument('--mix', type=float, default=0.85); ap.add_argument('--lichen', type=float, default=0.14)
+    ap.add_argument('--ratio', default='1,0.66,0.475'); ap.add_argument('--mix', type=float, default=0.85); ap.add_argument('--lichen', type=float, default=0.14)
     ap.add_argument('--seed', type=int, default=4)
     a = ap.parse_args()
     img = np.asarray(Image.open(a.src).convert('RGB'), dtype=np.float32)

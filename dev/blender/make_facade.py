@@ -52,14 +52,15 @@ def field(seed=161):
     inx = (fx >= wx0) & (fx < wx0 + ww); iny = (fy >= wy0) & (fy < wy0 + wh); win = inx & iny
     lx = (fx - wx0) / ww; ly = (fy - wy0) / wh
     rw = rng.random((TH // RH + 1, TW // CW + 1)); hue = rng.random(rw.shape); curt = rng.random(rw.shape)
+    gl = rng.random(rw.shape); slope = 0.8 + rng.random(rw.shape) * 1.2   # v117: блик неба — только у 20 % тёмных окон, наклон свой
     lit = rw[ri, ci] < 0.55
     frame = win & ((lx < 0.05) | (lx > 0.95) | (ly < 0.04) | (ly > 0.96) | (np.abs(lx - 0.5) < 0.025) | (np.abs(ly - 0.38) < 0.02))
     glass = win & ~frame
     sky = np.stack([18 + 30 * (1 - ly), 22 + 34 * (1 - ly), 40 + 50 * (1 - ly)], -1).astype(np.float32)
-    diag = ((lx * 1.3 + ly + hue[ri, ci]) % 1.0) < 0.07
+    diag = (gl[ri, ci] < 0.2) & (((lx * slope[ri, ci] + ly + hue[ri, ci]) % 1.0) < 0.06)
     sky = np.where(diag[..., None], sky + 40, sky)
     warm = np.where((hue[ri, ci] < 0.6)[..., None], np.array([255, 196, 120], np.float32), np.array([200, 222, 255], np.float32))
-    inter = warm * (0.7 + 0.35 * ly)[..., None]
+    inter = warm * (0.52 + 0.42 * ly)[..., None]   # v117 (критик r37: окна L 176–194 при 168 у эталона; верх окна темнее)
     cs_ = np.where(curt[ri, ci] > 0.5, lx < 0.12 + curt[ri, ci] * 0.25, lx > 0.88 - curt[ri, ci] * 0.25)
     inter = np.where(cs_[..., None], inter * 0.6, inter)
     furn = (ly > 0.72) & (np.abs(lx - 0.25 - curt[ri, ci] * 0.5) < 0.11)
@@ -70,8 +71,15 @@ def field(seed=161):
     sill = inx & (fy >= wy0 + wh) & (fy < wy0 + wh + 1.6)
     H = np.where(sill, H + 1.2, H); C = np.where(sill[..., None], np.array([120, 120, 124], np.float32), C)
     # кондиционер под частью окон, водосток у края плитки
-    ac = (hue[ri, ci] > 0.72) & (fx >= wx0 + ww * 0.45) & (fx < wx0 + ww * 0.95) & (fy >= wy0 + wh + 2.2) & (fy < wy0 + wh + 8.5)
-    H = np.where(ac, H + 3.0, H); C = np.where(ac[..., None], np.array([150, 152, 156], np.float32) * (0.92 + 0.08 * ((xx * 4 % 2) > 1))[..., None], C)
+    # v117 (критик r37: «кондиционеры — светлые наклейки L 150 под каждым вторым окном»): у 15 % окон, тёмно-серые с решёткой
+    # и кругом вентилятора, тень снизу
+    ac = (hue[ri, ci] > 0.85) & (fx >= wx0 + ww * 0.3) & (fx < wx0 + ww * 0.95) & (fy >= wy0 + wh + 2.2) & (fy < wy0 + wh + 9.0)
+    acx = (fx - (wx0 + ww * 0.62)) / 2.6; acy = (fy - (wy0 + wh + 5.6)) / 2.6; fan = (acx * acx + acy * acy) < 1
+    slat = 0.86 + 0.14 * ((xx * 3 % 2) > 1)
+    C = np.where(ac[..., None], np.array([80, 78, 74], np.float32) * np.where(fan, 0.55 + 0.25 * ((np.arctan2(acy, acx) * 3 % 1.2) > 0.6), slat)[..., None], C)
+    H = np.where(ac, H + 3.0, H)
+    acs = (hue[ri, ci] > 0.85) & (fx >= wx0 + ww * 0.3) & (fx < wx0 + ww * 0.95) & (fy >= wy0 + wh + 9.0) & (fy < wy0 + wh + 10.2)
+    C = np.where(acs[..., None], C * 0.55, C)
     pipe = np.abs(xx - (TW - 3)) < 1.1
     H = np.where(pipe, H + 1.1 * np.sqrt(np.clip(1 - ((xx - (TW - 3)) / 1.1) ** 2, 0, 1)), H); C = np.where(pipe[..., None], np.array([62, 64, 70], np.float32), C)
     E = np.where((glass & lit)[..., None], inter / 255.0 * 0.9, 0).astype(np.float32)

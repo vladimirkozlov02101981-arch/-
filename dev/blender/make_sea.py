@@ -80,7 +80,7 @@ def ocean(glint=False):
     r.resolution = max(8, RES // 2)
     r.spectrum = 'PHILLIPS'
     r.wind_velocity = float(os.environ.get('SEA_RIPPLE_WIND', '1.6'))
-    r.wave_scale = float(os.environ.get('SEA_RIPPLE', '0.22'))
+    r.wave_scale = float(os.environ.get('SEA_RIPPLE', '0.08'))
     r.wave_scale_min = 0.005
     r.choppiness = 0.6
     r.wave_alignment = 0.35
@@ -95,7 +95,7 @@ def ocean(glint=False):
     # толща воды: рассеянный изнутри бирюзовый свет (эталон: средняя полосы 30/53/57) — не зависит от цвета неба
     b.inputs['Emission Color'].default_value = (0.005, 0.034, 0.044, 1)
     b.inputs['Emission Strength'].default_value = 0.0 if glint else float(os.environ.get('SEA_BODY', '0.45'))   # в проходе бликов — только солнце
-    b.inputs['Roughness'].default_value = float(os.environ.get('SEA_ROUGH', '0.16'))   # отражения неба пятнами, а не тонкой каймой
+    b.inputs['Roughness'].default_value = float(os.environ.get('SEA_ROUGH', '0.3'))   # отражения неба пятнами, а не тонкой каймой
     b.inputs['IOR'].default_value = 1.333
     # отражённый луч, попавший в изнанку соседней волны, давал чёрные «дыры» с резкой кромкой: изнанка светится
     # средним цветом воды (как если бы луч отразился ещё раз)
@@ -187,13 +187,13 @@ def sky(glint):
         nt.links.new(dim.outputs['Result'], cdim.inputs[k])
     nt.links.new(cdim.outputs['Color'], low.inputs[7])
     nt.links.new(low.outputs[2], bg.inputs['Color'])
-    bg.inputs['Strength'].default_value = float(os.environ.get('SEA_SKY', '0.7'))
+    bg.inputs['Strength'].default_value = float(os.environ.get('SEA_SKY', '0.5'))
 
 
 def sun():
     li = bpy.data.lights.new('sun', 'SUN')
     li.energy = float(os.environ.get('SEA_SUN', '10'))
-    li.angle = math.radians(float(os.environ.get('SEA_SUN_ANG', '5')))   # широкое солнце низко у горизонта — искр больше
+    li.angle = math.radians(float(os.environ.get('SEA_SUN_ANG', '12')))   # широкое солнце низко у горизонта — искр больше
     li.color = (1.0, 0.56, 0.27)
     ob = bpy.data.objects.new('sun', li)
     bpy.context.scene.collection.objects.link(ob)
