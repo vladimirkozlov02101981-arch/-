@@ -82,7 +82,22 @@ def field(seed=161):
     C = np.where(acs[..., None], C * 0.55, C)
     pipe = np.abs(xx - (TW - 3)) < 1.1
     H = np.where(pipe, H + 1.1 * np.sqrt(np.clip(1 - ((xx - (TW - 3)) / 1.1) ** 2, 0, 1)), H); C = np.where(pipe[..., None], np.array([62, 64, 70], np.float32), C)
-    E = np.where((glass & lit)[..., None], inter / 255.0 * 0.9, 0).astype(np.float32)
+    # v120 (критик r37: «сетка одинаковых окон — 2–4 элемента на этаж: решётки, водостоки, кабели, балконы»):
+    vr = rng.random(rw.shape)[ri, ci]                                          # своё случайное число у каждого окна
+    bars = (vr < 0.12) & glass & ((np.abs(((fx - wx0) % 3.0) - 1.5) < 0.35))           # решётка на 12 % окон: прутья через 3 ед.
+    C = np.where(bars[..., None], np.array([34, 33, 32], np.float32), C); H = np.where(bars, H + 2.2, H)
+    E = np.where((glass & lit & ~bars)[..., None], inter / 255.0 * 0.9, 0).astype(np.float32)
+    bal = (vr > 0.9) & inx & (fy >= wy0 + wh - 1.0) & (fy < wy0 + wh + 1.8)          # балкон на 10 % окон: плита и перила
+    rail = (vr > 0.9) & (fx >= wx0 - 1.5) & (fx < wx0 + ww + 1.5) & (fy >= wy0 + wh - 7.0) & (fy < wy0 + wh - 1.0) & ((((fx - wx0) % 2.2) < 0.45) | (fy < wy0 + wh - 6.3))   # ниже точки пробы окна (11, 23) — игра различает горящие окна
+    C = np.where(bal[..., None], np.array([92, 90, 88], np.float32), C); H = np.where(bal, H + 4.0, H)
+    C = np.where(rail[..., None], np.array([40, 40, 42], np.float32), C); H = np.where(rail, H + 4.5, H); E = np.where(rail[..., None], 0, E)
+    rust = (rng.random(rw.shape) < 0.35)[ri, ci] & (np.abs(fx - (wx0 + ww * (0.3 + 0.4 * hue[ri, ci]))) < 1.2 + 0.6 * np.sin(fy * 0.7)) & (fy >= wy0 + wh + 1.6) & (fy < wy0 + wh + 12)
+    C = np.where(rust[..., None], C * np.array([0.78, 0.7, 0.62], np.float32) * (0.85 + 0.15 * np.clip((fy - wy0 - wh) / 12, 0, 1))[..., None], C)   # потёки ржавчины под подоконником
+    for k in range(2):                                                         # провисшие кабели поперёк плитки
+        y0 = rng.uniform(20, TH - 20); sag = rng.uniform(3, 7)
+        cy = y0 + sag * 4 * (xx / TW) * (1 - xx / TW)
+        cab = np.abs(yy - cy) < 0.45
+        C = np.where(cab[..., None], np.array([18, 18, 20], np.float32), C); H = np.where(cab, H + 2.8, H); E = np.where(cab[..., None], 0, E)
     return H.astype(np.float32), np.clip(C, 0, 255), E
 
 
