@@ -16,7 +16,7 @@ const THEMES = {
     clouds: { n: 9, color: '#ffffff', shade: '#c5d8ec', alpha: 0.95 },
     liquid: { kind: 'water', top: '#5cbcef', mid: '#2a7fc0', deep: '#0b3560', foam: '#effbff', alpha: 0.82 },
     ground: {
-      cap: { cols: ['#b6c566', '#758d39', '#4b5829'], thick: 8, blades: ['#88ac2c', '#5e8420', '#c8e04a', '#406a16', '#a0c03c'], flowers: ['#e8302a', '#f2c830', '#f4f0e0', '#4a7aff', '#ff5d8f', '#9a5cf0'] /* v91: вместо второго жёлтого — фиолетовая астра */ },
+      cap: { cols: ['#b6c566', '#758d39', '#4b5829'], thick: 8, sodK: 0.42 /* v118 (критик r37: под травой гладкая оливковая полоса 20–25 px; в эталоне трава сразу на тёмной земле) */, blades: ['#88ac2c', '#5e8420', '#c8e04a', '#406a16', '#a0c03c'], flowers: ['#e8302a', '#f2c830', '#f4f0e0', '#4a7aff', '#ff5d8f', '#9a5cf0'] /* v91: вместо второго жёлтого — фиолетовая астра */ },
       soil: '#553722', soilDepth: 26,
       strata: ['#8e6446', '#7e583c', '#966c4c', '#765236', '#8a6242'], band: 46, bandSharp: 0.6,
       rock: ['#a39c92', '#8f887e', '#b3aba0', '#7e776e'],
@@ -152,7 +152,7 @@ const THEMES = {
     clouds: { n: 8, color: '#ffc9a0', shade: '#b07a8a', alpha: 0.85 },
     liquid: { kind: 'water', top: '#6fb3d9', mid: '#2f6f9f', deep: '#102a4a', foam: '#fff2e0', alpha: 0.82, glint: '#ffd9a0' },
     ground: {
-      cap: { cols: ['#b8c96d', '#819844', '#53632e'], thick: 8, blades: ['#8cb84a', '#6f9a36', '#aacc5c', '#557e2c'], flowers: ['#ffffff', '#ffd93d', '#ff7a9a'] },
+      cap: { cols: ['#b8c96d', '#819844', '#53632e'], thick: 8, sodK: 0.42 /* v118: как у долины */, blades: ['#8cb84a', '#6f9a36', '#aacc5c', '#557e2c'], flowers: ['#ffffff', '#ffd93d', '#ff7a9a'] },
       soil: '#4e3220', soilDepth: 40, sun: '#ffb060',
       strata: ['#8e6a4c', '#9a7658', '#806046', '#a07c5e'], band: 38, bandSharp: 0.4,
       rock: ['#8e8478', '#7a7266', '#9c9286'],

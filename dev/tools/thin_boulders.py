@@ -1,7 +1,7 @@
 """Прореживает валуны в грунте (критик r36, долина: «валунов 11,5 % — почти вдвое больше эталона; ряд одинаковых "шатров"»:
 сшивка из эталона брала один и тот же лоскут с валуном много раз, в том числе зеркально).
 
-python dev/tools/thin_boulders.py <родная.webp> <выход.png> [--keep 0.55] [--seed 3]
+python dev/tools/thin_boulders.py <родная.webp> <выход.png> [--keep 0.55] [--seed 3] [--bigarea px --bigsep px] [--nodup]
 затем: python dev/make_native.py <выход.png> <имя> --no-match --lossy --quality 90   (малая — точное уменьшение родной)
 
 1) валуны — серые (ненасыщенные) пятна на малой копии (÷4): сглаженные насыщенность < --S и яркость > --L, компоненты от
@@ -32,6 +32,9 @@ def main():
     ap.add_argument('--keep', type=float, default=0.55); ap.add_argument('--seed', type=int, default=3)
     ap.add_argument('--L', type=float, default=50); ap.add_argument('--S', type=float, default=0.24)
     ap.add_argument('--min', type=int, default=150); ap.add_argument('--sim', type=float, default=0.9)
+    ap.add_argument('--bigarea', type=int, default=0); ap.add_argument('--bigsep', type=float, default=250)
+    ap.add_argument('--nodup', action='store_true')
+    ap.add_argument('--erase', default='', help='эллипсы «cx,cy,rx,ry;…» в пикселях малой копии — убрать именно эти глыбы')
     a = ap.parse_args()
     rng = np.random.default_rng(a.seed)
     N = np.asarray(Image.open(a.src).convert('RGB'), dtype=np.float32); K = 4
@@ -40,7 +43,11 @@ def main():
     sat = (S.max(2) - S.min(2)) / np.maximum(S.max(2), 1)
     m = (nd.gaussian_filter(L, 2.5, mode='wrap') > a.L) & (nd.gaussian_filter(sat, 2.5, mode='wrap') < a.S)
     m = nd.binary_opening(nd.binary_closing(m, iterations=3), iterations=2)
-    lab, n = nd.label(m)
+    # v118: соприкасающиеся глыбы («шатры» стоят вплотную) — раздельно: метки по ядрам (маска, сжатая на 3 px), затем каждая
+    # точка маски — к ближайшему ядру
+    core, nc = nd.label(nd.binary_erosion(m, iterations=3))
+    idx = nd.distance_transform_edt(core == 0, return_distances=False, return_indices=True)
+    lab = np.where(m, core[idx[0], idx[1]], 0); n = nc
     sl = nd.find_objects(lab); area = nd.sum(m, lab, range(1, n + 1))
     ids = [i for i in range(n) if area[i] >= a.min]
     total = float(sum(area[i] for i in ids))
@@ -68,8 +75,17 @@ def main():
     for j in range(len(ids)): groups.setdefault(find(j), []).append(j)
     remove = set()
     for g in groups.values():
-        if len(g) > 1:
+        if len(g) > 1 and not a.nodup:
             keep1 = g[rng.integers(len(g))]; remove.update(j for j in g if j != keep1)
+    if a.bigarea:   # v118 (критик r37: «три островерхих шатра рядом»): крупных глыб — не больше одной на bigsep пикселей малой копии
+        big = sorted((j for j in range(len(ids)) if area[ids[j]] >= a.bigarea and j not in remove), key=lambda j: -area[ids[j]])
+        Hs, Ws = L.shape; kept = []
+        for j in big:
+            ys, xs = sl[ids[j]]; cy, cx = (ys.start + ys.stop) / 2, (xs.start + xs.stop) / 2
+            near = any(min(abs(cy - ky), Hs - abs(cy - ky)) < a.bigsep * 0.5 and min(abs(cx - kx), Ws - abs(cx - kx)) < a.bigsep for ky, kx in kept)
+            if near: remove.add(j)
+            else: kept.append((cy, cx))
+        print('big boulders: %d, kept %d' % (len(big), len(kept)))
     print('duplicate groups: %d, duplicates removed: %d' % (sum(1 for g in groups.values() if len(g) > 1), len(remove)))
     left = total - sum(area[ids[j]] for j in remove)
     order = [j for j in rng.permutation(len(ids)) if j not in remove]
@@ -80,11 +96,19 @@ def main():
     # заполнение грунтом
     busy = nd.binary_dilation(m, iterations=5)                              # валуны с тенью и кромкой — не источник
     out = N.copy(); H, W = L.shape; done = 0
-    for j in remove:
-        i = ids[j]; ys, xs = sl[i]
-        y0, y1, x0, x1 = ys.start - 12, ys.stop + 12, xs.start - 12, xs.stop + 12
-        yy = np.arange(y0, y1) % H; xx = np.arange(x0, x1) % W
-        comp = lab[np.ix_(yy, xx)] == i + 1
+    jobs = [('c', j) for j in remove] + [('e', tuple(map(float, e.split(',')))) for e in a.erase.split(';') if e.strip()]
+    for kind, j in jobs:
+        if kind == 'c':
+            i = ids[j]; ys, xs = sl[i]
+            y0, y1, x0, x1 = ys.start - 12, ys.stop + 12, xs.start - 12, xs.stop + 12
+            yy = np.arange(y0, y1) % H; xx = np.arange(x0, x1) % W
+            comp = lab[np.ix_(yy, xx)] == i + 1
+        else:   # эллипс: всё светлое внутри (глыба) и вокруг него на 3 px
+            cx, cy, rx, ry = j
+            y0, y1, x0, x1 = int(cy - ry - 12), int(cy + ry + 12), int(cx - rx - 12), int(cx + rx + 12)
+            yy = np.arange(y0, y1) % H; xx = np.arange(x0, x1) % W
+            gy, gx = np.meshgrid(np.arange(y0, y1) - cy, np.arange(x0, x1) - cx, indexing='ij')
+            comp = ((gx / rx) ** 2 + (gy / ry) ** 2) < 1
         tgt = nd.binary_dilation(comp, iterations=4) | (nd.binary_dilation(comp, iterations=9) & (L[np.ix_(yy, xx)] > 100))   # тень и светлый гребень «шатра»
         tgt = nd.binary_dilation(tgt, iterations=1)
         best, bf = None, 1.0                                               # источник — где меньше всего валунов (по всей текстуре)
