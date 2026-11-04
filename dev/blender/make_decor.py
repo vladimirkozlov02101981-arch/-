@@ -573,7 +573,7 @@ def alienplant(name, seed):
     sc, rng = scene(40, ((1.0, 0.88, 0.76), 4.2), seed)
     st = bmesh.new(); lv = bmesh.new(); bb = bmesh.new()
     glow_n = rng.randint(1, 3)
-    for i in range(rng.randint(5, 8)):
+    for i in range(rng.randint(8, 12)):   # v123: гуще (было 5–8 вай) — зелень читается на верху острова
         h = rng.uniform(12, 26); a = rng.uniform(-0.75, 0.75); x0 = rng.uniform(-3, 3); y0 = rng.uniform(-3, 3)
         curl = rng.random() < 0.45 and i >= glow_n
         pts = []
@@ -591,13 +591,15 @@ def alienplant(name, seed):
             for sd in (-1, 1):
                 side = d.cross(Vector((0, 1, 0))).normalized() * sd
                 dd = (side * 0.8 + d * 0.5).normalized()
-                L = (2.8 - 1.6 * t) * rng.uniform(0.85, 1.15)
-                leaf_strip(lv, c, dd, d.cross(dd).normalized() if d.cross(dd).length > 1e-6 else Vector((0, 1, 0)), L * U, L * 0.28 * U, 0.25, 4, 0.1)
+                L = (2.8 - 1.6 * t) * rng.uniform(0.85, 1.15) * 1.35   # v123: листочки крупнее
+                leaf_strip(lv, c, dd, d.cross(dd).normalized() if d.cross(dd).length > 1e-6 else Vector((0, 1, 0)), L * U, L * 0.34 * U, 0.25, 4, 0.1)
         if i < glow_n:
             bmesh.ops.create_uvsphere(bb, u_segments=14, v_segments=10, radius=rng.uniform(0.9, 1.3) * U, matrix=Matrix.Translation(pts[-1] + Vector((0, 0, 0.8 * U))) @ Matrix.Diagonal((1, 1, 1.3, 1)))
-    me = bpy.data.meshes.new('stems'); st.to_mesh(me); st.free(); obj('stems', me, mat_col('fstem', (0.14, 0.30, 0.20), 0.55, 0.3), sc)
+    # v123 (критик r38: «верх острова однотонно фиолетовый — 30 % зелени, папоротник»): зелень светлее и теплее (было 0,16/0,36/0,24 —
+    # в лиловом свете темы почти чёрная)
+    me = bpy.data.meshes.new('stems'); st.to_mesh(me); st.free(); obj('stems', me, mat_col('fstem', (0.16, 0.36, 0.16), 0.55, 0.3), sc)
     me = bpy.data.meshes.new('fronds'); lv.to_mesh(me); lv.free()
-    m = mat_col('frond', (0.16, 0.36, 0.24), 0.5, 0.35); b = m.node_tree.nodes['Principled BSDF']
+    m = mat_col('frond', (0.3, 0.62, 0.2), 0.5, 0.35); b = m.node_tree.nodes['Principled BSDF']
     for key in ('Subsurface Weight', 'Subsurface'):
         if key in b.inputs: b.inputs[key].default_value = 0.3; break
     obj('fronds', me, m, sc)

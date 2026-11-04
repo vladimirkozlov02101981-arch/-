@@ -114,7 +114,7 @@ const THEMES = {
       pebbles: ['#6a55a0', '#56448a', '#7d68b8'], smoothStones: true, stoneRim: '#7ae8ff',
       outline: '#0b0620', veins: { color: '#5ff4ff', color2: '#ff6ef6', w: 0.02, glow: true }, ceiling: 'crystals', capMats: [1], tex: { dirt: 'rock_alien' /* dirt_alien — та же картинка: одна родная ×4 вместо двух одинаковых */, rock: 'rock_alien', cave: 'cave_alien', grass: 'grass_alien', cap: 'cap_moss', capK: 0.65 /* v112: бархатный мох шапки (make_moss.py), подушки мягче — ×0,65 контраста */, glowTex: [90, 235, 255], glowTex2: [250, 110, 255], glowRaw: true, glowDirt: true, glowMin: 135, glowK: 1.5 /* v102 (r35: «кристаллы — плоские наклейки»): грани в текстуре (alien_crystals2.py facets), свечение слабее и только у светлых граней — ореол не заливает рельеф; v93: тени граней кристалла тоже светятся (на малой текстуре мелкие кристаллы темнее 150 — серели от gain) */, gain: [1.62, 1.8, 1.0] /* v91: новая порода (make_rubble.py: валуны, щебень, мокрый блеск) — по замеру кадра alien:1700:1000 к эталону 25/23/25 (v70: [1.12, 1.28, 0.72] для прежней) */ },
     },
-    scatter: ['crystal', 'pod', 'alienbush', 'alienplant', 'alienbush', 'pod', 'alienbush', 'crystal'],   /* r28: растений на островах вдвое больше; v91: соцветия (эталон — густая лиловая кромка) */
+    scatter: ['crystal', 'alienplant', 'alienbush', 'alienplant', 'pod', 'alienbush', 'alienplant', 'crystal', 'alienbush', 'pod'],   /* v123 (критик r38: «верх острова однотонно фиолетовый — 30 % зелени»): папоротников 3 из 10 */   /* r28: растений на островах вдвое больше; v91: соцветия (эталон — густая лиловая кромка) */
     weather: 'spores', birds: false, ambient: '#8474b0', gravity: 0.72, ambientSound: 'space', glow: true,
   },
   tropical: {
@@ -179,7 +179,7 @@ const THEMES = {
       strata: ['#3d3630', '#4a4038', '#352f2a', '#554a40'], band: 30, bandSharp: 0.3,
       rock: ['#4a4a52', '#3e3e46', '#56565e'],
       pebbles: ['#4a4642', '#3c3936', '#56524c'], smoothStones: false,   /* v103 (r35: «мармеладки на земле»): щебень, а не гладкие шары */
-      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [3.9, 3.1, 1.75] /* v93: стена по замеру к эталону (дальняя стена 19/23/33 при эталоне 29/30/39); было [2.9, 2.6, 1.6] */ },
+      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [2.9, 2.3, 1.3] /* v123 (критик r38: «стена L50 32 → 22–25»): ×0,74; v93: стена по замеру к эталону (дальняя стена 19/23/33 при эталоне 29/30/39); было [2.9, 2.6, 1.6] */ },
     },
     scatter: ['trash', 'tuft'],
     weather: null, birds: false, ambient: '#aaa8cf', ambientSound: 'city', glow: true,   // без дождя (просьба игрока)
