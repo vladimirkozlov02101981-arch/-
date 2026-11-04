@@ -649,7 +649,8 @@ const DECOR = {
   roofAc(c, g, x, y, s, r) { treeSprite(c, ['roof_ac1', 'roof_ac2'], x, y, s, r, 32); },
   roofTank(c, g, x, y, s, r) { treeSprite(c, ['roof_tank1'], x, y, s, r, 48); },
   roofVent(c, g, x, y, s, r) { treeSprite(c, ['roof_vent1', 'roof_vent2'], x, y, s, r, 24); },
-  antenna(c, g, x, y, s) {
+  antenna(c, g, x, y, s, r) {
+    if (r && treeSprite(c, ['antenna1'], x, y, s, r, 96)) return;   /* v124: решётчатая мачта из Blender (make_decor.py antenna); ниже — прежний рисунок, пока спрайт не загружен */
     c.strokeStyle = '#3a3e46'; c.lineWidth = 2.5 * s; c.beginPath(); c.moveTo(x, y + 2); c.lineTo(x, y - 80 * s); c.stroke();
     c.lineWidth = 1.5 * s; for (let k = 1; k <= 3; k++) { const yy = y - k * 18 * s; const w = (4 - k) * 7 * s; c.beginPath(); c.moveTo(x - w, yy); c.lineTo(x + w, yy); c.stroke(); }
     c.beginPath(); c.moveTo(x - 14 * s, y + 2); c.lineTo(x, y - 30 * s); c.lineTo(x + 14 * s, y + 2); c.stroke();

@@ -1287,6 +1287,42 @@ def roof_vent(name, seed):
     return sc
 
 
+def antenna(name, seed):
+    """v124 (векторная антенна на крыше → Blender): решётчатая мачта 80 ед. (три стойки, сужается кверху, перекладины и раскосы),
+    три поперечины-диполя убывающей ширины, две панельные антенны и тарелка, растяжки к основанию; кадр 96 ед."""
+    sc, rng = scene(96, ((0.78, 0.84, 1.0), 3.8), seed)
+    Hm = 80.0; fr = bmesh.new()
+    def leg_r(z): return 3.2 * (1 - z / Hm) + 0.9                                  # полуширина мачты на высоте z
+    for k in range(3):                                                             # три стойки
+        a = k * math.tau / 3 + 0.3
+        mt._cone(fr, Vector((math.cos(a) * leg_r(0) * U, math.sin(a) * leg_r(0) * U, 0)), Vector((math.cos(a) * leg_r(Hm) * U, math.sin(a) * leg_r(Hm) * U, Hm * U)), 0.32 * U, 0.22 * U, 8)
+    z = 0.0; step = 5.0; j = 0
+    while z + step <= Hm:                                                          # перекладины и раскосы по граням
+        for k in range(3):
+            a0 = k * math.tau / 3 + 0.3; a1 = (k + 1) * math.tau / 3 + 0.3
+            p0 = Vector((math.cos(a0) * leg_r(z), math.sin(a0) * leg_r(z), z)) * U; p1 = Vector((math.cos(a1) * leg_r(z), math.sin(a1) * leg_r(z), z)) * U
+            q1 = Vector((math.cos(a1) * leg_r(z + step), math.sin(a1) * leg_r(z + step), z + step)) * U
+            mt._cone(fr, p0, p1, 0.14 * U, 0.14 * U, 6); mt._cone(fr, p0 if j % 2 else p1, q1 if j % 2 else Vector((math.cos(a0) * leg_r(z + step), math.sin(a0) * leg_r(z + step), z + step)) * U, 0.12 * U, 0.12 * U, 6)
+        z += step; j += 1
+    for i, (zz, wd) in enumerate(((Hm - 4, 18), (Hm - 16, 13), (Hm - 28, 8))):     # поперечины-диполи
+        mt._cone(fr, Vector((-wd / 2 * U, -1.2 * U, zz * U)), Vector((wd / 2 * U, -1.2 * U, zz * U)), 0.35 * U, 0.35 * U, 8)
+        for sx in (-1, 1):
+            mt._cone(fr, Vector((sx * wd / 2 * U, -1.2 * U, (zz - 2.5) * U)), Vector((sx * wd / 2 * U, -1.2 * U, (zz + 2.5) * U)), 0.25 * U, 0.25 * U, 6)
+    mt._cone(fr, Vector((0, 0, Hm * U)), Vector((0, 0, (Hm + 8) * U)), 0.35 * U, 0.12 * U, 8)   # штырь
+    for sx in (-1, 1):                                                             # растяжки
+        mt._cone(fr, Vector((0, 0.5 * U, Hm * 0.62 * U)), Vector((sx * 30 * U, 2.5 * U, 0.5 * U)), 0.06 * U, 0.06 * U, 4)
+    me = bpy.data.meshes.new(name + '_m'); fr.to_mesh(me); fr.free(); obj(name + '_m', me, mat_metal('mast', (0.3, 0.3, 0.32), 0.5, 0.7, 0.35), sc)
+    pn = bmesh.new()
+    for (zz, sx) in ((Hm * 0.55, -1), (Hm * 0.42, 1)):                               # панельные антенны
+        _box(pn, (sx * (leg_r(zz) + 1.6), -0.8, zz), 2.0, 1.2, 9.0)
+    me = bpy.data.meshes.new(name + '_p'); pn.to_mesh(me); pn.free(); o = obj(name + '_p', me, mat_metal('panel', (0.72, 0.72, 0.7), 0.5, 0.2, 0.25), sc)
+    for p in me.polygons: p.use_smooth = False
+    ds = bmesh.new(); dz = Hm * 0.3                                               # тарелка
+    bmesh.ops.create_uvsphere(ds, u_segments=32, v_segments=12, radius=4.2 * U, matrix=Matrix.Translation(Vector(((leg_r(dz) + 3.5) * U, -2.5 * U, dz * U))) @ Matrix.Rotation(0.5, 4, 'Z') @ Matrix.Diagonal((0.32, 1, 1, 1)))
+    me = bpy.data.meshes.new(name + '_d'); ds.to_mesh(me); ds.free(); obj(name + '_d', me, mat_metal('dish', (0.78, 0.78, 0.76), 0.45, 0.3, 0.3), sc)
+    return sc
+
+
 def leaf_strip(bm, base, d, side, L, W, fold=0.25, seg=6, curl=0.15):
     """лист: полоса вдоль средней жилки от base по направлению d (side — направление ширины), края приподняты (fold),
     кончик загнут (curl); ширина по синусу — заострённый овал"""
@@ -1423,7 +1459,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'cottage1': (cottage, 181, 100),
     'lantern1': (lantern, 191, 24),
     'striplight1': (striplight, 201, 32),
-    'roof_ac1': (roof_ac, 221, 32), 'roof_ac2': (roof_ac, 222, 32), 'roof_tank1': (roof_tank, 223, 48), 'roof_vent1': (roof_vent, 224, 24), 'roof_vent2': (roof_vent, 225, 24),
+    'roof_ac1': (roof_ac, 221, 32), 'roof_ac2': (roof_ac, 222, 32), 'roof_tank1': (roof_tank, 223, 48), 'roof_vent1': (roof_vent, 224, 24), 'roof_vent2': (roof_vent, 225, 24), 'antenna1': (antenna, 226, 96),
     'alienbush1': (lambda n, s: alienbush(n, s, (0.95, 0.32, 0.95)), 211, 40), 'alienbush2': (lambda n, s: alienbush(n, s, (0.62, 0.38, 1.0)), 212, 40),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }
