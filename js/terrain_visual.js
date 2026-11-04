@@ -493,10 +493,17 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     texAt(S.tx.rock, x, y, o); r = o.r * S.tgR; g = o.g * S.tgG; bl = o.b * S.tgB; o.tex = true;
     if (S.glowTex && !isBack && texGlow(S, o, r, g, bl)) {
       r = o.r; g = o.g; bl = o.b;   /* v101: у вулкана расплав в текстуре уже записан делённым на gain (volcano_lava_cracks.py) */
+      if (S.rockK && o.ga > 190) { const q = Math.min(1, (o.ga - 190) / 65) * 0.65; r += (255 - r) * q; g += (215 - g) * q; bl += (130 - bl) * q; }   /* v122 (критик r38: ядра расплава белёсо-жёлтые, G p90 105 → 145) */
+    } else if (S.rockK && r > g * 1.7 && r > 70) {   /* угольки и отсвет в текстуре — не гасить (критик r38: угольков стало вдвое меньше) */
     } else if (S.rockK) {   /* v117 (критик r37, вулкан: «порода светлая, пыльная, серо-розовая»; эталон — почти чёрный базальт: медиана L 19
       против 38, цвет 36/18/13 против 61/38/32): камень без расплава темнее и краснее, светлые грани сжаты сильнее; расплав и его
       отсвет в текстуре (texGlow) — прежние */
-      const K = S.rockK, L0 = r * 0.3 + g * 0.59 + bl * 0.11, c = 1 / (1 + Math.max(0, L0 - 120) / 160); r *= K[0] * c; g *= K[1] * c; bl *= K[2] * c;
+      const K = S.rockK, L0 = r * 0.3 + g * 0.59 + bl * 0.11, c = 1 / (1 + Math.max(0, L0 - 120) / 160); r *= K[0] * c; g *= K[1] * c; bl *= K[2] * c;   /* v122: замер только по породе (без неба) — верх склона L50 24, p90 41 при эталоне 15–20 / 38–40: сжатие прежнее */
+      if (!isBack && S.hotCore) {   /* v122: россыпь угольков по лицу плит 1–3 px (эталон 116–156 на 100 тыс. px кадра) */
+        const EC = 9, cx2 = Math.floor(x / EC), cy2 = Math.floor(y / EC), he = hash3(cx2, cy2, 171);
+        if (he > 0.8) { const er = 0.7 + hash3(cx2, cy2, 172) * 0.8, ex = (cx2 + 0.2 + hash3(cx2, cy2, 173) * 0.6) * EC, ey = (cy2 + 0.2 + hash3(cx2, cy2, 174) * 0.6) * EC, dx = x - ex, dy = y - ey, d2 = dx * dx + dy * dy;
+          if (d2 < er * er) { const q = 1 - Math.sqrt(d2) / er; r = 255; g = 110 + 100 * q; bl = 30 + 60 * q * q; o.ga = Math.max(o.ga, 230); o.gr = 255; o.gg = 120; o.gb = 35; o.emit = true; } }
+      }
     }
     if (capT > 0 && t - capT < 10) { const sd = t - capT, q = 1 - sd / 10, k = S.snowy ? 1 - 0.45 * q * q : S.rubbleCap ? (sd < 2 ? 0.66 : sd < 4 ? 0.84 : 1) : sd < 4 ? 0.5 : 0.66 + (sd - 4) * 0.057; r *= k; g *= k; bl *= k; }
     { const sd = t - capT, dk = Math.max(0, Math.min(1, (y - S.H * 0.35) / (S.H * 0.6))), up = sd < 60 ? 1.08 - sd / 60 * 0.08 : 1; const k = (1 - 0.08 * dk) * up; r *= k; g *= k * 0.98; bl *= k * 0.96; }   // глубже — темнее, у освещённого верха светлее
@@ -574,7 +581,8 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
     if (S.caveBack && S.tx.cave) {   /* v114 (критик r36, каньон: «стены пещер — та же слоистая порода; в эталоне потрескавшиеся плиты»):
       задняя стена тоннеля — плиты с трещинами (cave_canyon, родная ×4), средний цвет — как у прежней стены из породы (caveBackK) */
       texAt(S.tx.cave, x, y, o); const K = S.caveBackK; r = o.r * K[0] * S.tgR; g = o.g * K[1] * S.tgG; bl = o.b * K[2] * S.tgB; o.ga = 0; }
-    else if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); r = o.r * 1.05 * S.tgR; g = o.g * 1.05 * S.tgG; bl = o.b * 1.05 * S.tgB; o.ga = 0; }
+    else if (S.tx.rock) { texAt(S.tx.rock, x + 517, y + 311, o); r = o.r * 1.05 * S.tgR; g = o.g * 1.05 * S.tgG; bl = o.b * 1.05 * S.tgB; o.ga = 0;
+      if (S.rockK) { const K = S.rockK, L0 = r * 0.3 + g * 0.59 + bl * 0.11, c = 0.8 / (1 + Math.max(0, L0 - 90) / 120); r *= K[0] * c; g *= K[1] * c; bl *= K[2] * c; } }   /* v122 (критик r38: «бледное пятно 113/75/63 слева внизу» — задняя стена углубления без затемнения базальта): как передняя порода, чуть темнее */
     else if (S.tx.dirt && S.bury) {   /* v94 (эталон valley_tower: стена тоннеля тёмная и ровная — камни на ней не выделяются; у нас — светлые камни и бледные
       круги валунов): тот же грунт, контраст вдвое ниже, темнее */
       texAt(S.tx.dirt, x + 257, y + 131, o); const M = texMeanRGB(S.tx.dirt);
@@ -1464,7 +1472,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       if (theme.id === 'alien') {
         const isDruze = rng() < 0.52;
         if (isDruze) {
-          const cols = rng() < 0.5 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];
+          const cols = rng() < 0.6 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];   /* v122 (критик r38): друзы 60 % голубые */
           const numCryst = 3 + ((rng() * 4) | 0);
           /* v91: друза — гранёные кристаллы из Blender (crystal_c*, crystal_m*), насыщенные, чёткие при приближении; вектор
              ниже рисуется вхолостую (числа rng те же — остальной декор на прежних местах) */

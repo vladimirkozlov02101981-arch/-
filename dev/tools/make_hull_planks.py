@@ -54,13 +54,13 @@ for r in range(ROWS):
     off = rng.uniform(0, W1); joints = sorted(((off + np.concatenate([[0], np.cumsum(Ls)[:-1]])) % W1).tolist())
     for j, ja in enumerate(joints):
         jb = joints[(j + 1) % len(joints)] + (W1 if j + 1 == len(joints) else 0)
-        L = jb - ja; tone = rng.normal(0, 0.11); warm = rng.normal(0, 0.035); arcs = rng.random() < 0.4
+        L = jb - ja; tone = rng.normal(0, 0.24); warm = rng.normal(0, 0.045); arcs = rng.random() < 0.4   # v122 (критик r38: «борт тусклый, σL 11,5 при 26»): тон досок ±15 L
         xs = np.arange(int(np.floor(ja * K)), int(np.ceil(jb * K)))
         cols = xs % W
         sub = (slice(y0, y1), cols)
         fy = (yy[y0:y1][:, :len(xs)] - y0) / K                          # 0..ROW поперёк доски
         fx = (xs[None, :] / K - ja).astype(np.float32) * np.ones_like(fy)   # 0..L вдоль доски
-        v = 0.5 + tone + fiber[sub] * 0.14 + streak[sub] * 0.09 + stain[sub] * 0.07 + pores[sub] * 0.05 + fine[sub] * 0.16 + micro[sub] * 0.07
+        v = 0.5 + tone + fiber[sub] * 0.26 + streak[sub] * 0.12 + stain[sub] * 0.08 + pores[sub] * 0.07 + fine[sub] * 0.3 + micro[sub] * 0.15   # волокна ×2, зерно ×1,5 (ВЧ 3,4 при 4,1–5,3 у эталона)
         v += np.clip(scr[sub] - 2.6, 0, 1) * 0.35                                  # редкие царапины
         # чёткие линии годичных слоёв (≈1–2 текселя) с волной и поры-штрихи: деталь, которая видна только при приближении
         sp = rng.uniform(1.2, 2.4); t = (fy + warp[sub] * 1.5 + fiber[sub] * 0.35) / sp
@@ -75,7 +75,7 @@ for r in range(ROWS):
         c = c * np.array([1 + warm, 1, 1 - warm], np.float32)
         # фаска: светлая кромка сверху, тень снизу и у торцов; щели
         k = np.ones_like(fy)
-        k = np.where((fy >= 1) & (fy < 2.6), 1.16, k)
+        k = np.where((fy >= 1) & (fy < 2.2), 1.5, np.where((fy >= 2.2) & (fy < 3.2), 1.18, k))   # тёплый блик 1–2 ед. по верхней кромке доски
         k = np.where(fy > ROW - 3.5, 0.62 + (ROW - fy) / 3.5 * 0.38, k)
         ex = np.minimum(fx, L - fx)
         k = k * np.where(ex < 3.5, 0.72 + ex / 3.5 * 0.28, 1)

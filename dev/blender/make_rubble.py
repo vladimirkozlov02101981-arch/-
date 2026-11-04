@@ -33,11 +33,11 @@ STYLES = {
                   # пятое число слоя — тон камней слоя: щебень и камешки темнее глыб (в эталоне глыбы светлее тёмной крошки)
                   layers=[(64, 0.3, (0.32, 0.46), 0.5, 1.0), (32, 0.42, (0.32, 0.56), 0.5, 0.95), (16, 0.55, (0.3, 0.56), 0.46, 0.8),
                           (8, 0.72, (0.3, 0.56), 0.42, 0.62), (4, 0.88, (0.3, 0.55), 0.36, 0.45), (2, 0.92, (0.3, 0.52), 0.3, 0.36)],
-                  facet=((0.6, 0.86), (0.66, 0.92)), flat=(0.55, 1.0), planes=4, fslope=(0.45, 1.15),   # глубже срезы, 4 грани — угловатые глыбы, не галька
+                  facet=((0.6, 0.86), (0.66, 0.92)), flat=(0.18, 0.4), planes=4, fslope=(0.45, 1.15), poly=(5, 8, 8),   # v122 (критик r38: «угловатые глыбы 40–120 px»): многоугольные глыбы с плоским верхом и крутыми боками (слои от 8 ед.)
                   rock=[(92, 86, 94), (76, 71, 80), (108, 101, 108), (68, 63, 70), (86, 80, 88), (100, 93, 100), (60, 56, 62)],
                   matrix=(12, 11, 15), moss=(78, 86, 36), moss_k=0.2,
                   crystals=64, crystal_size=2.4, crystal_3d=True, crystal_gem=True, crystal_cols=[(150, 90, 255), (60, 200, 255), (220, 90, 255), (90, 235, 255)],
-                  light=dict(col=(0.9, 0.88, 1.0), elev=26, energy=5.2), rough=0.4, spec=0.55, world=(0.52, 0.5, 0.72, 0.3), emit=0.7),
+                  light=dict(col=(0.9, 0.88, 1.0), elev=float(os.environ.get('RUB_ELEV', '17')), energy=5.6), rough=0.4, spec=0.55, world=(0.52, 0.5, 0.72, 0.3), emit=0.7),   # v122: солнце ниже — падающие тени 3–5 px
 }
 
 
@@ -69,6 +69,10 @@ def field(st):
         f2a = rng.uniform(0, math.tau, S2); f2s = rng.uniform(0.25, 0.8, S2); f2k = rng.uniform(*fb, S2)
         # ещё грани (v90, Alien): круче срезы с разных сторон — угловатые колотые глыбы вместо гладкой гальки
         extra = [(rng.uniform(0, math.tau, S2), rng.uniform(*st.get('fslope', (0.4, 1.1)), S2), rng.uniform(*fa, S2)) for _ in range(st.get('planes', 2) - 2)]
+        PO = None
+        if st.get('poly') and G >= st['poly'][2]:
+            nsd = int(rng.integers(st['poly'][0], st['poly'][1] + 1)); a00 = rng.uniform(0, math.tau, S2)
+            PO = [(a00 + (i + rng.uniform(-0.18, 0.18, S2)) * math.tau / nsd, rng.uniform(0.82, 1.0, S2) * math.cos(math.pi / nsd)) for i in range(nsd)]
         cx = np.floor(Xr / G).astype(np.int32)
         for y0 in range(0, NY, 256):
             y1 = min(NY, y0 + 256); Yb = ((np.arange(y0, y1, dtype=np.float32) + 0.5) / R)[:, None]
@@ -83,6 +87,11 @@ def field(st):
                     ca = np.cos(ang[iyb, ixb]); sa = np.sin(ang[iyb, ixb])
                     u = (dx * ca + dy * sa) / sx[iyb, ixb]; v = (-dx * sa + dy * ca) * sx[iyb, ixb]
                     rd = rad[iyb, ixb]; d = np.sqrt(u * u + v * v) / rd
+                    if PO:   # v122 (критики r37–r38: «камни — плоские круглые диски»): контур — неправильный многоугольник 5–8 сторон
+                        dp = np.zeros_like(d)
+                        for (pa, pk) in PO:
+                            dp = np.maximum(dp, (u * np.cos(pa[iyb, ixb]) + v * np.sin(pa[iyb, ixb])) / (rd * pk[iyb, ixb]))
+                        d = np.maximum(dp, d * 0.82)               # углы многоугольника чуть скруглены
                     top = rd * hgt[iyb, ixb]
                     dome = np.sqrt(np.clip(1 - d * d, 0, 1)) ** flat[iyb, ixb] * top
                     # колотые грани: две плоскости срезают купол — плоские площадки с чёткими рёбрами

@@ -599,7 +599,7 @@ const DECOR = {
     if (g) { g.fillStyle = 'rgba(255,120,230,0.4)'; circ(g, x, y - 10 * s, 10 * s); }
   },
   crystal(c, g, x, y, s, r) {
-    const cols = r() < 0.5 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];
+    const cols = r() < 0.6 ? ['#bffcff', '#5ff4ff', '#1a8fa8'] : ['#ffd0ff', '#ff6ef6', '#9a2a9a'];   /* v122 (критик r38): 60 % голубых, 40 % лиловых */
     if (treeSprite(c, cols[1] === '#5ff4ff' ? ['crystal_c1', 'crystal_c2'] : ['crystal_m1', 'crystal_m2'], x, y, s, r, 56)) {   // гранёные кристаллы (Blender), свечение — в слой света
       if (g) { const [R, G, B] = hex2rgb(cols[1]); softGlow(g, x, y - 16 * s, 18 * s, `${R},${G},${B}`, 0.2); }
       return;

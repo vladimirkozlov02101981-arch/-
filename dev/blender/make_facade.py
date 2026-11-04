@@ -71,15 +71,23 @@ def field(seed=161):
     sill = inx & (fy >= wy0 + wh) & (fy < wy0 + wh + 1.6)
     H = np.where(sill, H + 1.2, H); C = np.where(sill[..., None], np.array([120, 120, 124], np.float32), C)
     # кондиционер под частью окон, водосток у края плитки
-    # v117 (критик r37: «кондиционеры — светлые наклейки L 150 под каждым вторым окном»): у 15 % окон, тёмно-серые с решёткой
-    # и кругом вентилятора, тень снизу
-    ac = (hue[ri, ci] > 0.85) & (fx >= wx0 + ww * 0.3) & (fx < wx0 + ww * 0.95) & (fy >= wy0 + wh + 2.2) & (fy < wy0 + wh + 9.0)
-    acx = (fx - (wx0 + ww * 0.62)) / 2.6; acy = (fy - (wy0 + wh + 5.6)) / 2.6; fan = (acx * acx + acy * acy) < 1
-    slat = 0.86 + 0.14 * ((xx * 3 % 2) > 1)
-    C = np.where(ac[..., None], np.array([80, 78, 74], np.float32) * np.where(fan, 0.55 + 0.25 * ((np.arctan2(acy, acx) * 3 % 1.2) > 0.6), slat)[..., None], C)
-    H = np.where(ac, H + 3.0, H)
-    acs = (hue[ri, ci] > 0.85) & (fx >= wx0 + ww * 0.3) & (fx < wx0 + ww * 0.95) & (fy >= wy0 + wh + 9.0) & (fy < wy0 + wh + 10.2)
-    C = np.where(acs[..., None], C * 0.55, C)
+    # v117 (критик r37: «кондиционеры — светлые наклейки L 150 под каждым вторым окном»): у 15 % окон.
+    # v122 (критик r38: «кондиционеры невидимы — тёмное на тёмном»): светлый корпус шириной с окно со светлой верхней кромкой
+    # (на экране p95 ~105), горизонтальная решётка слева, тёмный круг вентилятора с лопастями справа (L 15–20), тень снизу —
+    # от рельефа (корпус выступает на 3,2 ед.)
+    a0, a1, b0, b1 = wx0 + 0.6, wx0 + ww - 0.6, wy0 + wh + 2.0, wy0 + wh + 8.6
+    ac = (hue[ri, ci] > 0.85) & (fx >= a0) & (fx < a1) & (fy >= b0) & (fy < b1)
+    acx = (fx - (a1 - 4.6)) / 3.0; acy = (fy - (b0 + b1) / 2) / 3.0; rr = acx * acx + acy * acy; fan = rr < 1
+    blade = ((np.arctan2(acy, acx) + 0.9 * np.sqrt(rr)) * 5 / (2 * math.pi)) % 1.0 < 0.38
+    slat = 0.82 + 0.18 * (((fy - b0) * 2.2 % 1.0) > 0.45)
+    body = np.array([150, 149, 145], np.float32) * slat[..., None]
+    body = np.where(((fy - b0) < 0.8)[..., None], np.array([206, 205, 200], np.float32), body)
+    body = np.where((((b1 - fy) < 0.6) | ((fx - a0) < 0.5))[..., None], body * 0.6, body)
+    fanc = np.where(blade, 46.0, 26.0)[..., None] * np.array([1, 1, 1.05], np.float32)
+    fanc = np.where((rr > 0.86)[..., None], np.array([110, 110, 108], np.float32), fanc)
+    fanc = np.where((rr < 0.06)[..., None], np.array([90, 90, 90], np.float32), fanc)
+    C = np.where(ac[..., None], np.where(fan[..., None], fanc, body), C)
+    H = np.where(ac, H + np.where(fan, 2.2, 3.2), H)
     pipe = np.abs(xx - (TW - 3)) < 1.1
     H = np.where(pipe, H + 1.1 * np.sqrt(np.clip(1 - ((xx - (TW - 3)) / 1.1) ** 2, 0, 1)), H); C = np.where(pipe[..., None], np.array([62, 64, 70], np.float32), C)
     # v120 (критик r37: «сетка одинаковых окон — 2–4 элемента на этаж: решётки, водостоки, кабели, балконы»):
