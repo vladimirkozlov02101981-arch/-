@@ -645,6 +645,10 @@ const DECOR = {
     const blobs = []; for (let i = 0; i < 9; i++) blobs.push({ x: x + r.range(-12, 12) * s, y: y - 46 * s + r.range(-8, 8) * s, r: r.range(7, 10) * s });
     foliage(c, blobs, ['#1e4a2a', '#2f6a3a', '#4f8a4a']);
   },
+  /* v123 (критик r38, город: «на крышах — блоки кондиционеров, баки, антенны»): предметы крыш из Blender (make_decor.py roof_*) */
+  roofAc(c, g, x, y, s, r) { treeSprite(c, ['roof_ac1', 'roof_ac2'], x, y, s, r, 32); },
+  roofTank(c, g, x, y, s, r) { treeSprite(c, ['roof_tank1'], x, y, s, r, 48); },
+  roofVent(c, g, x, y, s, r) { treeSprite(c, ['roof_vent1', 'roof_vent2'], x, y, s, r, 24); },
   antenna(c, g, x, y, s) {
     c.strokeStyle = '#3a3e46'; c.lineWidth = 2.5 * s; c.beginPath(); c.moveTo(x, y + 2); c.lineTo(x, y - 80 * s); c.stroke();
     c.lineWidth = 1.5 * s; for (let k = 1; k <= 3; k++) { const yy = y - k * 18 * s; const w = (4 - k) * 7 * s; c.beginPath(); c.moveTo(x - w, yy); c.lineTo(x + w, yy); c.stroke(); }

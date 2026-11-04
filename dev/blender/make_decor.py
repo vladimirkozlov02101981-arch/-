@@ -1178,6 +1178,115 @@ def striplight(name, seed):
     return sc
 
 
+def mat_metal(name, col, rough=0.42, metal=0.55, grime=0.35):
+    """крашеный/оцинкованный металл крыш: металличность, мелкая шероховатость и пятна грязи (тёмнее к низу)"""
+    m, nt, b = mt.principled(name, rough, 0.5); N, L = nt.nodes, nt.links
+    b.inputs['Metallic'].default_value = metal
+    tc = N.new('ShaderNodeTexCoord'); nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 140; nz.inputs['Detail'].default_value = 8
+    L.new(tc.outputs['Object'], nz.inputs['Vector'])
+    ramp = N.new('ShaderNodeValToRGB'); ramp.color_ramp.elements[0].position = 0.35; ramp.color_ramp.elements[1].position = 0.75
+    ramp.color_ramp.elements[0].color = (*mt.lin(tuple(c * (1 - grime) for c in col)), 1); ramp.color_ramp.elements[1].color = (*mt.lin(col), 1)
+    L.new(nz.outputs['Fac'], ramp.inputs['Fac']); L.new(ramp.outputs['Color'], b.inputs['Base Color'])
+    nz2 = N.new('ShaderNodeTexNoise'); nz2.inputs['Scale'].default_value = 900; nz2.inputs['Detail'].default_value = 6; L.new(tc.outputs['Object'], nz2.inputs['Vector'])
+    bu = N.new('ShaderNodeBump'); bu.inputs['Strength'].default_value = 0.12; bu.inputs['Distance'].default_value = 0.001
+    L.new(nz2.outputs['Fac'], bu.inputs['Height']); L.new(bu.outputs['Normal'], b.inputs['Normal'])
+    return m
+
+
+def _box(bm, c, sx, sy, sz):
+    bmesh.ops.create_cube(bm, size=1, matrix=Matrix.Translation(Vector(c) * U) @ Matrix.Diagonal((sx * U, sy * U, sz * U, 1)))
+
+
+def roof_ac(name, seed):
+    """v123 (критик r38, город: «на крышах — блоки кондиционеров, баки, антенны»): наружный блок кондиционера на крыше — корпус
+    22×10×13 ед. на двух опорах-швеллерах, спереди решётка вентилятора (круг с лопастями за прутьями) и жалюзи, сверху кромка,
+    сбоку трубки с теплоизоляцией уходят вниз; крашеный металл с грязью"""
+    sc, rng = scene(32, ((0.78, 0.84, 1.0), 3.6), seed)
+    W_, D_, H_ = rng.uniform(19, 23), 10.0, rng.uniform(11.5, 13.5)
+    body = bmesh.new(); _box(body, (0, 0, 2.2 + H_ / 2), W_, D_, H_)
+    _box(body, (0, 0, 2.2 + H_ + 0.35), W_ + 0.6, D_ + 0.6, 0.7)                  # кромка крышки
+    me = bpy.data.meshes.new(name + '_b'); body.to_mesh(me); body.free(); o = obj(name + '_b', me, mat_metal('acbody', (0.66, 0.66, 0.63), 0.5, 0.25, 0.3), sc)
+    for p in me.polygons: p.use_smooth = False
+    fr = bmesh.new()
+    for x in (-W_ / 2 + 2.5, W_ / 2 - 2.5): _box(fr, (x, 0, 1.1), 1.6, D_ + 1.5, 2.2)   # опоры
+    me = bpy.data.meshes.new(name + '_f'); fr.to_mesh(me); fr.free(); obj(name + '_f', me, mat_metal('acfoot', (0.2, 0.2, 0.21), 0.6, 0.6, 0.4), sc)
+    cx, cz, R = W_ / 2 - 6.0, 2.2 + H_ / 2, min(4.6, H_ / 2 - 1.2)
+    fan = bmesh.new()                                                               # тёмная ниша вентилятора и лопасти
+    bmesh.ops.create_cone(fan, cap_ends=True, segments=48, radius1=R * U, radius2=R * U, depth=0.6 * U,
+                          matrix=Matrix.Translation(Vector((cx * U, (-D_ / 2 - 0.05) * U, cz * U))) @ Matrix.Rotation(math.pi / 2, 4, 'X'))
+    me = bpy.data.meshes.new(name + '_n'); fan.to_mesh(me); fan.free(); obj(name + '_n', me, mat_col('acdark', (0.035, 0.035, 0.04), 0.7, 0.2), sc)
+    bl = bmesh.new(); a0 = rng.uniform(0, 1.5)
+    for k in range(4):                                                              # лопасти — радиально, в плоскости решётки
+        a = a0 + k * math.pi / 2; c = Vector(((cx + math.cos(a) * R * 0.47) * U, (-D_ / 2 - 0.2) * U, (cz + math.sin(a) * R * 0.47) * U))
+        bmesh.ops.create_cube(bl, size=1, matrix=Matrix.Translation(c) @ Matrix.Rotation(-a, 4, 'Y') @ Matrix.Diagonal((R * 0.8 * U, 0.15 * U, R * 0.34 * U, 1)))
+    me = bpy.data.meshes.new(name + '_bl'); bl.to_mesh(me); bl.free()
+    obj(name + '_bl', me, mat_metal('acblade', (0.3, 0.3, 0.32), 0.45, 0.6, 0.2), sc)
+    gr = bmesh.new()                                                                # прутья решётки: концентрические кольца и крест
+    for rr in (R * 0.35, R * 0.65, R * 0.95):
+        bmesh.ops.create_cone(gr, cap_ends=False, segments=48, radius1=rr * U, radius2=rr * U, depth=0.18 * U,
+                              matrix=Matrix.Translation(Vector((cx * U, (-D_ / 2 - 0.45) * U, cz * U))) @ Matrix.Rotation(math.pi / 2, 4, 'X'))
+    _box(gr, (cx, -D_ / 2 - 0.45, cz), 2 * R, 0.18, 0.22); _box(gr, (cx, -D_ / 2 - 0.45, cz), 0.22, 0.18, 2 * R)
+    for j in range(int(H_ / 1.05) - 2):                                             # жалюзи слева
+        _box(gr, (-W_ / 2 + (W_ - 12.5) / 2 + 1.0, -D_ / 2 - 0.25, 3.4 + j * 1.05), W_ - 13.5, 0.35, 0.32)
+    me = bpy.data.meshes.new(name + '_g'); gr.to_mesh(me); gr.free(); g = obj(name + '_g', me, mat_metal('acgrill', (0.5, 0.5, 0.5), 0.4, 0.7, 0.25), sc)
+    for p in me.polygons: p.use_smooth = False
+    pp = bmesh.new()                                                                # трубки к дому
+    mt._cone(pp, Vector(((-W_ / 2 - 0.9) * U, -2 * U, (2.2 + H_ * 0.6) * U)), Vector(((-W_ / 2 - 0.9) * U, -2 * U, -1.5 * U)), 0.75 * U, 0.75 * U, 16)
+    mt._cone(pp, Vector(((-W_ / 2 - 0.9) * U, 0.5 * U, (2.2 + H_ * 0.5) * U)), Vector(((-W_ / 2 - 0.9) * U, 0.5 * U, -1.5 * U)), 0.5 * U, 0.5 * U, 16)
+    me = bpy.data.meshes.new(name + '_p'); pp.to_mesh(me); pp.free(); obj(name + '_p', me, mat_col('acpipe', (0.12, 0.12, 0.12), 0.8, 0.2), sc)
+    return sc
+
+
+def roof_tank(name, seed):
+    """v123: бак на крыше — оцинкованный цилиндр с обручами и конической крышкой на стальной раме из уголков с раскосами,
+    лесенка сбоку; кадр 48 ед."""
+    sc, rng = scene(48, ((0.78, 0.84, 1.0), 3.8), seed)
+    R, Hh, legs = rng.uniform(8, 9.5), rng.uniform(15, 18), rng.uniform(10, 13)
+    tk = bmesh.new()
+    bmesh.ops.create_cone(tk, cap_ends=True, segments=64, radius1=R * U, radius2=R * U, depth=Hh * U, matrix=Matrix.Translation(Vector((0, 0, (legs + Hh / 2) * U))))
+    me = bpy.data.meshes.new(name + '_t'); tk.to_mesh(me); tk.free(); obj(name + '_t', me, mat_metal('tank', (0.6, 0.61, 0.6), 0.38, 0.7, 0.16), sc)
+    lid = bmesh.new(); mt._cone(lid, Vector((0, 0, (legs + Hh) * U)), Vector((0, 0, (legs + Hh + 3.2) * U)), (R + 0.5) * U, 0.6 * U, 64)
+    me = bpy.data.meshes.new(name + '_l'); lid.to_mesh(me); lid.free(); obj(name + '_l', me, mat_metal('lid', (0.5, 0.5, 0.5), 0.45, 0.6, 0.45), sc)
+    hp = bmesh.new()
+    for z in (legs + 1.2, legs + Hh * 0.5, legs + Hh - 1.2):
+        bmesh.ops.create_cone(hp, cap_ends=False, segments=64, radius1=(R + 0.25) * U, radius2=(R + 0.25) * U, depth=0.8 * U, matrix=Matrix.Translation(Vector((0, 0, z * U))))
+    me = bpy.data.meshes.new(name + '_h'); hp.to_mesh(me); hp.free(); obj(name + '_h', me, mat_metal('hoop', (0.32, 0.3, 0.28), 0.55, 0.7, 0.5), sc)
+    fr = bmesh.new(); L0 = R * 0.72
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            _box(fr, (sx * L0, sy * L0, legs / 2), 1.1, 1.1, legs)
+    for sy in (-1, 1):                                                             # раскосы крест-накрест по передней и задней грани
+        for a in (1, -1):
+            q = Vector((2 * L0, 0, legs * 0.85)); ln = q.length; ang = math.atan2(legs * 0.85, 2 * L0) * a
+            bmesh.ops.create_cube(fr, size=1, matrix=Matrix.Translation(Vector((0, sy * L0 * U, legs * 0.48 * U))) @ Matrix.Rotation(-ang, 4, 'Y') @ Matrix.Diagonal((ln * U, 0.5 * U, 0.5 * U, 1)))
+    _box(fr, (0, 0, legs - 0.4), 2 * L0 + 1.4, 2 * L0 + 1.4, 0.8)                 # площадка
+    for k in range(int((legs + Hh) / 2.2)):                                         # лесенка справа (видна спереди)
+        _box(fr, (R + 1.9, -R * 0.3, 1 + k * 2.2), 2.2, 0.3, 0.3)
+    for x in (R + 0.8, R + 3.0):
+        _box(fr, (x, -R * 0.3, (legs + Hh) / 2), 0.35, 0.35, legs + Hh)
+    me = bpy.data.meshes.new(name + '_f'); fr.to_mesh(me); fr.free(); f = obj(name + '_f', me, mat_metal('frame', (0.16, 0.15, 0.15), 0.55, 0.7, 0.45), sc)
+    for p in me.polygons: p.use_smooth = False
+    return sc
+
+
+def roof_vent(name, seed):
+    """v123: вентиляция на крыше — 2–3 трубы разной высоты с грибками-колпаками, одна с коленом, и электрощиток; кадр 24 ед."""
+    sc, rng = scene(24, ((0.78, 0.84, 1.0), 3.6), seed)
+    pp = bmesh.new(); cp = bmesh.new(); xs = sorted(rng.sample([-6.5, -2.5, 1.5, 5.5], rng.randint(2, 3)))
+    for i, x in enumerate(xs):
+        r = rng.uniform(1.1, 2.0); h = rng.uniform(7, 15)
+        mt._cone(pp, Vector((x * U, 0, -1 * U)), Vector((x * U, 0, h * U)), r * U, r * U, 32)
+        mt._cone(pp, Vector((x * U, 0, (h * 0.3) * U)), Vector((x * U, 0, (h * 0.3 + 0.7) * U)), (r + 0.35) * U, (r + 0.35) * U, 32)   # фланец
+        mt._cone(cp, Vector((x * U, 0, (h + 0.6) * U)), Vector((x * U, 0, (h + 2.1) * U)), (r * 1.9) * U, 0.3 * U, 32)            # колпак
+        mt._cone(cp, Vector((x * U, 0, h * U)), Vector((x * U, 0, (h + 0.7) * U)), (r * 0.5) * U, (r * 0.5) * U, 12)
+    me = bpy.data.meshes.new(name + '_p'); pp.to_mesh(me); pp.free(); obj(name + '_p', me, mat_metal('vent', (0.58, 0.58, 0.57), 0.4, 0.7, 0.45), sc)
+    me = bpy.data.meshes.new(name + '_c'); cp.to_mesh(me); cp.free(); obj(name + '_c', me, mat_metal('cap', (0.42, 0.42, 0.42), 0.45, 0.7, 0.4), sc)
+    bx = bmesh.new(); _box(bx, (rng.choice((-1, 1)) * 8.5, 1.5, 3.2), 4.5, 3, 6.4)
+    me = bpy.data.meshes.new(name + '_x'); bx.to_mesh(me); bx.free(); o = obj(name + '_x', me, mat_metal('box', (0.38, 0.4, 0.37), 0.55, 0.3, 0.4), sc)
+    for p in me.polygons: p.use_smooth = False
+    return sc
+
+
 def leaf_strip(bm, base, d, side, L, W, fold=0.25, seg=6, curl=0.15):
     """лист: полоса вдоль средней жилки от base по направлению d (side — направление ширины), края приподняты (fold),
     кончик загнут (curl); ширина по синусу — заострённый овал"""
@@ -1314,6 +1423,7 @@ DECOR = {   # имя → (сцена, seed, кадр в ед.)
     'cottage1': (cottage, 181, 100),
     'lantern1': (lantern, 191, 24),
     'striplight1': (striplight, 201, 32),
+    'roof_ac1': (roof_ac, 221, 32), 'roof_ac2': (roof_ac, 222, 32), 'roof_tank1': (roof_tank, 223, 48), 'roof_vent1': (roof_vent, 224, 24), 'roof_vent2': (roof_vent, 225, 24),
     'alienbush1': (lambda n, s: alienbush(n, s, (0.95, 0.32, 0.95)), 211, 40), 'alienbush2': (lambda n, s: alienbush(n, s, (0.62, 0.38, 1.0)), 212, 40),
     'rocksnow1': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 116, 36), 'rocksnow2': (lambda n, s: boulder(n, s, (0.20, 0.23, 0.29), (0.48, 0.53, 0.62), snow=True), 117, 36),
 }

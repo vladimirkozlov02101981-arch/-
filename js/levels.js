@@ -407,6 +407,9 @@ const MAP_CITY = buildLevel({
   B.room(2800, 1552, 1700, 90); B.ladder(2915, 1500, 1642); B.ladder(4200, 1500, 1642);
   const house = (x, w, n, st, lad) => { const top = B.tower(x, 1500, w, { mat: 'concrete', pal: st, wall: 14, slab: 14, stories: [100, ...Array(n - 1).fill(96)], ladders: Array.from({ length: n }, (_, i) => i % 2 ? w - lad : lad), found: 6 });
     B.fixture({ k: 'rail', metal: true, x1: x + 3, y1: top, x2: x + w - 3, y2: top, sag: 0, h: 14 });   /* v95: ограждение по краю крыши (эталон) */
+    /* v123 (критик r38: «на крышах — блоки кондиционеров, баки, антенны»): предметы крыш (Blender) между выходами лестниц — только рисунок, геометрия прежняя */
+    B.decor(['roofAc', x + w * (x % 3 ? 0.3 : 0.42), top], ['roofVent', x + w * 0.58, top, 1, x % 2 === 0]);
+    if (w >= 220) B.decor(['roofTank', x + w * 0.74, top]); else B.decor(['roofAc', x + w * 0.72, top, 0.9, true]);
     return top; };
   house(90, 220, 4, P_TOWER('#3a4150', '#ffd27a', 0.4), 30);
   house(380, 240, 6, P_TOWER('#2b3140', '#9fe0ff', 0.35), 30);
