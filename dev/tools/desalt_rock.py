@@ -1,6 +1,8 @@
 """Убирает белую «соль» на тёмной породе (критик r36, Арктика: «меньше белых точек-соли в 1 px»).
 
 python dev/tools/desalt_rock.py <родная.webp> <выход.png> [--k 7] [--thr 22] [--keep 0.15] [--dark 95] [--gain 0.86] [--frost 0.7] [--snowk 1.3] [--icicles 0.14] [--seams 1]
+    [--seamk 1] [--lumps 0] [--overhang 0] [--fringe 0]      (v131: --snowk 1.45 --icicles 0 --seamk 0.5 --lumps 1 --overhang 18 --fringe 0.6;
+    исходник — родная до v113: git show 1d59b26^:assets/tex/native/rock_arctic.webp)
 затем: python dev/make_native.py <выход.png> <имя> --no-match --lossy --quality 90   (малая — точное уменьшение родной)
 
 Крупинки — светлые пятнышки уже k пикселей родной текстуры, ярче фона больше чем на thr (белый «цилиндр»: L − открытие L):
@@ -38,6 +40,8 @@ def main():
     ap.add_argument('--gain', type=float, default=0.86); ap.add_argument('--frost', type=float, default=0.7)
     ap.add_argument('--frostd', type=float, default=24); ap.add_argument('--snowL', type=float, default=108)
     ap.add_argument('--snowk', type=float, default=1.3); ap.add_argument('--icicles', type=float, default=0.14); ap.add_argument('--seams', type=int, default=1)
+    ap.add_argument('--seamk', type=float, default=1.0); ap.add_argument('--overhang', type=float, default=0); ap.add_argument('--fringe', type=float, default=0)
+    ap.add_argument('--lumps', type=float, default=0)
     a = ap.parse_args()
     img = np.asarray(Image.open(a.src).convert('RGB'), dtype=np.float32)
     L = img @ np.array([0.299, 0.587, 0.114], np.float32)
@@ -72,7 +76,7 @@ def main():
     if a.seams:
         H, W = L.shape; rng = np.random.default_rng(13); n = 0
         rock = ~snow
-        for _ in range(int(W / 470 * 13)):
+        for _ in range(int(W / 470 * 13 * a.seamk)):
             x0, y0 = int(rng.integers(0, W)), int(rng.integers(0, H))
             if not rock[y0, x0]: continue
             ys = [y0]
@@ -90,6 +94,59 @@ def main():
                     if abs(dxx) < wd: q = 1 - abs(dxx) / wd; out[yw, xw] = out[yw, xw] * (1 - 0.42 * q * q * (3 - 2 * q))   # глубже к середине, ΔL −15…−20
                     elif -wd - 4 < dxx <= -wd: out[yw, xw] = np.minimum(255, out[yw, xw] * 1.22 + 4)   # светлая фаска слева (свет сверху слева)
         print('seams: %d' % n)
+    if a.lumps > 0:   # v131 (критик r39: «снег на уступах серый и плоский — σ 18 при 27, p90 204 при 230»): комья 3–8 ед. на снегу
+        H, W = L.shape; rng = np.random.default_rng(17)
+        def gn2(sg):
+            g = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), sg, mode='wrap'); return (g - g.mean()) / (g.std() + 1e-9)
+        lump = 0.6 * gn2(10) + 0.4 * gn2(4); gy_ = np.roll(lump, 2, 0) - np.roll(lump, -2, 0)   # свет сверху: верх комка светлее
+        msk = np.clip((Ls - a.snowL) / 25, 0, 1)[..., None]
+        out = out * (1 + a.lumps * (0.10 * lump + 0.12 * gy_)[..., None] * msk)
+    if a.overhang > 0:   # v131 (критик r39: «нет пухлого свеса с синей тенью»): свес снега вниз от нижней кромки полос
+        H, W = L.shape; rng = np.random.default_rng(23)
+        Ls2 = nd.gaussian_filter(out @ np.array([0.299, 0.587, 0.114], np.float32), 4, mode='wrap'); snow2 = Ls2 > a.snowL
+        thick = snow2.copy()
+        for q in range(1, 13): thick &= np.roll(snow2, q, 0)
+        edge = thick & ~np.roll(snow2, -1, 0)
+        n1 = nd.gaussian_filter1d(rng.standard_normal(W).astype(np.float32), 30, mode='wrap'); n1 /= np.abs(n1).max() + 1e-9
+        n2 = nd.gaussian_filter1d(rng.standard_normal(W).astype(np.float32), 5, mode='wrap'); n2 /= np.abs(n2).max() + 1e-9
+        ovh = a.overhang * np.clip(0.75 + 0.45 * n1 + 0.2 * n2, 0.25, 1.5)            # толщина свеса по столбцу, px родной
+        under = np.array([104, 118, 146], np.float32)                                 # холодная тень снизу (до gain темы)
+        ey, ex = np.nonzero(edge); cnt = len(ey)
+        Sm = nd.gaussian_filter(out, (1.0, 5.0, 0), mode='wrap')                      # цвет снега над кромкой, сглаженный вдоль x — без полос
+        grain = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), 0.9, mode='wrap'); grain /= grain.std() + 1e-9
+        D = np.full((H, W), 1e6, np.float32); C = np.zeros((H, W, 3), np.float32); hmap = np.broadcast_to(ovh[None, :], (H, W))
+        for k in range(1, int(ovh.max()) + 2):                                        # свес: строка k под кромкой берёт цвет на 4 px выше кромки
+            Ek = np.roll(edge, k, 0) & (k <= hmap + 1) & (D > k)
+            if not Ek.any(): continue
+            src = np.roll(Sm, k + 4, 0)
+            t = np.clip(k / np.maximum(hmap, 1), 0, 1)[..., None]
+            col = src * (1 - 0.6 * t * t) + under * (0.6 * t * t)                       # к низу свеса — в холодную тень, скругление
+            D = np.where(Ek, k, D); C = np.where(Ek[..., None], col, C)
+        cov = np.clip(hmap - D + 1, 0, 1) * (D < 1e5)
+        C += (grain * 5)[..., None]
+        out = out * (1 - cov[..., None]) + C * cov[..., None]
+        print('overhang: edge columns %d' % cnt)
+        if a.fringe > 0:   # бахрома мелких сосулек под свесом: шаг 10–20 px родной, длина 12–50 px (изредка 80), под fringe доли кромки
+            g = nd.gaussian_filter1d(rng.standard_normal(W).astype(np.float32), 60, mode='wrap'); thr = np.quantile(g, 1 - a.fringe)
+            bottoms = {}
+            for y0, x0 in zip(ey, ex): bottoms.setdefault(x0, []).append(y0)
+            nf = 0
+            for x0, ys in bottoms.items():
+                if g[x0] < thr: continue
+                for y0 in ys:
+                    if not snow2[(y0 - 3) % H, x0]: continue
+                    if rng.random() > 1 / 14: continue                                 # в среднем шаг ~14 px
+                    u = rng.random(); Lc = rng.uniform(12, 30) if u < 0.7 else rng.uniform(30, 50) if u < 0.95 else rng.uniform(50, 80)
+                    yb = y0 + int(ovh[x0]); w0 = rng.uniform(3, 6); op = rng.uniform(0.7, 0.9); nf += 1
+                    for k in range(int(Lc) + 1):
+                        t = k / Lc; hw = w0 / 2 * (1 - t) ** 0.9 + 0.3; y = (yb + k) % H
+                        for dx in range(int(-hw - 1), int(hw + 2)):
+                            xx = x0 + dx; cov = np.clip(hw - abs(dx) + 0.5, 0, 1)
+                            if cov <= 0: continue
+                            side = dx / max(hw, 0.5)
+                            col = np.array([205, 228, 248], np.float32) * (1 - max(0, side) * 0.32) + np.array([30, 20, 6], np.float32) * max(0, -side)
+                            al = op * (0.8 + 0.2 * t) * cov; xw = xx % W; out[y, xw] = out[y, xw] * (1 - al) + col * al
+            print('fringe icicles: %d' % nf)
     if a.icicles > 0:
         H, W = L.shape; rng = np.random.default_rng(9)
         g = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), 110, mode='wrap')   # v121: гроздьями (критик r38: «по 1–3 под каждой кромкой» → 4–6 гроздьев, ≥ 60 % кромок без сосулек)

@@ -67,10 +67,10 @@ const THEMES = {
       strata: ['#b0c1d6', '#a3b5cc', '#bccbdd', '#98abc3', '#c3d0e0'], band: 30, bandSharp: 0.2,
       rock: ['#7c8cac', '#6e7e9e', '#8898b6', '#647494', '#9aa8c2'], rockDirt: true, rockBand: 62, rim: '#b0c8ff',
       pebbles: ['#c2cfdd', '#a9b8ca', '#d5dee8'],
-      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.51, 1.44, 1.31] /* v73: оттенок камня по эталону — в самой текстуре (arctic_snow_relief.py --rock-tint), канальный gain красил снег; v44: яркость пород по эталону (cmatch) */ },   // v44: тонкие пласты гранита, снежные уступы с сосульками (make_masonry.py strata)
+      outline: '#16233a', veins: null, ceiling: 'icicles', capMats: [1, 2, 7], tex: { rock: 'rock_arctic', cave: 'cave_arctic', cap: 'cap_snow', gain: [1.31, 1.27, 1.2] /* v131: ÷ на свет ярче (ambient); v73: оттенок камня по эталону — в самой текстуре (arctic_snow_relief.py --rock-tint), канальный gain красил снег; v44: яркость пород по эталону (cmatch) */ },   // v44: тонкие пласты гранита, снежные уступы с сосульками (make_masonry.py strata)
     },
     scatter: ['rockSnow', 'iceCrystal', 'bushSnow', 'rockSnow'],
-    weather: 'snow', birds: false, ambient: '#c3cde6', ambientSound: 'snow',
+    weather: 'snow', birds: false, ambient: '#e1e8fa' /* v131 (критик r39: «снег на уступах серый — p90 204 при 230»): лунный свет ярче — снег (у потолка 236) светлее, порода прежняя (gain ÷1,15); было #c3cde6 */, ambientSound: 'snow',
   },
   volcano: {
     id: 'volcano',

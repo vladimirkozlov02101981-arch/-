@@ -279,7 +279,7 @@ function capDepth(TD, m, i, x, y, t, W, H) {
 const SNOW_ROCK_L = [[0, 0], [190, 190], [255, 236]];
 function snowRockL(L) {
   for (let i = 1; i < SNOW_ROCK_L.length; i++) { const a = SNOW_ROCK_L[i - 1], b = SNOW_ROCK_L[i]; if (L <= b[0]) return a[1] + (b[1] - a[1]) * (L - a[0]) / (b[0] - a[0]); }
-  return 200;
+  return SNOW_ROCK_L[SNOW_ROCK_L.length - 1][1];   /* v131: выше таблицы — потолок 236 (было 200: самый яркий снег гас ниже просто яркого) */
 }
 
 /* v110 (критик r36: горящих окон 8,6–10,6 % фасада при ~5 % в эталоне; «битые» окна — у погашенного горящего окна оставались
@@ -1299,7 +1299,10 @@ function buildTerrainVisual(T, theme, map, raster, waterY) {
             bl = bl * (1 - depthK) + dt[2] * depthK * 1.05;
           }
         }
-        if (S.snowy && mt === 2 && !o.cap) { const L = 0.299 * r + 0.587 * g + 0.114 * bl; if (L > 190) { const k = snowRockL(L) / L; r *= k; g *= k; bl *= k; } }   // снег на уступах без пересвета
+        if (S.snowy && mt === 2 && !o.cap) { const L = 0.299 * r + 0.587 * g + 0.114 * bl;
+          if (L > 150) {   /* v131 (критик r39: «снег на уступах серый — B 200 при 220»): снег холоднее и белее (яркость — фоновый свет темы, themes.js) */
+            const q = Math.min(1, (L - 150) / 50), w = q * 0.55; r += (L * 0.95 - r) * w; g += (L * 0.99 - g) * w; bl += (L * 1.08 - bl) * w; }
+          const L2 = 0.299 * r + 0.587 * g + 0.114 * bl; if (L2 > 190) { const k = snowRockL(L2) / L2; r *= k; g *= k; bl *= k; } }   // снег на уступах без пересвета
         const j = i * 4; px[j] = r; px[j + 1] = g; px[j + 2] = bl; px[j + 3] = 255;
         if (o.tT && (!o.emit || o.emitTex)) refF[i] = texRefId(o, x, y);   /* светящиеся окна фасада — тоже из родной текстуры: при приближении рамы и шторы чёткие */
         if (o.ga > 0 && gimg) { gimg[j] = o.gr; gimg[j + 1] = o.gg; gimg[j + 2] = o.gb; gimg[j + 3] = o.ga; }
