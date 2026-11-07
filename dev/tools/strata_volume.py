@@ -1,7 +1,7 @@
 """Объём пластов песчаника каньона (критик r37: «пласты без объёма — средние частоты 7,2 при 10,6 у эталона; верхняя треть
 пласта светлее на ~18 L; линии напластования вдвое чаще — период ~90 px кадра против ~45 у эталона»).
 
-python dev/tools/strata_volume.py <родная.webp> <выход.png> [--top 0.16] [--bottom 0.12] [--mid 0.42] [--split 0.6] [--joints 0.42]
+python dev/tools/strata_volume.py <родная.webp> <выход.png> [--top 0.16] [--bottom 0.12] [--mid 0.42] [--split 1.0] [--joints 0.6] [--lipk 1.1]
 (питоном с bpy; исходник — родная до v119: git show 5b79e66^:assets/tex/native/rock_canyon.webp)
 затем: python dev/make_native.py <выход.png> rock_canyon --no-match --lossy --quality 90   (и та же картинка — dirt_canyon)
 
@@ -36,7 +36,7 @@ def main():
     ap.add_argument('src'); ap.add_argument('out')
     ap.add_argument('--top', type=float, default=0.16); ap.add_argument('--bottom', type=float, default=0.12)
     ap.add_argument('--mid', type=float, default=0.42); ap.add_argument('--seed', type=int, default=21)
-    ap.add_argument('--split', type=float, default=0.0); ap.add_argument('--joints', type=float, default=0.0)
+    ap.add_argument('--split', type=float, default=0.0); ap.add_argument('--joints', type=float, default=0.0); ap.add_argument('--lipk', type=float, default=0.45)
     ap.add_argument('--jmin', type=float, default=400); ap.add_argument('--jmax', type=float, default=800)
     a = ap.parse_args()
     spec = importlib.util.spec_from_file_location('cs', ROOT / 'dev/tools/canyon_strata.py')
@@ -62,11 +62,12 @@ def main():
     f = 1 + a.top * (1 - smooth(0.0, 0.35, vv)) - a.bottom * smooth(0.72, 1.0, vv)
     dm = (v - mid - wob[None, :]) * hpx[row]                                  # расстояние до линии, px родной (4 на ед.)
     sr = spl[row]
-    gw = np.where(sr, 4.6, 2.6); go = np.where(sr, 2.2, 1.2)                  # у разделённых — шов шире (~2,3 ед.) и глубже
+    gw = np.where(sr, 6.5, 2.6); go = np.where(sr, 3.0, 1.2)                  # у разделённых — шов шире (v129: ~3 ед. — в кадре 2–3 px) и глубже
     line = np.clip(1 - np.abs(dm + go) / gw, 0, 1) ** 1.5                     # тёмная бороздка ~1,2 ед.
-    lip = np.clip(1 - np.abs(dm - np.where(sr, 4.0, 2.6)) / np.where(sr, 2.4, 1.4), 0, 1)   # светлая кромка под ней
+    lip = np.clip(1 - np.abs(dm - np.where(sr, 5.0, 2.6)) / np.where(sr, 3.0, 1.4), 0, 1)   # светлая кромка под ней
     bk = np.where(sr, 1.0, brk[None, :]); mk = np.where(sr, 1.75, 1.0)          # у разделённых — сплошной шов
-    f = f * (1 - a.mid * mk * line * bk) * (1 + a.mid * 0.45 * mk * lip * bk)
+    f = f * (1 - a.mid * mk * line * bk) * (1 + a.mid * np.where(sr, a.lipk, 0.45) * mk * lip * bk)
+    warm = (sr * lip * bk).astype(np.float32)                                  # v129 (критик r39: «под щелью тёплая кромка L 150–170, R/B ≈ 2»)
     if a.joints > 0:   # v123: вертикальные стыки плит — в каждом ряду и в каждой половине свои, вразбежку
         seg = row * 2 + sub.astype(np.int64)
         rj = np.random.default_rng(a.seed + 200); nj = 0
@@ -91,7 +92,9 @@ def main():
                     f[y, xw] = np.where(mm, f[y, xw] * (1 - a.joints * q) * (1 + 0.16 * lipj), f[y, xw])
                 nj += 1; x += rj.uniform(a.jmin, a.jmax)
         print('joints %d' % nj)
-    out = np.clip(img * f[..., None], 0, 255)
+    out = img * f[..., None]
+    out += (np.array([216, 170, 118], np.float32) - out) * (0.45 * warm)[..., None]   # кромка — к светлой кремовой (R/B ≈ 1,8), а не к рыжей
+    out = np.clip(out, 0, 255)
     Y = np.array([0.299, 0.587, 0.114], np.float32); L0 = img @ Y; L1 = out @ Y
     print('strata_volume rows %d (split %d, медиана высоты %.0f px родной), mean L %.1f → %.1f, L95 %.0f → %.0f' % (
         n, int(spl.sum()), float(np.median(hpx)), L0.mean(), L1.mean(), np.percentile(L0, 95), np.percentile(L1, 95)))
