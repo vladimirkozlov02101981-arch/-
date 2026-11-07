@@ -1,7 +1,7 @@
 """Кристаллы в новой породе Alien (v91, make_rubble.py: объёмные призмы пучками): в рендере они бледные (AgX уводит яркий
 насыщенный цвет в белый) и не светятся в игре. Подкраска по рендеру ×4 до сборки родной текстуры:
 
-python dev/tools/alien_crystals2.py <рендер ×4.png> <выход.png> [белизна рёбер 0–1, v123: 0,6]
+python dev/tools/alien_crystals2.py <рендер ×4.png> <выход.png> [белизна рёбер 0–1, v123: 0,6] [перелив 0–1, v133: 0,5] [искры, v133: 0,03]
 
 - кристалл = насыщенные пиксели бирюзового или пурпурно-фиолетового тона пятнами от 150 px (камень серый, его сиреневые
   блики — мелкие крапины и не в счёт);
@@ -21,7 +21,7 @@ from scipy.spatial import cKDTree
 Image.MAX_IMAGE_PIXELS = None
 
 
-def facets(out_img, mask, c0, c1, rng, white=0.0):
+def facets(out_img, mask, c0, c1, rng, white=0.0, irid=0.0, sparkle=0.0):
     """грани пучка: ячейки Вороного по случайным точкам внутри пятна; яркость грани — по её положению (свет сверху слева) и
     случаю, внутри грани лёгкий наклон к свету; рёбра светлые, край пятна тёмный"""
     lab, n = ndimage.label(mask); dist = ndimage.distance_transform_edt(mask)
@@ -38,13 +38,20 @@ def facets(out_img, mask, c0, c1, rng, white=0.0):
         t += np.clip(-((xs - pts[f, 0]) + (ys - pts[f, 1])) / (R * 2.5), -0.12, 0.12)
         t = np.where(e < 1.4, np.maximum(t, 0.97), t)
         col = c0 * (1 - t[:, None]) + c1 * t[:, None]
+        if irid > 0:   # v133 (критик r39: «кристаллы — плоские наклейки; эталон — перелив от голубого к фиолетовому, искры»): у граней свой оттенок
+            hue = rng.random(k)[f]                                                # 0 — голубой, 1 — фиолетовый (по граням)
+            alt = np.where(hue[:, None] > 0.5, np.array([150, 90, 235], np.float32), np.array([90, 200, 245], np.float32)) * (0.35 + 0.75 * t[:, None])
+            col = col * (1 - irid) + alt * irid
         if white > 0:   # v123 (критик r38: «кристаллы в толще бледнее, белые блики p95 190 → 210»): рёбра граней — к белому
             col = np.where((e < 1.4)[:, None], col * (1 - white) + np.array([245, 250, 255], np.float32) * white, col)
         di = dist[sl][reg]; col *= np.where(di < 2.2, 0.4 + 0.6 * di / 2.2, 1.0)[:, None]
+        if sparkle > 0:   # искры: белые крапины 1–3 px внутри граней (эталон: блики-«блёстки» по всей друзе)
+            sp = (rng.random(area) < sparkle) & (di > 2.5)
+            col[sp] = col[sp] * 0.2 + np.array([240, 248, 255], np.float32) * 0.8
         sub = out_img[sl]; sub[reg] = col
 
 
-def main(src, out, white=0.0):
+def main(src, out, white=0.0, irid=0.0, sparkle=0.0):
     img = np.asarray(Image.open(src).convert('RGB')).astype(np.float32)
     mx = img.max(2); mn = img.min(2); sat = (mx - mn) / np.maximum(mx, 1)
     R, G, B = img[..., 0], img[..., 1], img[..., 2]
@@ -64,7 +71,10 @@ def main(src, out, white=0.0):
         sel = mask
         c0a = np.array(c0, np.float32); c1a = np.array(c1, np.float32)
         out_img[sel] = c0a * (1 - t[sel][:, None]) + c1a * t[sel][:, None]
-        facets(out_img, mask, c0a, c1a, rng, white)
+        facets(out_img, mask, c0a, c1a, rng, white, irid, sparkle)
+        if sparkle > 0:   # искры чуть крупнее одного пикселя: расширение белых точек
+            wm = mask & (out_img.min(2) > 225); wm = ndimage.binary_dilation(wm, iterations=1) & mask
+            out_img[wm] = out_img[wm] * 0.35 + np.array([235, 244, 255], np.float32) * 0.65
         halo = ndimage.gaussian_filter(mask.astype(np.float32), 5) * 1.2
         halo = np.clip(halo, 0, 1) * (~mask)
         out_img += (halo ** 1.3)[..., None] * np.array(glow, np.float32) * 0.25
@@ -74,4 +84,4 @@ def main(src, out, white=0.0):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 0.0)
+    main(sys.argv[1], sys.argv[2], *(float(v) for v in sys.argv[3:6]))
