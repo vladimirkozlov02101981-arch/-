@@ -223,7 +223,7 @@ function windowSpill(px, winL, W, H) {
     const hy = Math.max(0, Math.min(h - 1, (y - 3) >> 1)) * w;
     for (let x = 0; x < W; x++) {
       const gi = y * W + x; if (winL[gi]) continue; const j = gi * 4; if (!px[j + 3]) continue;
-      const k = Math.min(1, a[hy + Math.min(w - 1, x >> 1)] / 255 * 1.8) * 0.75; if (k < 0.01) continue;
+      const k = Math.min(1, a[hy + Math.min(w - 1, x >> 1)] / 255 * 2.4) * 1.05; if (k < 0.01) continue;   /* v127 (критик r39: «свет окон на стене +30/+25 L на 1–3/3–6 px, нужно +55/+38»): ×1,4 */
       px[j] = Math.min(255, px[j] * (1 + k * 1.3) + k * 34); px[j + 1] = Math.min(255, px[j + 1] * (1 + k * 0.7) + k * 14); px[j + 2] = Math.min(255, px[j + 2] * (1 + k * 0.1) + k * 2);   /* тёплый: у эталона R/G у окна 1,46 */
     }
   }
@@ -285,7 +285,7 @@ function snowRockL(L) {
 /* v110 (критик r36: горящих окон 8,6–10,6 % фасада при ~5 % в эталоне; «битые» окна — у погашенного горящего окна оставались
    силуэты шторы и мебели): гаснет половина окон, стекло погасшего окна — тёмное с отражением неба, как у тёмных окон текстуры
    (геометрия окна — make_facade.py: ячейка 32×40, стекло 7…25 × 8,5…31, рама 5 %, переплёт по 0,5 и 0,38) */
-const WIN_OFF = 0.5, OFFP = { r: 0, g: 0, b: 0 };
+const WIN_OFF = 0.15, OFFP = { r: 0, g: 0, b: 0 };   /* v127 (критик r39: «горит около 25 % окон, у эталона около 50 %»): гаснет 15 % горящих в текстуре — горит ~47 % */
 function offGlass(S, lx, ly, idx, o) {
   const cx = ((lx % 32) + 32) % 32, cy = ((ly % 40) + 40) % 40; if (cx < 7 || cx >= 25 || cy < 8.5 || cy >= 31) return false;
   const wc = Math.floor(lx / 32), wr = Math.floor(ly / 40); if (hash3(wc, wr, idx * 7 + 11) >= WIN_OFF) return false;
@@ -787,7 +787,7 @@ function shadeMaterial(S, mt, x, y, t, capT, d, info, o, isBack) {
             // свет каждого окна свой (ячейка окна в координатах здания, а не плитки): часть гаснет, у остальных — разная яркость и тон
             const wc = Math.floor((x - prm.x0) / 32), wr = Math.floor((y - prm.y0) / 40), hw = hash3(wc, wr, info.idx * 7 + 11), ht = hash3(wc, wr, info.idx * 7 + 12);
             if (hw < WIN_OFF) { r *= 0.16; g *= 0.17; bl *= 0.2; }   /* погасшее окно (стекло целиком — offGlass ниже) */
-            else { const k = 0.95 + hw * 0.52, warmW = ht < 0.86;   /* v103 (r35: окна тусклее эталона — 208/159/113 против 235/176/113): ×1,3 */   /* r33: тёплых окон ~60 %, холодных ~10 % */ r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
+            else { const k = 0.95 + hw * 0.52, warmW = ht < 0.78;   /* v127: холодных окон среди горящих 8 % → ~15 % (критик r39) */   /* v103 (r35: окна тусклее эталона — 208/159/113 против 235/176/113): ×1,3 */   /* r33: тёплых окон ~60 %, холодных ~10 % */ r = Math.min(255, r * k * (warmW ? 1.06 : 0.92)); g = Math.min(255, g * k * (warmW ? 0.84 : 0.98)); bl = Math.min(255, bl * k * (warmW ? 0.58 : 1.1));   /* большинство окон — тёплый свет ламп, как в эталоне */
               o.emit = true; o.emitTex = true; o.ga = (isBack ? 150 : 230) * (0.6 + hw * 0.4); o.gr = r; o.gg = g; o.gb = bl; o.r = r; o.g = g; o.b = bl; }
           }
           else { r *= S.tgR; g *= S.tgG; bl *= S.tgB; }                                              // стены: яркость по эталону (gain темы)

@@ -56,7 +56,7 @@ def field(seed=161):
     lit = rw[ri, ci] < 0.55
     frame = win & ((lx < 0.05) | (lx > 0.95) | (ly < 0.04) | (ly > 0.96) | (np.abs(lx - 0.5) < 0.025) | (np.abs(ly - 0.38) < 0.02))
     glass = win & ~frame
-    sky = np.stack([18 + 30 * (1 - ly), 22 + 34 * (1 - ly), 40 + 50 * (1 - ly)], -1).astype(np.float32)
+    sky = np.stack([27 + 45 * (1 - ly), 33 + 48 * (1 - ly), 55 + 60 * (1 - ly)], -1).astype(np.float32)   # v127 (критик r39: «тёмные стёкла (15,18,30) → (31,34,47) с градиентом отражения»)
     diag = (gl[ri, ci] < 0.2) & (((lx * slope[ri, ci] + ly + hue[ri, ci]) % 1.0) < 0.06)
     sky = np.where(diag[..., None], sky + 40, sky)
     warm = np.where((hue[ri, ci] < 0.6)[..., None], np.array([255, 196, 120], np.float32), np.array([200, 222, 255], np.float32))
@@ -70,13 +70,19 @@ def field(seed=161):
     H = np.where(glass, -3.0, np.where(frame, -1.6, H))
     sill = inx & (fy >= wy0 + wh) & (fy < wy0 + wh + 1.6)
     H = np.where(sill, H + 1.2, H); C = np.where(sill[..., None], np.array([120, 120, 124], np.float32), C)
+    C = np.where((sill & (fy < wy0 + wh + 0.5))[..., None], np.array([178, 180, 186], np.float32), C)   # v127 (критик r39): мокрый блик по кромке подоконника
     # кондиционер под частью окон, водосток у края плитки
     # v117 (критик r37: «кондиционеры — светлые наклейки L 150 под каждым вторым окном»): у 15 % окон.
     # v122 (критик r38: «кондиционеры невидимы — тёмное на тёмном»): светлый корпус шириной с окно со светлой верхней кромкой
     # (на экране p95 ~105), горизонтальная решётка слева, тёмный круг вентилятора с лопастями справа (L 15–20), тень снизу —
     # от рельефа (корпус выступает на 3,2 ед.)
     a0, a1, b0, b1 = wx0 + 0.6, wx0 + ww - 0.6, wy0 + wh + 2.0, wy0 + wh + 8.6
-    ac = (hue[ri, ci] > 0.85) & (fx >= a0) & (fx < a1) & (fy >= b0) & (fy < b1)
+    # v127 (критик r39: «кондиционеры рядами по 4–6 под окнами одного этажа — нужно не больше одного на 3 окна, вразнобой, с подтёком»):
+    # в каждом ряду плитки (5 окон) — не больше одного, в 60 % рядов, столбец свой
+    nrow, ncol = rw.shape; acc = np.zeros((nrow, ncol), bool); ra = np.random.default_rng(seed + 7)
+    for rr_ in range(nrow):
+        if ra.random() < 0.6: acc[rr_, int(ra.integers(0, TW // CW))] = True
+    ac = acc[ri, ci] & (fx >= a0) & (fx < a1) & (fy >= b0) & (fy < b1)
     acx = (fx - (a1 - 4.6)) / 3.0; acy = (fy - (b0 + b1) / 2) / 3.0; rr = acx * acx + acy * acy; fan = rr < 1
     blade = ((np.arctan2(acy, acx) + 0.9 * np.sqrt(rr)) * 5 / (2 * math.pi)) % 1.0 < 0.38
     slat = 0.82 + 0.18 * (((fy - b0) * 2.2 % 1.0) > 0.45)
@@ -88,6 +94,8 @@ def field(seed=161):
     fanc = np.where((rr < 0.06)[..., None], np.array([90, 90, 90], np.float32), fanc)
     C = np.where(ac[..., None], np.where(fan[..., None], fanc, body), C)
     H = np.where(ac, H + np.where(fan, 2.2, 3.2), H)
+    drip = acc[(ri - 1) % (TH // RH), ci] & (np.abs(fx - (a0 + 3.0)) < 0.55 + 0.25 * np.sin(fy * 1.7)) & (fy < 9.5)   # подтёк под блоком (в начале следующей ячейки)
+    C = np.where(drip[..., None], C * np.array([0.62, 0.6, 0.6], np.float32) * (0.75 + 0.25 * (fy / 9.5))[..., None], C)
     pipe = np.abs(xx - (TW - 3)) < 1.1
     H = np.where(pipe, H + 1.1 * np.sqrt(np.clip(1 - ((xx - (TW - 3)) / 1.1) ** 2, 0, 1)), H); C = np.where(pipe[..., None], np.array([62, 64, 70], np.float32), C)
     # v120 (критик r37: «сетка одинаковых окон — 2–4 элемента на этаж: решётки, водостоки, кабели, балконы»):

@@ -179,7 +179,7 @@ const THEMES = {
       strata: ['#3d3630', '#4a4038', '#352f2a', '#554a40'], band: 30, bandSharp: 0.3,
       rock: ['#4a4a52', '#3e3e46', '#56565e'],
       pebbles: ['#4a4642', '#3c3936', '#56524c'], smoothStones: false,   /* v103 (r35: «мармеладки на земле»): щебень, а не гладкие шары */
-      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [2.9, 2.3, 1.3] /* v123 (критик r38: «стена L50 32 → 22–25»): ×0,74; v93: стена по замеру к эталону (дальняя стена 19/23/33 при эталоне 29/30/39); было [2.9, 2.6, 1.6] */ },
+      outline: '#07080d', rim: '#8890a8', rimK: 0.25, veins: null, ceiling: 'drips', capMats: [1], tex: { concrete: 'concrete_city', facade: 'facade_city', gain: [3.45, 2.65, 1.45] /* v127 (критик r39: «стена (32,31,33) → (41,34,38), правый дом L50 19 → 25, стёкла (15,18,30) → (31,34,47)»): ×1,15–1,19, теплее; v123 (критик r38: «стена L50 32 → 22–25»): ×0,74; v93: стена по замеру к эталону (дальняя стена 19/23/33 при эталоне 29/30/39); было [2.9, 2.6, 1.6] */ },
     },
     scatter: ['trash', 'tuft'],
     weather: null, birds: false, ambient: '#aaa8cf', ambientSound: 'city', glow: true,   // без дождя (просьба игрока)
