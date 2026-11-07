@@ -2002,10 +2002,17 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
     }
     // 2. Гравий и осыпи на полу пещер
     const cavePebs = ['#3e362e', '#4a4238', '#584e42', '#63594c', '#2c2620', '#6e6556'];
+    /* v130 (критик r39, пираты: «на палубах серые камешки и зелёные миски — у эталона палуба чистая»): на полах построек (кирпич,
+       доски, бетон, металл) гравий и мох не рисуются — рисунок уходит в пустой холст, числа rng тратятся как прежде (у остальных
+       карт всё на прежних местах) */
+    const NOCTX = { beginPath() {}, ellipse() {}, fill() {}, fillRect() {}, moveTo() {}, lineTo() {}, stroke() {} };
+    const builtFloor = (x, y) => { const fm = matAt(x, y + 1); return fm >= 3 && fm <= 6; };
+    const cx0 = c;
     for (let k = 0; k < tops.length; k += 2) {
       const x = tops[k], y = tops[k + 1];
       if (y > waterY - 4 || !isCaveFloor(x, y) || !flatTop(x, y)) continue;
       if (rng() < 0.045) {
+        const c = builtFloor(x, y) ? NOCTX : cx0;
         const grw = 1.2 + rng() * 2.8, grh = grw * (0.5 + rng() * 0.35);
         const col = rng.pick(cavePebs);
         c.fillStyle = 'rgba(10,8,6,0.35)';
@@ -2051,6 +2058,7 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       if (x < nextMossX || y > waterY - 4 || !isCaveFloor(x, y) || !flatTop(x, y)) continue;
       nextMossX = x + 18 + rng() * 36;
       if (rng() < 0.4) {
+        const c = builtFloor(x, y) ? NOCTX : cx0;
         const mw = 3 + rng() * 5, mh = 1.5 + rng() * 2;
         c.fillStyle = 'rgba(10,14,6,0.25)';
         c.beginPath(); c.ellipse(x, y + 1, mw * 1.1, mh * 0.5, 0, 0, TAU); c.fill();
