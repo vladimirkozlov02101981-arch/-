@@ -407,6 +407,9 @@ const MAP_CITY = buildLevel({
   B.room(2800, 1552, 1700, 90); B.ladder(2915, 1500, 1642); B.ladder(4200, 1500, 1642);
   const house = (x, w, n, st, lad) => { const top = B.tower(x, 1500, w, { mat: 'concrete', pal: st, wall: 14, slab: 14, stories: [100, ...Array(n - 1).fill(96)], ladders: Array.from({ length: n }, (_, i) => i % 2 ? w - lad : lad), found: 6 });
     B.fixture({ k: 'rail', metal: true, x1: x + 3, y1: top, x2: x + w - 3, y2: top, sag: 0, h: 14 });   /* v95: ограждение по краю крыши (эталон) */
+    { let f = 1500; for (let i = 0; i < n - 1; i++) { f -= i === 0 ? 100 : 96;   /* v132 (критик r39, город: «перила на каждой плите: стойки через 6–8 px, высота 10–12 px»): ограждение
+        по полу каждого этажа — между выходами лестниц (только рисунок, как у крыши) */
+      B.fixture({ k: 'rail', metal: true, x1: x + lad + 16, y1: f, x2: x + w - lad - 16, y2: f, sag: 0, h: 11 }); } }
     /* v123 (критик r38: «на крышах — блоки кондиционеров, баки, антенны»): предметы крыш (Blender) между выходами лестниц — только рисунок, геометрия прежняя */
     B.decor(['roofAc', x + w * (x % 3 ? 0.3 : 0.42), top], ['roofVent', x + w * 0.58, top, 1, x % 2 === 0]);
     if (w >= 220) B.decor(['roofTank', x + w * 0.74, top]); else B.decor(['roofAc', x + w * 0.72, top, 0.9, true]);
