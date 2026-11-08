@@ -1,7 +1,7 @@
 """Светлые глыбы в грунте долины (критик r38: «грунт после прореживания — p95 106 при 118–129, σ 29,8 при 33,6–39,4; дальше
 не прореживать; добавить 2–3 светлые глыбы 60–100 px в средней части, верх камней +15 L»).
 
-python dev/tools/valley_boulders.py <родная.webp> <выход.png> [--lift 21] [--grow 3] [--scale 1.4] [--sharp 0.5] [--pick x0,x1,y0,y1] [--contrast 1.15]
+python dev/tools/valley_boulders.py <родная.webp> <выход.png> [--lift 21] [--grow 3] [--scale 1.4] [--sharp 0.5] [--pick x0,x1,y0,y1] [--contrast 1.15] [--knee 150 --slope 0.45]
 затем: python dev/make_native.py <выход.png> dirt_valley --no-match --lossy --quality 90
 
 1) валуны — тем же классификатором, что и dev/tools/thin_boulders.py (серые ненасыщенные пятна на малой копии ÷4,
@@ -37,6 +37,7 @@ def main():
     ap.add_argument('src'); ap.add_argument('out')
     ap.add_argument('--lift', type=float, default=21); ap.add_argument('--grow', type=int, default=3)
     ap.add_argument('--scale', type=float, default=1.4); ap.add_argument('--sharp', type=float, default=0.5)
+    ap.add_argument('--knee', type=float, default=0); ap.add_argument('--slope', type=float, default=0.45)
     ap.add_argument('--contrast', type=float, default=1.0, help='общий контраст грунта вокруг среднего (σ 29,5 при 33,6–39,4 у эталона)')
     ap.add_argument('--pick', default='', help='окно «x0,x1,y0,y1» в ед. текстуры (с заворотом): увеличивать крупнейшие глыбы из него')
     ap.add_argument('--L', type=float, default=50); ap.add_argument('--S', type=float, default=0.24); ap.add_argument('--min', type=int, default=150)
@@ -100,6 +101,8 @@ def main():
         print('grow: глыба %d×%d px родной → ×%.2f (центр %d, %d)' % (ww, hh, a.scale, cx, cy))
     if a.contrast != 1:
         M = out.reshape(-1, 3).mean(0); out = M + (out - M) * a.contrast
+    if a.knee > 0:   # v135 (критик r40: «белая крошка в грунте — блики камней p90 160 → 125, p99 227 → 175»): мягкое сжатие светлого
+        Lk = out @ Y; Lc = np.where(Lk > a.knee, a.knee + (Lk - a.knee) * a.slope, Lk); out *= (Lc / np.maximum(Lk, 1))[..., None]
     L1 = out @ Y; L0 = N @ Y
     print('L95 %.0f → %.0f, σL %.1f → %.1f' % (np.percentile(L0, 95), np.percentile(L1, 95), L0.std(), L1.std()))
     Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8)).save(a.out)

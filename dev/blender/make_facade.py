@@ -54,7 +54,7 @@ def field(seed=161):
     rw = rng.random((TH // RH + 1, TW // CW + 1)); hue = rng.random(rw.shape); curt = rng.random(rw.shape)
     gl = rng.random(rw.shape); slope = 0.8 + rng.random(rw.shape) * 1.2   # v117: блик неба — только у 20 % тёмных окон, наклон свой
     lit = rw[ri, ci] < 0.55
-    frame = win & ((lx < 0.05) | (lx > 0.95) | (ly < 0.04) | (ly > 0.96) | (np.abs(lx - 0.5) < 0.025) | (np.abs(ly - 0.38) < 0.02))
+    frame = win & ((lx < 0.06) | (lx > 0.94) | (ly < 0.05) | (ly > 0.95) | (np.abs(lx - 0.5) < 0.045) | (np.abs(ly - 0.38) < 0.035))   # v135 (критик r40: «переплёты 2–3 px»): рама и переплёт толще
     glass = win & ~frame
     sky = np.stack([27 + 45 * (1 - ly), 33 + 48 * (1 - ly), 55 + 60 * (1 - ly)], -1).astype(np.float32)   # v127 (критик r39: «тёмные стёкла (15,18,30) → (31,34,47) с градиентом отражения»)
     diag = (gl[ri, ci] < 0.2) & (((lx * slope[ri, ci] + ly + hue[ri, ci]) % 1.0) < 0.06)
@@ -65,6 +65,17 @@ def field(seed=161):
     inter = np.where(cs_[..., None], inter * 0.6, inter)
     furn = (ly > 0.72) & (np.abs(lx - 0.25 - curt[ri, ci] * 0.5) < 0.11)
     inter = np.where(furn[..., None], inter * 0.3, inter)
+    # v135 (критик r40: «светлой площади окон 7 % при 4–4,3 % у эталона; 30–40 % площади горящего окна — силуэты интерьера: шторы,
+    # растения, люди, L 60–120»): у каждого горящего окна свой набор — вторая штора, жалюзи, силуэт человека или растения, абажур
+    kind = rng.random(rw.shape)[ri, ci]; kx = rng.random(rw.shape)[ri, ci]
+    cs2 = (kind < 0.35) & np.where(curt[ri, ci] > 0.5, lx > 0.8 - kx * 0.15, lx < 0.2 + kx * 0.15)          # вторая штора с другой стороны
+    blinds = (kind >= 0.35) & (kind < 0.55) & ((ly * 14 % 1.0) < 0.42) & (ly < 0.35 + kx * 0.4)            # жалюзи сверху, опущены не до конца
+    pcx = 0.3 + kx * 0.4; pr = (lx - pcx) / 0.12; pq = (ly - 0.55) / 0.2
+    person = (kind >= 0.55) & (kind < 0.8) & (((pr * pr + ((ly - 0.47) / 0.09) ** 2) < 1) | ((np.abs(pr) < 1.3 + 0.6 * np.clip(pq, 0, 1)) & (ly > 0.55)))   # голова и плечи
+    plant = (kind >= 0.8) & (((lx - pcx) ** 2 / 0.02 + (ly - 0.66) ** 2 / 0.03) < 1) & (ly > 0.5)             # куст в горшке на подоконнике
+    inter = np.where(cs2[..., None], inter * 0.55, inter)
+    inter = np.where(blinds[..., None], inter * 0.45, inter)
+    inter = np.where((person | plant)[..., None], inter * 0.22, inter)
     C = np.where((glass & ~lit)[..., None], sky, C); C = np.where((glass & lit)[..., None], inter, C)
     C = np.where(frame[..., None], np.array([46, 46, 50], np.float32), C)
     H = np.where(glass, -3.0, np.where(frame, -1.6, H))

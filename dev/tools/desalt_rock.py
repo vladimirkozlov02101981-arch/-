@@ -110,7 +110,7 @@ def main():
         n1 = nd.gaussian_filter1d(rng.standard_normal(W).astype(np.float32), 30, mode='wrap'); n1 /= np.abs(n1).max() + 1e-9
         n2 = nd.gaussian_filter1d(rng.standard_normal(W).astype(np.float32), 5, mode='wrap'); n2 /= np.abs(n2).max() + 1e-9
         ovh = a.overhang * np.clip(0.75 + 0.45 * n1 + 0.2 * n2, 0.25, 1.5)            # толщина свеса по столбцу, px родной
-        under = np.array([104, 118, 146], np.float32)                                 # холодная тень снизу (до gain темы)
+        under = np.array([86, 112, 150], np.float32)                                  # холодная голубая тень снизу (до gain темы; v135: было 104,118,146 — сиреневая)
         ey, ex = np.nonzero(edge); cnt = len(ey)
         Sm = nd.gaussian_filter(out, (1.0, 5.0, 0), mode='wrap')                      # цвет снега над кромкой, сглаженный вдоль x — без полос
         grain = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), 0.9, mode='wrap'); grain /= grain.std() + 1e-9
@@ -126,27 +126,38 @@ def main():
         C += (grain * 5)[..., None]
         out = out * (1 - cov[..., None]) + C * cov[..., None]
         print('overhang: edge columns %d' % cnt)
-        if a.fringe > 0:   # бахрома мелких сосулек под свесом: шаг 10–20 px родной, длина 12–50 px (изредка 80), под fringe доли кромки
-            g = nd.gaussian_filter1d(rng.standard_normal(W).astype(np.float32), 60, mode='wrap'); thr = np.quantile(g, 1 - a.fringe)
-            bottoms = {}
-            for y0, x0 in zip(ey, ex): bottoms.setdefault(x0, []).append(y0)
-            nf = 0
-            for x0, ys in bottoms.items():
-                if g[x0] < thr: continue
-                for y0 in ys:
-                    if not snow2[(y0 - 3) % H, x0]: continue
-                    if rng.random() > 1 / 14: continue                                 # в среднем шаг ~14 px
-                    u = rng.random(); Lc = rng.uniform(12, 30) if u < 0.7 else rng.uniform(30, 50) if u < 0.95 else rng.uniform(50, 80)
-                    yb = y0 + int(ovh[x0]); w0 = rng.uniform(3, 6); op = rng.uniform(0.7, 0.9); nf += 1
-                    for k in range(int(Lc) + 1):
-                        t = k / Lc; hw = w0 / 2 * (1 - t) ** 0.9 + 0.3; y = (yb + k) % H
-                        for dx in range(int(-hw - 1), int(hw + 2)):
-                            xx = x0 + dx; cov = np.clip(hw - abs(dx) + 0.5, 0, 1)
-                            if cov <= 0: continue
-                            side = dx / max(hw, 0.5)
-                            col = np.array([205, 228, 248], np.float32) * (1 - max(0, side) * 0.32) + np.array([30, 20, 6], np.float32) * max(0, -side)
-                            al = op * (0.8 + 0.2 * t) * cov; xw = xx % W; out[y, xw] = out[y, xw] * (1 - al) + col * al
-            print('fringe icicles: %d' % nf)
+        if a.fringe > 0:   # v135 (критик r40: «сосульки ровной гребёнкой белых линий в 1 px»): гроздьями по 3–9 через 150–500 px родной
+            # (30–40 % кромки без сосулек), ширина у основания 5–10 px, длина 20–90 px, полупрозрачный голубой лёд: у основания светлее,
+            # к кончику темнее и прозрачнее; светлая левая грань, тень справа
+            lab, nl = nd.label(edge, structure=np.ones((3, 3)))
+            objs = nd.find_objects(lab); nf = 0; ncl = 0
+            for li, sl_ in enumerate(objs, 1):
+                if sl_ is None: continue
+                ys_, xs_ = np.nonzero(lab[sl_] == li); ys_ = ys_ + sl_[0].start; xs_ = xs_ + sl_[1].start
+                if len(xs_) < 40: continue
+                order = np.argsort(xs_); ys_, xs_ = ys_[order], xs_[order]
+                x = xs_[0] + rng.uniform(0, 200)
+                while x < xs_[-1]:
+                    k0 = int(np.searchsorted(xs_, x)); k0 = min(k0, len(xs_) - 1)
+                    if rng.random() < a.fringe and snow2[(ys_[k0] - 3) % H, xs_[k0]]:
+                        n = int(rng.integers(3, 10)); ncl += 1; span = n * 7
+                        for q in range(n):
+                            xi = int(xs_[k0] + (q - (n - 1) / 2) * span / max(n - 1, 1) + rng.normal(0, 2))
+                            kk = int(np.clip(np.searchsorted(xs_, xi), 0, len(xs_) - 1)); y0 = ys_[kk]; x0 = xs_[kk]
+                            mid = 1 - abs(q - (n - 1) / 2) / max((n - 1) / 2, 1)
+                            Lc = rng.uniform(20, 45) + 45 * mid * rng.random(); w0 = rng.uniform(5, 10) * (0.7 + 0.3 * mid)
+                            yb = y0 + int(ovh[x0 % W]); nf += 1
+                            for k in range(int(Lc) + 1):
+                                t = k / Lc; hw = w0 / 2 * (1 - t) ** 0.85 + 0.35; yy = (yb + k) % H
+                                base = np.array([200, 214, 238], np.float32) * (1 - t) + np.array([108, 128, 164], np.float32) * t
+                                for dx in range(int(-hw - 1), int(hw + 2)):
+                                    cov = np.clip(hw - abs(dx) + 0.5, 0, 1)
+                                    if cov <= 0: continue
+                                    side = dx / max(hw, 0.5)
+                                    col = base * (1 + 0.1 * max(0, -side) - 0.18 * max(0, side))
+                                    al = (0.82 - 0.3 * t) * cov; xw = (x0 + dx) % W; out[yy, xw] = out[yy, xw] * (1 - al) + col * al
+                    x += rng.uniform(150, 500)
+            print('fringe icicles: %d in %d clusters' % (nf, ncl))
     if a.icicles > 0:
         H, W = L.shape; rng = np.random.default_rng(9)
         g = nd.gaussian_filter(rng.standard_normal((H, W)).astype(np.float32), 110, mode='wrap')   # v121: гроздьями (критик r38: «по 1–3 под каждой кромкой» → 4–6 гроздьев, ≥ 60 % кромок без сосулек)
