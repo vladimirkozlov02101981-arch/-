@@ -30,7 +30,7 @@ D:\Територивар1 и пользовательский Territory-War100 
 
 ## Ветка и выдача
 - Работа идёт в ветке `claude/hopeful-dirac-byxv27` (если чат открыт на другой ветке: `git fetch origin claude/hopeful-dirac-byxv27 && git checkout claude/hopeful-dirac-byxv27`).
-- Каждый законченный шаг: тесты → коммит → `git push origin claude/hopeful-dirac-byxv27`. Повышай версию в `index.html` (`id="game-version"`, «ВЕРСИЯ ГГГГ.ММ.ДД-N»).
+- Каждый законченный шаг: тесты → коммит → `git push origin claude/hopeful-dirac-byxv27`. Повышай версию в `index.html` (`id="game-version"`, «ВЕРСИЯ ГГГГ.ММ.ДД-N»; дата — по времени владельца, МСК UTC+3, а не UTC).
 - Тесты: `npm test`; браузерные — `node -r ./dev/tools/pw-chromium.cjs tests/browser.cjs` (а также `tests/online.cjs`, `tests/tactics.cjs`, `tests/audio.cjs`). Дополнительно: `node tests/hires.cjs` (стыки увеличения, без сервера), `python tests/test_texture_quilting.py` (сшивка). Сервер для тестов и скриншотов: `node server.js` (порт 3000).
 - Сборка одним файлом: `node dev/build-single.cjs` (Chrome/Edge Windows, установленный Chromium или `CHROME`) → `dist/Territory-War.html` — только по просьбе, в корень НЕ копировать (владелец 24.10: снимок одним файлом в корне не нужен — он не обновляется, его открывали вместо «Играть.cmd» и видели старую версию).
 - При работе непосредственно в `D:\Територивар` эта папка уже является актуальной игрой: сохраняй изменения здесь, не делай отдельный reset.

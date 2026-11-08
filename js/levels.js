@@ -101,7 +101,8 @@ function district(B, o) {
   B.bridge(bx, by, 4906, gy, { mat: bm.mat || 'wood', pal: bm.pal, thick: 14, rails: true, railCol: bm.railCol, posts: bm.posts || [Math.round(bx + (4906 - bx) * 0.5)], postTo: o.water + 40 });
   // крепость: этажи, лестницы попеременно у западной и восточной стены
   const lad = st.map((_, i) => i % 2 ? Wd - 60 : 60);
-  B.tower(X, gy, Wd, { mat, pal, stories: st, ladders: lad, crown: o.crown !== false, found: 40 });
+  const topD = B.tower(X, gy, Wd, { mat, pal, stories: st, ladders: lad, crown: o.crown !== false, found: 40 });
+  if (mat === 'concrete') B.decor(['roofAc', X + Wd * 0.28, topD], ['roofVent', X + Wd * 0.47, topD, 1, true], ['roofTank', X + Wd * 0.7, topD]);   /* v134: крыша городской «крепости» — предметы из Blender */
   let f = gy;
   st.forEach((h, i) => {
     const ceil = f - h + 14;

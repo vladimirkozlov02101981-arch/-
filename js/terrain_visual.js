@@ -1721,21 +1721,13 @@ function drawSurfaceDetails(T, theme, seed, waterY, tops, ceils, mat, backArr) {
       const x = tops[k], y = tops[k + 1];
       if (x < nextX || y > waterY - 20 || !(matAt(x, y + 2) === 5 || matAt(x, y + 2) === 6) /* только крыши: на асфальте улицы (mat 1) антенны с огоньком смотрелись «розовыми шариками» (r31) */ || !flatTop(x, y) || T.isSolid(x, y - 40) || T.isSolid(x + 24, y - 20) || T.isSolid(x - 8, y - 20)) continue;
       nextX = x + 50 + rng() * 90; const kind = rng();
-      if (kind < 0.45) {                                                                     // кондиционер: корпус, решётка, вентилятор
-        const w = 22 + rng() * 8, h = 15;
-        c.fillStyle = 'rgba(0,0,0,0.35)'; c.fillRect(x - 1, y - 1, w + 3, 2);
-        const bg = c.createLinearGradient(0, y - h, 0, y); bg.addColorStop(0, '#8a90a0'); bg.addColorStop(1, '#4a4e5c'); c.fillStyle = bg; c.fillRect(x, y - h, w, h);
-        c.fillStyle = '#2a2d36'; c.beginPath(); c.arc(x + w * 0.64, y - h / 2, 5, 0, TAU); c.fill(); c.strokeStyle = '#555a68'; c.lineWidth = 1; c.beginPath(); c.moveTo(x + w * 0.64 - 4, y - h / 2); c.lineTo(x + w * 0.64 + 4, y - h / 2); c.moveTo(x + w * 0.64, y - h / 2 - 4); c.lineTo(x + w * 0.64, y - h / 2 + 4); c.stroke();
-        c.strokeStyle = '#6a7080'; c.lineWidth = 0.8; for (let q = 0; q < 4; q++) { c.beginPath(); c.moveTo(x + 2, y - h + 2.5 + q * 2); c.lineTo(x + w * 0.4, y - h + 2.5 + q * 2); c.stroke(); }
-        c.fillStyle = '#6a6a90'; c.fillRect(x, y - h, w, 1.5);
+      if (kind < 0.45) { rng();   /* v134: векторный кондиционер убран — на крышах кондиционеры, баки и трубы из Blender (levels.js house, district); rng — как прежде */
       } else if (kind < 0.75) {                                                              // антенна с мигающим огоньком
         const h = 26 + rng() * 20; c.strokeStyle = '#4a4e5c'; c.lineWidth = 1.8; c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - h); c.stroke();
         c.lineWidth = 1; for (let q = 1; q < 3; q++) { c.beginPath(); c.moveTo(x - 5 + q, y - h * (0.4 + q * 0.2)); c.lineTo(x + 5 - q, y - h * (0.4 + q * 0.2)); c.stroke(); }
         c.fillStyle = '#ff4060'; c.beginPath(); c.arc(x, y - h, 2.4, 0, TAU); c.fill();
         if (gc) { gc.fillStyle = 'rgba(255,60,90,1)'; gc.beginPath(); gc.arc(x, y - h, 7, 0, TAU); gc.fill(); }
-      } else {                                                                               // вытяжная труба с колпаком
-        const h = 18 + rng() * 10; const pg = c.createLinearGradient(x - 5, 0, x + 5, 0); pg.addColorStop(0, '#8a90a0'); pg.addColorStop(1, '#3a3e48');
-        c.fillStyle = pg; c.fillRect(x - 5, y - h, 10, h); c.fillStyle = '#6a6a90'; c.fillRect(x - 8, y - h - 3, 16, 3); c.fillStyle = '#2e323c'; c.fillRect(x - 8, y - h, 16, 1.5);
+      } else { rng();   /* v134: векторная труба с колпаком убрана (критик r39/r40: «мультяшная труба с фиолетовым колпаком») */
       }
     }
   }
